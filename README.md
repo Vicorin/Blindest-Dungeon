@@ -93,6 +93,23 @@ The Hamlet is where you'll spend most of your time between raids, managing your 
 * I opens the trinket inventory where you can equip trinkets to heroes or sell the ones you don't want.
 * E to embark, opening the expedition planning screen so you can set off on your next quest.
 
+### Building Shortcuts
+
+From within the list of Hamlet locations or an open building screen, you can use the following keys to open a location directly.
+
+* A: Abbey
+ B: Blacksmith
+* C: Stagecoach
+* D: Districts
+* L: Guild
+* M: Ancestor's Memoirs
+* S: Sanitarium
+* T: Tavern
+* V: Survivalist
+* W: Nomad Wagon
+* Y: Graveyard
+* Z: Butcher's Circus
+
 ### Building Screens
 
 Most buildings are organized into rows and columns. You'll learn what each building does as you unlock them, but the controls for each will be the same.
@@ -145,4 +162,9 @@ During the skills phase, you will hear how many respite points you have in the r
 
 Use Q/E to change the selected hero and find their camping skills under the dungeon view. You can check their tooltips to learn more about what each skill does.
 
+## Help & Feedback
+Join [My Discord](https://discord.gg/ED6T22nDt) to get help, report bugs, or offer your suggestions.
 
+## Support my Work
+
+Donations are not expected. I do this because I like games and am passionate about making them more accessible. That said, it does cost money to produce these mods, so if you like my work and want to help out, you can [support me on ko-fi](https://ko-fi.com/axdelvegames)
