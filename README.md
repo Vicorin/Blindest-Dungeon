@@ -6,12 +6,20 @@ Blindest Dungeon adds screen-reader support and enhanced keyboard navigation to 
 Currently, the entire base game is accessible, as well as much of the DLC. It is in public beta so that I can begin to gather player feedback while I polish the mod and support the last of the DLC items.
 
 * Base game: fully accessible, some interface items may change slightly to create a smoother experience.
-* Shieldbreaker: Fully accessible
-* The Color of  Madness: Mostly accessible. I have completed the first quest using the mod, but have not yet tested the full endless mode.
-* Crimson Court: Partly accessible: The courtyard dungeon has not yet been tested, but in theory should be playable. Curses may not read yet.
+* DLC Characters and Districts: Fully accessible.
+* The Color of  Madness: Mostly accessible. I have completed the first quest using the mod and have most of the endless mode features working, but have not yet tested the full endless mode.
+* Crimson Court: Should be fully accessible, but not thoroughly tested.
 (* Butcher's Circus: Not accessible yet. The main menu for the circus is read, but it is the most unfinished area of the mod and is a work in progress.
+(* Operating System: Windows. The mod was created using Tolk. multi-platform support using Prism is planned and high priority.)
+* Localization: English, German. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game are localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
 
-## Installation
+## Installation and Updates
+
+Download and run "Blindest Dungeon Installer.exe" (found in the mod release). It will automatically locate your game path and install the files. It can also be used to uninstall or update the mod with the click of a button.
+
+To manually install or update, copy and paste all files inside the mod directory next to the darkest.exe shortcut: (Darkest Dungeon > Windows > Win64). To uninstall, simply delete them.
+
+The mod will alert you of new updates automatically when you launch the game.
 
 ## Getting Started
 ### Starting a Campaign
@@ -163,7 +171,7 @@ During the skills phase, you will hear how many respite points you have in the r
 Use Q/E to change the selected hero and find their camping skills under the dungeon view. You can check their tooltips to learn more about what each skill does.
 
 ## Help & Feedback
-Join [My Discord](https://discord.gg/ED6T22nDt) to get help, report bugs, or offer your suggestions.
+Join [My Discord](https://discord.gg/avQTPGy2FA) to get help, report bugs, or offer your suggestions.
 
 ## Support my Work
 
