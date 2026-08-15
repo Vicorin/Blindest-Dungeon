@@ -11,7 +11,7 @@ Currently, the entire base game is accessible, as well as much of the DLC. It is
 * Crimson Court: Should be fully accessible, but not thoroughly tested.
 (* Butcher's Circus: Not accessible yet. The main menu for the circus is read, but it is the most unfinished area of the mod and is a work in progress.
 (* Operating System: Windows. The mod was created using Tolk. multi-platform support using Prism is planned and high priority.)
-* Localization: English, German. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game are localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
+* Localization: English, German. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game is localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
 
 ## Installation and Updates
 
@@ -23,7 +23,7 @@ The mod will alert you of new updates automatically when you launch the game.
 
 ## Getting Started
 ### Starting a Campaign
-Launch the game via the access shortcut included with the mod. The mod will take a minute to load, but then you should hear "accessibility mod loaded". After the opening cinematic, there is a small text preamble that seeks to prepare you for the difficulty of the game. Press the slash key (/) to re-read this message or any other popup found throughout the game.
+Launch the game via the access shortcut included with the mod. The mod will take a minute to load, but then you should hear "accessibility mod loaded". After the opening cinematic, there is a small text preamble that seeks to prepare you for the difficulty of the game. Press the comma key (,) to re-read this message or any other popup found throughout the game.
 
 The main menu is very simple, you can navigate with the arrow keys, enter to select an item, or escape to open the pause/options menu.
 
@@ -44,8 +44,7 @@ Most of the game will take place in side-scrolling dungeons. Your characters wil
 * Press C to view the selected hero's character sheet.
 * Press R to see what's in the room, where you can look at your party members without selecting them, interact with objects, and view/target enemies.
 *  left/right arrows move through what's in the room. up/down to move between the action bar and quest tracker.
-* Ctrl+up/down arrow will read through tooltip information about each creature or object in the room.
-* Press G to view This is how you will view many other tooltips.
+* Ctrl+up/down arrow will read through tooltip information about each creature or object in the room. This is how you will view many other tooltips found throughout the game.
 * D moves your party forward, and A moves them back. They take more stress when walking back.
 * Hold shift and tap A/D to move back/forwards to the next tile. This prevents announcements being cut off while moving and ensures you don't accidentally walk past any objects or doors.
 * Press W to interact with curios, disarm traps, or open doors.
@@ -54,7 +53,7 @@ Most of the game will take place in side-scrolling dungeons. Your characters wil
 * G jumps to the quest tracker, where you can view your current goal, abandon the quest, retreat from battle, or finish the quest when it's complete.
 * Press tilde (`) to jump to the action bar from anywhere, where you can view the selected hero, their skills, and rearrange the party.
 * Press Tab to cycle to the map/inventory. You can also press M or I to open one directly.
-* press backslash (\) to open the event log to review anything that happens to your heroes in or out of combat.
+* press period (.) to open the event log to review anything that happens to your heroes in or out of combat.
 
 ### Map/Hallway Navigation
 After pressing tab or the M key to jump to the map, you'll be able to scout ahead and move between rooms of the dungeon. Each room of the dungeon is arranged on a grid, with connecting hallways in between. After clearing each room, you'll need to select your next destination from the map.
@@ -95,7 +94,7 @@ After the loot rewards is the XP summary. Each hero is displayed with their own 
 
 The Hamlet is where you'll spend most of your time between raids, managing your hero roster and resources. You'l l typically return to the hamlet with the activity log open, detailing everything that's happened for that week in one column, and your overall goals in the other.
 
-* Backslash (\) to open/close the activity log.
+* Period (.) to open/close the activity log.
 * Tab moves between the hamlet map and your hero roster.
 * R opens the resource panel, where you can see your gold and heirlooms, which are another kind of currency you'll need for upgrading buildings. You can also trade 1 type of heirloom for another, using the trade button on that panel.
 * I opens the trinket inventory where you can equip trinkets to heroes or sell the ones you don't want.
@@ -168,7 +167,10 @@ Camping has two phases. First, you'll select how much food you want to eat, whic
 
 During the skills phase, you will hear how many respite points you have in the readout for the dungeon view. Each camping skill will cost a number of these points. Once you have 6 or less remaining, you'll see a button to rest on the action bar, which will finish camping and return you to the normal dungeon.
 
-Use Q/E to change the selected hero and find their camping skills under the dungeon view. You can check their tooltips to learn more about what each skill does.
+Use Q/E to change the selected hero and find their camping skills in the action bar under the dungeon view. You can check their tooltips to learn more about what each skill does.
+
+## Mod Settings
+Press F10 from anywhere in the game to open the mod settings where you can see all of the controls added by the mod and remap them to your preference. Simply press enter on the command you want to modify, then press the key you want to become the new shortcut. To cancel, simply press the same key that was already assigned or exit the mod settings without saving.
 
 ## Help & Feedback
 Join [My Discord](https://discord.gg/avQTPGy2FA) to get help, report bugs, or offer your suggestions.
