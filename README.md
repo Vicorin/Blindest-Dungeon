@@ -22,6 +22,16 @@ To manually install or update, copy and paste all files inside the mod directory
 
 The mod will alert you of new updates automatically when you launch the game.
 
+### Creating A Windows Defender Exception
+
+Due to the nature of the game's custom C++ engine and a lack of official script modding support, this mod relies on DLL injection and live memory reading to detect and translate game text into speech, which is often automatically flagged by Windows Defender and other antivirus software. The warning is not due to any malicious code in the mod, simply the method it uses. To prevent this and get the game to run, you may need to follow these steps to add the game folder as a Windows Defender exception.
+
+* Open Windows Security. You can find it in the start menu if you're not sure where to look.
+* Press enter on "Virus and Threat Protection".
+* Press enter on the link to "Manage Settings", found in the "threat settings" section.
+* Tab to "Exclusions" and press enter on the link to "Add or Remove exclusions".
+* Press Enter on "Add Exclusion" and select the folder where you have the game installed.
+
 ## Getting Started
 ### Starting a Campaign
 Launch the game via the access shortcut included with the mod. The mod will take a minute to load, but then you should hear "accessibility mod loaded". After the opening cinematic, there is a small text preamble that seeks to prepare you for the difficulty of the game. Press the comma key (,) to re-read this message or any other popup found throughout the game.
