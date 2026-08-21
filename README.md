@@ -9,6 +9,7 @@ Currently, the entire base game is accessible, as well as much of the DLC. It is
 * DLC Characters and Districts: Fully accessible.
 * The Color of  Madness: Mostly accessible. I have completed the first quest using the mod and have most of the endless mode features working, but have not yet tested the full endless mode.
 * Crimson Court: Should be fully accessible, but not thoroughly tested.
+* Fire's Edge: Should be fully supported, but not thoroughly tested.
 (* Butcher's Circus: Not accessible yet. The main menu for the circus is read, but it is the most unfinished area of the mod and is a work in progress.
 (* Operating System: Windows. The mod was created using Tolk. multi-platform support using Prism is planned and high priority.)
 * Localization: English, German. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game is localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
@@ -34,6 +35,8 @@ Press enter on an empty slot to start a new game. If you have any DLC or worksho
 After selecting a difficulty, name your estate. It starts with the word Darkest" auto-filled, and has a max of 10 characters. You'll hear the updated entry as you type or delete text. Press enter to save.
 
 Pressing enter on a filled save slot will load that save, such as the one you just created. You can delete a save using the delete key.
+
+You can view and enable DLC installed on an existing save by pressing SHIFT+ENTER. You can enable DLC mid-run, but you cannot disable them.
 
 After the initial cutscene, you will start in a short tutorial mission with 2 characters.
 
@@ -171,6 +174,8 @@ Use Q/E to change the selected hero and find their camping skills in the action 
 
 ## Mod Settings
 Press F10 from anywhere in the game to open the mod settings where you can see all of the controls added by the mod and remap them to your preference. Simply press enter on the command you want to modify, then press the key you want to become the new shortcut. To cancel, simply press the same key that was already assigned or exit the mod settings without saving.
+
+The mod settings also features a debugg logging mode, which will write a log of live game data to a text file, stored in the same folder as the mod install. It is off by default, but you can turn it on to record bugs and send me the log to fix bugs faster.
 
 ## Help & Feedback
 Join [My Discord](https://discord.gg/avQTPGy2FA) to get help, report bugs, or offer your suggestions.
