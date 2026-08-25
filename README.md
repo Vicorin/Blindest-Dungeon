@@ -8,8 +8,8 @@ Currently, the entire base game is accessible, as well as much of the DLC. It is
 * Base game: fully accessible, some interface items may change slightly to create a smoother experience.
 * DLC Characters and Districts: Fully accessible.
 * The Color of  Madness: Mostly accessible. I have completed the first quest using the mod and have most of the endless mode features working, but have not yet tested the full endless mode.
-* Crimson Court: Should be fully accessible, but not thoroughly tested.
-* Fire's Edge: Should be fully supported, but not thoroughly tested.
+* Crimson Court: Fully Accessible
+* Fire's Edge: Fully Accessible
 (* Butcher's Circus: Not accessible yet. The main menu for the circus is read, but it is the most unfinished area of the mod and is a work in progress.
 (* Operating System: Windows. The mod was created using Tolk. multi-platform support using Prism is planned and high priority.)
 * Localization: English, German. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game is localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
@@ -74,8 +74,11 @@ After pressing tab or the M key to jump to the map, you'll be able to scout ahea
 * Arrow keys to move between rooms on the map.
 * Ctrl+arrows to walk tile-by-tile down the connecting hallways.
 * Enter to move to an adjacent room.
+* Home to return to the party's location on the map.
 
 After you select your destination on the map, you will then need to walk through the hallway to reach the door on the other side. This is best accomplished using the tile navigation (shift+d to move forward and shift+a to move back) as holding the movement keys has a tendency to cut off announcements, making it easy to miss what's happening.
+
+Note: Your party will always be moving to the right towards the destination you selected on the map. Walking backwards/to the left will return you to the room you just left.
 
 ## Combat
 During combat, a group of enemies will appear on the right. You can use the arrow keys to move through them inside the dungeon view, and CTRL+up arrow will read tooltips with information about them.
@@ -108,6 +111,7 @@ After the loot rewards is the XP summary. Each hero is displayed with their own 
 The Hamlet is where you'll spend most of your time between raids, managing your hero roster and resources. You'l l typically return to the hamlet with the activity log open, detailing everything that's happened for that week in one column, and your overall goals in the other.
 
 * Period (.) to open/close the activity log.
+* Comma (,) to re-read a popup, such as a tutorial message or town event.
 * Tab moves between the hamlet map and your hero roster.
 * R opens the resource panel, where you can see your gold and heirlooms, which are another kind of currency you'll need for upgrading buildings. You can also trade 1 type of heirloom for another, using the trade button on that panel.
 * I opens the trinket inventory where you can equip trinkets to heroes or sell the ones you don't want.
@@ -182,8 +186,22 @@ During the skills phase, you will hear how many respite points you have in the r
 
 Use Q/E to change the selected hero and find their camping skills in the action bar under the dungeon view. You can check their tooltips to learn more about what each skill does.
 
+## Traps
+
+If your party successfully scouts a trap, they will stop short on that tile to avoid setting it off. In the dungeon view, you will be able to see each hero's chance to disarm the trap. Select the character you want to interact with the trap and press W.
+
+If you fail to scout a trap, it will not be visible on the map and your party will walk straight into it. It targets the currently-selected hero, and their chance to dodge is determined by their trap resistance (found on their character sheet).
+
+## Secret Rooms
+
+Some dungeons have secret rooms, which you will be unable to see unless you critically succeed at scouting. Once spotted, you will be able to see them on the map, hear them annouced when you move onto their tile, and be able to enter them by pressing W, like any other door.
+
+Inside, there is usually some treasure, and then you will need to exit via the map. Open the map, sselect a nearby room as your destination, and press enter to return to the corridor.
+
 ## Mod Settings
 Press F10 from anywhere in the game to open the mod settings where you can see all of the controls added by the mod and remap them to your preference. Simply press enter on the command you want to modify, then press the key you want to become the new shortcut. To cancel, simply press the same key that was already assigned or exit the mod settings without saving.
+
+Under speech, you'll find toggles for reading subtitles and toggling hero barks being spoken in town.
 
 The mod settings also features a debugg logging mode, which will write a log of live game data to a text file, stored in the same folder as the mod install. It is off by default, but you can turn it on to record bugs and send me the log to fix bugs faster.
 
