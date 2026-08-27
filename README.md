@@ -211,3 +211,5 @@ Join [My Discord](https://discord.gg/avQTPGy2FA) to get help, report bugs, or of
 ## Support my Work
 
 Donations are not expected. I do this because I like games and am passionate about making them more accessible. That said, it does cost money to produce these mods, so if you like my work and want to help out, you can [support me on ko-fi](https://ko-fi.com/axdelvegames)
+
+Disclaimer: Blindest Dungeon is not an official Red Hook Studios product or product modification, and Red Hook Studios Inc. is not responsible in any way for changes or damages that may result from using the mod. Furthermore, “Darkest Dungeon” and the Darkest Dungeon logo are trademarks of Red Hook Studios Inc. All content in the game is Copyright Red Hook Studios Inc. All rights reserved.
