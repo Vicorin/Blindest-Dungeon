@@ -11,7 +11,7 @@ Currently, the entire base game is accessible, as well as much of the DLC. It is
 * Crimson Court: Fully Accessible
 * Fire's Edge: Fully Accessible
 (* Butcher's Circus: Not accessible yet. The main menu for the circus is read, but it is the most unfinished area of the mod and is a work in progress.
-(* Operating System: Windows. The mod was created using Tolk. multi-platform support using Prism is planned and high priority.)
+(* Operating System: Windows. The mod has switched to the Prism speech library, but more work is needed to achieve full compatability on Mac and Linux.
 * Localization: English, German. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game is localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
 
 ## Installation and Updates
