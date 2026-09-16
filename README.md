@@ -5,14 +5,14 @@ Blindest Dungeon adds screen-reader support and enhanced keyboard navigation to 
 
 Currently, the entire base game is accessible, as well as much of the DLC. It is in public beta so that I can begin to gather player feedback while I polish the mod and support the last of the DLC items.
 
-* Base game: fully accessible, some interface items may change slightly to create a smoother experience.
+* Base game: fully accessible.
 * DLC Characters and Districts: Fully accessible.
 * The Color of  Madness: Mostly accessible. I have completed the first quest using the mod and have most of the endless mode features working, but have not yet tested the full endless mode.
 * Crimson Court: Fully Accessible
 * Fire's Edge: Fully Accessible
-(* Butcher's Circus: Not accessible yet. The main menu for the circus is read, but it is the most unfinished area of the mod and is a work in progress.
+(* Butcher's Circus: Fully Accessible
 (* Operating System: Windows. The mod has switched to the Prism speech library, but more work is needed to achieve full compatability on Mac and Linux.
-* Localization: English, German. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game is localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
+* Localization: English, French, German, Spanish. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game is localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
 
 ## Installation and Updates
 
@@ -198,6 +198,61 @@ Some dungeons have secret rooms, which you will be unable to see unless you crit
 
 Inside, there is usually some treasure, and then you will need to exit via the map. Open the map, sselect a nearby room as your destination, and press enter to return to the corridor.
 
+## The Butcher's Circus
+
+The Butcher's Circus is a free DLC that adds a competitive multiplayer mode. It is fully accessible and does not require your opponenet to have the mod installed to work. The following sections will explain each section of the circus and what you can do with the mod.
+
+### Banner Designer
+
+Your banner is like your player emblem, which other players see during a match. It is made up of six pieces, which you unlock as rewards for completing matches.
+
+This screen is laid out fairly simply. Focus arrives in a vertical list of tabs (one for each piece of your banner). under these tabs are a button to randomize your selections, and a button to apply all changes. To the right is a grid, showing the different pieces for the selected tab.
+
+You can use the following keyboard shortcuts in the banner designer:
+* CTRL+ENTER to apply changes.
+* R for random.
+* B to speak a full preview of the banner design.
+
+### Dueling Grounds
+
+The dueling grounds is where you can challenge other players to a private match. It has two columns: your friends list on the left, where you can press enter on any of your online friends to send them an invite, and a section on the right where you can invite a player by typing in their Steam ID. Alternatively, you can create a lobby ID, which will connect you if you both type in the same thing.
+
+Once connected, you'll be dropped into a party selection screen, similar to the ring (see below). Select your party and press E to ready up. Once both players are ready, the match will begin.
+
+### Prizebox
+
+The prizebox is where you can see how much prestige you've accumulated, the rewards you've unlocked, and what you'll unlock at later levels. It is a simple grid. up/down to move through the prestige levels, left/right to browse the details of the rewards for that level. Pressing enter on a banner piece will take you to preview it in the banner designer.
+
+## Rankings Board
+
+This is where you can see your multiplayer rank and match history. At the top, it lists your current rank, what rank is next, and your progress towards achieving it. If you win a match, you'll gain skulls which progress you towards the next rank. Losing a match can cause you to lose skulls and even drop down a rank. It showss a seasonal countdown, but ignore this, because they don't do seasons anymore and it now counts up instead of down.
+
+Below your rank info is a list, with two tabs at the top. "Matchmaking history" for public matches, and "challenge history" for your record in the dueling grounds. Use left/right arrows to switch tabs, up/down to navigate the list. Each row you'll hear the outcome of the fight, the heroes in both parties, and who was killed in the fight.
+
+The Ring
+
+This is the main area of the Butcher's Circus, where you build a party, equip them with trinkets, and send them to fight. Everything here applies to private matches through the dueling grounds as well.
+
+The party line up and commands for it are identical to the singleplayer campaign. Enter to select, C to view character sheets, spacebar to rearrangee.
+
+Equipping trinkets also works identically to the campaign. Press enter on the trinket slots on a hero's character sheet, or press I to open the trinket inventory, press enter on a trinket, and then select who you want to equip it on.
+
+There are a few more commands on this screen you should be aware of:
+* E to ready/enter matchmaking
+* P to play a practice match or repeat the tutorial.
+* L to view a key to the different player ranks.
+* G opens the glossary.
+
+### Inside the Arena
+
+The interface and controls for the multiplayer battles is the same as any other combat in singleplayer. However, there are a few new mechanics to be aware of.
+
+* Coin toss: At the start of the match, after both players have pressed space to continue, you'll hear a coin toss which determines who gets to go first. The loser of the coin toss gets a dodge bonus to their entire party for the first round.
+* Selecting who acts: Instead of a random initiative order, you'll manually choose who acts. At the start of each turn, you'll need to select a hero in your party by pressing enter on their sprite in the dungeon view. Then you'll be able able to act as normal.
+* Turn timer: in multiplayer matches, you have a turn timer. When you hear the torch start burning down that indicates you have 15 seconds left to pick an action or your turn will automatically pass.
+
+There is a rewards screen at the end of the fight which is fairly straightforward. Arrow up/down to read through the information, press enter to advance through until you return back at the circus menu.
+
 ## Mod Settings
 Press F10 from anywhere in the game to open the mod settings where you can see all of the controls added by the mod and remap them to your preference. Simply press enter on the command you want to modify, then press the key you want to become the new shortcut. To cancel, simply press the same key that was already assigned or exit the mod settings without saving.
 
@@ -211,5 +266,7 @@ Join [My Discord](https://discord.gg/avQTPGy2FA) to get help, report bugs, or of
 ## Support my Work
 
 Donations are not expected. I do this because I like games and am passionate about making them more accessible. That said, it does cost money to produce these mods, so if you like my work and want to help out, you can [support me on ko-fi](https://ko-fi.com/axdelvegames)
+
+---
 
 Disclaimer: Blindest Dungeon is not an official Red Hook Studios product or product modification, and Red Hook Studios Inc. is not responsible in any way for changes or damages that may result from using the mod. Furthermore, “Darkest Dungeon” and the Darkest Dungeon logo are trademarks of Red Hook Studios Inc. All content in the game is Copyright Red Hook Studios Inc. All rights reserved.
