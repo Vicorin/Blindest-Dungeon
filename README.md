@@ -12,7 +12,7 @@ Currently, the entire base game is accessible, as well as much of the DLC. It is
 * Fire's Edge: Fully Accessible
 (* Butcher's Circus: Fully Accessible
 (* Operating System: Windows. The mod has switched to the Prism speech library, but more work is needed to achieve full compatability on Mac and Linux.
-* Localization: English, French, German, Spanish. Some of the speech output had to be written by hand and has to be translated. Text that was able to be pulled straight from the game is localized, but the mod text is still a work in progress. Feedback from players who speak languages other than English is greatly appreciated. Support for all 13 languages available in the game is planned.
+* Localization: Supports all 12 languages the game does (Brazilian Portuguese, Czech, English, French, German, Italian, Japanese, Korean, Polish, Russian, Simplified Chinese, and Spanish. Most were translated using AI, so user-feedback or contributions are appreciated. You can find the translations inside the "lang" folder in the mod's source code.
 
 ## Installation and Updates
 
@@ -96,7 +96,7 @@ After winning a battle or opening treasure, you'll be greeted with a loot screen
 
 ## Interacting with Objects
 
-Press W to interact with a curio, open the door to a room, or disarm a trap. When interacting with a curio or trap, any positive or negative effects will apply to the selected hero, and some heroes (such as the antiquarian) may impact the loot you find. In some cases, you'll have the opportunity to use an item. Simply select that option from the list, and then select the item you'd like to use; you'll hear "works here" next to its name if you can use that item.
+Press W to interact with a curio, open the door to a room, or disarm a trap. When interacting with a curio or trap, any positive or negative effects will apply to the selected hero, and some heroes (such as the antiquarian) may impact the loot you find. In some cases, you'll have the opportunity to use an item. Simply select that option from the list, and then select the item you'd like to use. Once you have used a particular item with a particular curio, you will hear the effect of using that item when interacting with that curio in the future.
 
 ## Finishing a Quest
 
@@ -173,6 +173,8 @@ Pressing the spacebar on any hero in the party will allow you to rearrange them.
 ### Provisioning
 
 Press E after selecting a quest and party to move to the provisioning shop. There are two columns, one for goods in the shop on the left, and your inventory on the right. Press enter to buy an item from the shop or sell it from your inventory. Shift+enter will buy/sell the whole stack.
+
+Pressing tab on this screen will move you to the quest info panel, where you can review the quest you selected, what uyour party's scouting chance is, and (if you have the Crimson Court DLC enabled) how many wasting characters are left in town.
 
 Press E when you're ready to start the quest.
 
