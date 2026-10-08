@@ -17,6 +17,8 @@ AxGameBuild axGameBuild() {
             return AX_BUILD_STEAM;
         if (stamp == GAME_PE_TIMESTAMP_DRMFREE && size == GAME_PE_SIZEOFIMAGE_DRMFREE)
             return AX_BUILD_DRMFREE;
+        if (stamp == GAME_PE_TIMESTAMP_DRMFREE_PREV && size == GAME_PE_SIZEOFIMAGE_DRMFREE_PREV)
+            return AX_BUILD_DRMFREE_PREV;
         return AX_BUILD_UNKNOWN;
     }();
     return cached;
@@ -25,7 +27,8 @@ AxGameBuild axGameBuild() {
 const char* axGameBuildName() {
     switch (axGameBuild()) {
         case AX_BUILD_STEAM:   return "Steam";
-        case AX_BUILD_DRMFREE: return "DRM-free (GOG)";
+        case AX_BUILD_DRMFREE:      return "DRM-free (GOG)";
+        case AX_BUILD_DRMFREE_PREV: return "DRM-free (GOG, previous release)";
         default:               return "unknown";
     }
 }

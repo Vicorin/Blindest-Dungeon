@@ -76,6 +76,7 @@ void enqueueSynth(uint32_t type, int button, int state, uint32_t frameDelay) {
 }
 
 static const DWORD SYNTH_DRAG_STAGE_MS = 40;
+static const DWORD SYNTH_PAD_MUTE_MS   = 150;
 
 void enqueueSynthWheel(int clicks) {
     if (g_synthCount >= (int)(sizeof g_synth / sizeof g_synth[0])) {
@@ -107,6 +108,7 @@ bool emitSynth(void* ev) {
     SynthEvent s = g_synth[0];
     for (int i = 1; i < g_synthCount; i++) g_synth[i - 1] = g_synth[i];   // pop front
     g_synthCount--;
+    padMuteGame(SYNTH_PAD_MUTE_MS);
     if (s.type == SDL_EVT_MOUSEWHEEL) {
         uintptr_t e = (uintptr_t)ev;
         for (int i = 0; i < SDL_EVENT_SIZE; i += 8) safeWriteU64(e + i, 0);
@@ -358,22 +360,37 @@ bool frontEndClickElementId(int64_t id) {
 }
 
 // ---- Synthesised keyboard input ----
-struct SynthKey { uint32_t type, scancode, sym; uint16_t mod; };
+struct SynthKey { uint32_t type, scancode, sym; uint16_t mod; uint32_t frame; };   // frame = not before
 static SynthKey g_synthKey[4];
 static int      g_synthKeyCount = 0;
 static uint32_t g_synthKeyFrame = 0xffffffffu;   // the frame we last emitted on
 
-void enqueueSynthKey(uint32_t type, uint32_t scancode, uint32_t sym, uint16_t mod) {
+bool enqueueSynthKey(uint32_t type, uint32_t scancode, uint32_t sym, uint16_t mod) {
+    return enqueueSynthKeyAt(type, scancode, sym, mod, 0);
+}
+bool enqueueSynthKeyAt(uint32_t type, uint32_t scancode, uint32_t sym, uint16_t mod, int frameDelay) {
     if (g_synthKeyCount >= (int)(sizeof g_synthKey / sizeof g_synthKey[0])) {
         logLine("synthkey: QUEUE FULL — dropped type=0x%x scan=%u sym=0x%x", type, scancode, sym);
-        return;
+        return false;
     }
     SynthKey& k = g_synthKey[g_synthKeyCount++];
     k.type = type; k.scancode = scancode; k.sym = sym; k.mod = mod;
+    k.frame = g_synthFrame + (uint32_t)(frameDelay > 0 ? frameDelay : 0);
+    return true;
+}
+
+// ---- A HELD SHIFT AROUND A CLICK ----
+void synthHoldShift(int frames) {
+    uint32_t scan = klScancodeForKey(SDLK_LSHIFT);
+    if (!scan) scan = 225;
+    enqueueSynthKeyAt(SDL_EVT_KEYDOWN, scan, SDLK_LSHIFT, KMOD_LSHIFT, 0);
+    enqueueSynthKeyAt(SDL_EVT_KEYUP,   scan, SDLK_LSHIFT, 0, frames > 1 ? frames : 1);
+    logLine("synthkey: holding Shift for %d frame(s)", frames);
 }
 
 bool emitSynthKey(void* ev) {
     if (g_synthKeyCount == 0 || g_synthKeyFrame == g_synthFrame) return false;
+    if (g_synthKey[0].frame > g_synthFrame) return false;      // held back on purpose
     g_synthKeyFrame = g_synthFrame;
     SynthKey k = g_synthKey[0];
     for (int i = 1; i < g_synthKeyCount; i++) g_synthKey[i - 1] = g_synthKey[i];

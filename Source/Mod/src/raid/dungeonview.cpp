@@ -24,6 +24,10 @@ static const uintptr_t OE_TRAP_HERO_IDX_OFF = 0xd80;
 static const uintptr_t OE_TRAP_DELIBERATE_OFF = 0xd84;
 static const uintptr_t MONSTER_CLASS_OFF  = 0x13f8;  // Monster+: MonsterClass* (was 0x1378)
 
+// ---- CAPTOR OFFSETS: the Hag's pot and the Drowned Crew's anchor ----
+static const uintptr_t MONSTERCLASS_CAPTOR_FULL_OFF = 0xc68;
+static const uintptr_t MONSTER_PRISONER_GUID_OFF    = 0x14fc;
+
 // ---- The MONSTER HOVER TOOLTIP (FUN_1406ee670) ----
 static const char* const MT_HP_KEY    = "monster_tooltip_hp_format";
 static const char* const MT_PROT_KEY  = "monster_tooltip_prot_format";
@@ -108,7 +112,7 @@ int rvEnemyList(uintptr_t base, uintptr_t* out, int maxOut) {
     return got;
 }
 
-bool rvMonsterName(uintptr_t base, uintptr_t mon, char* out, int outsz) {
+bool rvMonsterClassName(uintptr_t base, uintptr_t mon, char* out, int outsz) {
     out[0] = 0;
     uintptr_t cobj = 0;
     if (!safeReadPtr(mon + MONSTER_CLASS_OFF, &cobj) || cobj <= 0x10000) return false;
@@ -136,6 +140,77 @@ bool rvMonsterName(uintptr_t base, uintptr_t mon, char* out, int outsz) {
     // The raw class id at least means something, and never silence.
     _snprintf(out, outsz, "%s", id);
     out[outsz - 1] = 0;
+    return true;
+}
+
+// ---- SHAPE-SHIFTER FORMS: the Flesh's four bodies ----
+const char* rvShapeFormWord(uintptr_t mon) {
+    uintptr_t cobj = 0;
+    if (!safeReadPtr(mon + MONSTER_CLASS_OFF, &cobj) || cobj <= 0x10000) return nullptr;
+    char id[64] = { 0 };
+    if (!safeReadCStr(cobj + HEROCLASS_ID_OFF, id, sizeof id) || !id[0]) return nullptr;
+    static const struct { const char* stem; AxStrId word; } kForms[] = {
+        { "formless_melee",  AXS_RV_FORM_HEAD  },
+        { "formless_weak",   AXS_RV_FORM_HEART },
+        { "formless_guard",  AXS_RV_FORM_BONE  },
+        { "formless_ranged", AXS_RV_FORM_BUTT  },
+    };
+    for (const auto& f : kForms) {
+        const size_t n = strlen(f.stem);
+        if (strncmp(id, f.stem, n) != 0) continue;
+        if (id[n] == 0) return axs(f.word);
+        if (id[n] == '_' && id[n + 1] && id[n + 2] == 0) return axs(f.word);
+    }
+    return nullptr;
+}
+
+// ---- CAPTORS: who is in the pot ----
+uint32_t rvCaptorPrisonerGuid(uintptr_t mon) {
+    uintptr_t cobj = 0;
+    if (!safeReadPtr(mon + MONSTER_CLASS_OFF, &cobj) || cobj <= 0x10000) return 0;
+    uint32_t full = 0;
+    if (!safeReadU32(cobj + MONSTERCLASS_CAPTOR_FULL_OFF, &full) || !full) return 0;
+    uint32_t guid = 0;
+    if (!safeReadU32(mon + MONSTER_PRISONER_GUID_OFF, &guid)) return 0;
+    return guid;
+}
+
+bool rvCaptiveHeroName(uintptr_t base, uintptr_t mon, char* out, int outsz) {
+    out[0] = 0;
+    uint32_t guid = rvCaptorPrisonerGuid(mon);
+    if (!guid) return false;
+    uintptr_t hero = bldActHeroByGuid(base, guid);
+    if (!hero) {
+        logLine("captor: monster=%p holds guid %u but the roster has no such hero", (void*)mon, guid);
+        return false;
+    }
+    char cls[96];
+    if (!abHeroNameClassOf(base, hero, out, outsz, cls, sizeof cls) || !out[0]) {
+        logLine("captor: monster=%p holds guid %u, hero=%p has no readable name", (void*)mon, guid, (void*)hero);
+        out[0] = 0;
+        return false;
+    }
+    return true;
+}
+
+bool rvMonsterName(uintptr_t base, uintptr_t mon, char* out, int outsz) {
+    if (!rvMonsterClassName(base, mon, out, outsz)) return false;
+    const char* form = rvShapeFormWord(mon);
+    if (form && out[0]) {
+        char plain[160];
+        _snprintf(plain, sizeof plain, "%s", out);
+        plain[sizeof plain - 1] = 0;
+        _snprintf(out, outsz, axs(AXS_RV_FORM_NAME_FMT), plain, form);
+        out[outsz - 1] = 0;
+    }
+    char captive[160];
+    if (out[0] && rvCaptiveHeroName(base, mon, captive, sizeof captive)) {
+        char plain[160];
+        _snprintf(plain, sizeof plain, "%s", out);
+        plain[sizeof plain - 1] = 0;
+        _snprintf(out, outsz, axs(AXS_RV_CAPTOR_NAME_FMT), plain, captive);
+        out[outsz - 1] = 0;
+    }
     return true;
 }
 
@@ -359,6 +434,11 @@ static bool rvHeroRowText(uintptr_t base, uintptr_t hero, int slot, int slotEnd,
 
     rvPosPhrase(slot, slotEnd, enemy, frag, sizeof frag);
     abAppendFrag(out, outsz, frag);
+
+    if (!enemy) {
+        char mark[200];
+        if (rvRankMarkClause(base, slot, slotEnd, mark, sizeof mark)) abAppendFrag(out, outsz, mark);
+    }
 
     char form[64];
     if (spModeName(base, hero, form, sizeof form))
@@ -898,7 +978,12 @@ static bool propTextFor(uintptr_t base, uintptr_t prop,
     return name[0] != 0;
 }
 
-static int rvPropList(uintptr_t base, uintptr_t* out, int maxOut) {
+static const uintptr_t AREA_PROPS_BEG_OFF = 0x118;   // Area+: vector<Prop*> begin
+static const uintptr_t AREA_PROPS_END_OFF = 0x120;   // Area+: vector<Prop*> end
+static const uintptr_t PROP_ACTIVE_OFF    = 0x010;   // Prop+: bool, the roster loop's and the reach
+static const uintptr_t PROP_LIT_OFF       = 0x121;   // Prop+: byte, SetInteractive's own flag -- 1
+
+static int rvHighlightList(uintptr_t base, uintptr_t* out, int maxOut) {
     uintptr_t rd = (uintptr_t)g_raidDisplay;
     if (!rd) return 0;
     (void)base;
@@ -925,6 +1010,65 @@ static int rvPropList(uintptr_t base, uintptr_t* out, int maxOut) {
         uintptr_t p = 0;
         if (safeReadPtr(beg + (uintptr_t)i * 8, &p) && p > 0x10000) out[got++] = p;
     }
+    return got;
+}
+
+// The live Area, and whether it is a room (kind 0). 0 = no raid / unreadable.
+static uintptr_t rvCurrentArea(uintptr_t base, bool* isRoom) {
+    if (isRoom) *isRoom = false;
+    uintptr_t root = mapRoot(base);
+    if (!root) return 0;
+    uintptr_t area = 0;
+    if (!safeReadPtr(root + MAP_CUR_AREA_PTR, &area) || area <= 0x10000) return 0;
+    int32_t kind = -1;
+    if (isRoom && safeReadU32(area + AREA_KIND_OFF, reinterpret_cast<uint32_t*>(&kind)))
+        *isRoom = (kind == 0);
+    return area;
+}
+
+static int rvAreaPropsRaw(uintptr_t area, uintptr_t* out, int maxOut) {
+    uintptr_t beg = 0, end = 0;
+    if (!safeReadPtr(area + AREA_PROPS_BEG_OFF, &beg) || !safeReadPtr(area + AREA_PROPS_END_OFF, &end))
+        return 0;
+    if (!beg || end < beg) return 0;
+    int64_t n = (int64_t)((end - beg) / 8);
+    if (n <= 0) return 0;
+    if (n > RV_MAX_PROPS) {
+        logLine("roomview: the area's prop vector claims %lld entries, capping at %d",
+                (long long)n, RV_MAX_PROPS);
+        n = RV_MAX_PROPS;
+    }
+    int got = 0;
+    for (int64_t i = 0; i < n && got < maxOut; i++) {
+        uintptr_t p = 0;
+        if (safeReadPtr(beg + (uintptr_t)i * 8, &p) && p > 0x10000) out[got++] = p;
+    }
+    return got;
+}
+
+static bool rvPropListable(uintptr_t prop) {
+    int32_t kind = -1;
+    if (!safeReadU32(prop + PROP_TYPE_ENUM_OFF, reinterpret_cast<uint32_t*>(&kind))) return false;
+    uint8_t live = 0;
+    if (!safeReadU8(prop + PROP_ACTIVE_OFF, &live) || !live) return false;
+    if (kind == 0) return true;
+    if (kind == PROP_KIND_TRAP) {
+        uint8_t seen = 0;
+        return safeReadU8(prop + PROP_TRAP_SEEN_OFF, &seen) && seen != 0;
+    }
+    return false;
+}
+
+static int rvPropList(uintptr_t base, uintptr_t* out, int maxOut) {
+    bool room = false;
+    uintptr_t area = rvCurrentArea(base, &room);
+    if (!area || !room) return rvHighlightList(base, out, maxOut);   // a corridor: the band, as before
+
+    uintptr_t raw[RV_MAX_PROPS];
+    int n = rvAreaPropsRaw(area, raw, RV_MAX_PROPS);
+    int got = 0;
+    for (int i = 0; i < n && got < maxOut; i++)
+        if (rvPropListable(raw[i])) out[got++] = raw[i];
     return got;
 }
 
@@ -985,6 +1129,38 @@ static const uintptr_t PROP_BOX_MAXX_OFF = 0x100;
 static const uintptr_t PROP_BOX_MINY_OFF = 0x104;
 static const uintptr_t PROP_BOX_MAXY_OFF = 0x108;
 
+static bool rvReachBox(uintptr_t base, float* loX, float* hiX, float* loY, float* hiY) {
+    uintptr_t root = mapRoot(base);
+    if (!root) return false;
+    uintptr_t beg = 0, end = 0, lead = 0;
+    if (!safeReadPtr(root + RAID_PARTY_BEG_OFF, &beg) ||
+        !safeReadPtr(root + RAID_PARTY_END_OFF, &end) || beg <= 0x10000 || end <= beg) return false;
+    if (!safeReadPtr(beg, &lead) || lead <= 0x10000) return false;   // party[0], the game's own pick
+
+    float ax = 0, ay = 0, aw = 0, pos = 0, boxW = 0, boxH = 0;
+    if (!rvReadF32(lead + ACTOR_BOX_X_OFF, &ax) ||
+        !rvReadF32(lead + ACTOR_BOX_Y_OFF, &ay) ||
+        !rvReadF32(lead + ACTOR_BOX_W_OFF, &aw) ||
+        !rvReadF32(root + MAP_PARTY_POS_OFF, &pos) ||
+        !rvReadF32(base + REACH_BOX_WIDTH_RVA, &boxW) ||
+        !rvReadF32(base + REACH_BOX_HEIGHT_RVA, &boxH)) return false;
+
+    float x2 = boxW * aw + pos;
+    *loX = ax; *hiX = x2;
+    if (*hiX < *loX) { *loX = x2; *hiX = ax; }
+    *loY = ay; *hiY = ay + boxH;
+    return true;
+}
+
+static bool rvTrapBoxOverlaps(uintptr_t prop, float loX, float hiX, float loY, float hiY) {
+    float pminx = 0, pmaxx = 0, pminy = 0, pmaxy = 0;
+    if (!rvReadF32(prop + PROP_BOX_MINX_OFF, &pminx) ||
+        !rvReadF32(prop + PROP_BOX_MAXX_OFF, &pmaxx) ||
+        !rvReadF32(prop + PROP_BOX_MINY_OFF, &pminy) ||
+        !rvReadF32(prop + PROP_BOX_MAXY_OFF, &pmaxy)) return false;
+    return pminx <= hiX && loX <= pmaxx && pminy <= hiY && loY <= pmaxy;
+}
+
 static bool rvTrapInReach(uintptr_t base) {
     uintptr_t props[RV_MAX_PROPS];
     int n = rvPropList(base, props, RV_MAX_PROPS);
@@ -1004,26 +1180,11 @@ static bool rvTrapInReach(uintptr_t base) {
     if (ahead >= (int)mapAreaTiles(area)) return false;      // the game's own bound
     if (!tileContentsVisible(area, ahead)) return false;     // still fogged: say nothing
 
-    uintptr_t beg = 0, end = 0, lead = 0;
-    if (!safeReadPtr(root + RAID_PARTY_BEG_OFF, &beg) ||
-        !safeReadPtr(root + RAID_PARTY_END_OFF, &end) || beg <= 0x10000 || end <= beg) return false;
-    if (!safeReadPtr(beg, &lead) || lead <= 0x10000) return false;   // party[0], the game's own pick
-
-    float ax = 0, ay = 0, aw = 0, pos = 0, boxW = 0, boxH = 0;
-    if (!rvReadF32(lead + ACTOR_BOX_X_OFF, &ax) ||
-        !rvReadF32(lead + ACTOR_BOX_Y_OFF, &ay) ||
-        !rvReadF32(lead + ACTOR_BOX_W_OFF, &aw) ||
-        !rvReadF32(root + MAP_PARTY_POS_OFF, &pos) ||
-        !rvReadF32(base + REACH_BOX_WIDTH_RVA, &boxW) ||
-        !rvReadF32(base + REACH_BOX_HEIGHT_RVA, &boxH)) {
+    float loX = 0, hiX = 0, loY = 0, hiY = 0;
+    if (!rvReachBox(base, &loX, &hiX, &loY, &hiY)) {
         logLine("trapchance: interaction box unreadable -- clause suppressed");
         return false;
     }
-
-    float x2 = boxW * aw + pos;
-    float loX = ax, hiX = x2;
-    if (hiX < loX) { loX = x2; hiX = ax; }
-    const float loY = ay, hiY = ay + boxH;
 
     for (int i = 0; i < n; i++) {
         // (b) the filter lambda, both terms, read here rather than assumed of the vector.
@@ -1031,12 +1192,7 @@ static bool rvTrapInReach(uintptr_t base) {
         uint8_t seen = 0;
         if (!safeReadU8(props[i] + PROP_TRAP_SEEN_OFF, &seen) || !seen) continue;
         // (c) the box.
-        float pminx = 0, pmaxx = 0, pminy = 0, pmaxy = 0;
-        if (!rvReadF32(props[i] + PROP_BOX_MINX_OFF, &pminx) ||
-            !rvReadF32(props[i] + PROP_BOX_MAXX_OFF, &pmaxx) ||
-            !rvReadF32(props[i] + PROP_BOX_MINY_OFF, &pminy) ||
-            !rvReadF32(props[i] + PROP_BOX_MAXY_OFF, &pmaxy)) continue;
-        if (pminx <= hiX && loX <= pmaxx && pminy <= hiY && loY <= pmaxy) return true;
+        if (rvTrapBoxOverlaps(props[i], loX, hiX, loY, hiY)) return true;
     }
     return false;
 }
@@ -1048,7 +1204,6 @@ static const uintptr_t PROP_RECT_MINX_OFF    = 0x10c;   // Prop+: the rect the l
 static const uintptr_t PROP_RECT_MAXX_OFF    = 0x110;
 static const uintptr_t PROP_RECT_MINY_OFF    = 0x114;
 static const uintptr_t PROP_RECT_MAXY_OFF    = 0x118;
-static const uintptr_t PROP_ACTIVE_OFF       = 0x010;   // Prop+: bool, the byte the gate tests last
 static const uintptr_t MAP_INTERACT_LOCK_OFF = 0x4b20;
 
 bool rvPropReach(uintptr_t base, uintptr_t prop, bool* inReachOut, int* dirOut, float* dxOut) {
@@ -1090,6 +1245,19 @@ bool rvPropReach(uintptr_t base, uintptr_t prop, bool* inReachOut, int* dirOut, 
 }
 
 int  rvRoomProps(uintptr_t base, uintptr_t* out, int max) { return rvPropList(base, out, max); }
+
+static bool rvPropUsableHere(uintptr_t base, uintptr_t prop, int* dirOut) {
+    if (dirOut) *dirOut = 0;
+    if (propIsTrap(prop)) {
+        float loX = 0, hiX = 0, loY = 0, hiY = 0;
+        if (!rvReachBox(base, &loX, &hiX, &loY, &hiY)) return true;
+        return rvTrapBoxOverlaps(prop, loX, hiX, loY, hiY);
+    }
+    bool in = false; int dir = 0; float dx = 0;
+    if (!rvPropReach(base, prop, &in, &dir, &dx)) return true;
+    if (dirOut) *dirOut = dir;
+    return in;
+}
 bool rvPropIsTrap(uintptr_t prop)                          { return propIsTrap(prop); }
 bool rvPropActive(uintptr_t prop) {
     uint8_t a = 0; return safeReadU8(prop + PROP_ACTIVE_OFF, &a) && a != 0;
@@ -1221,7 +1389,10 @@ static bool rvHiddenDoorRowText(uintptr_t base, uint32_t destId, char* out, int 
 static bool rvPropRowText(uintptr_t base, uintptr_t prop, int slot, int total, char* out, int outsz) {
     char name[160], desc[512];
     if (!propTextFor(base, prop, name, sizeof name, desc, sizeof desc)) return false;
-    _snprintf(out, outsz, axs(AXS_RV_OBJECT_N_OF_M_FMT), name, slot, total);
+    int o = _snprintf(out, outsz, axs(AXS_RV_OBJECT_N_OF_M_FMT), name, slot, total);
+    if (o < 0 || o >= outsz) o = outsz - 1;
+    if (!rvPropUsableHere(base, prop, nullptr))
+        _snprintf(out + o, outsz - o, " %s", axs(AXS_RV_OUT_OF_REACH));
     out[outsz - 1] = 0;
     return true;
 }
@@ -1648,6 +1819,91 @@ static bool rvSkillName(uintptr_t base, uintptr_t mon, int i, char* out, int out
     _snprintf(out, outsz, "%s", name);
     out[outsz - 1] = 0;
     return true;
+}
+
+// ---- RANK TARGETS: the marked rank (Prophet, Brigand Vvulf) ----
+static const uintptr_t ACTOR_ENEMY_RANK_TARGETS_OFF     = 0x480;  // Actor+: uint, "enemy_rank_targets"
+static const uintptr_t EFFECT_PERFORMER_RANK_TARGET_OFF = 0x2bc;  // Effect+: byte, ".performer_rank_target"
+static const int       RV_MARK_EFFECT_MAX               = 32;     // sanity cap; a shipped skill carries <= 6
+
+bool rvRankMarksOf(uintptr_t mon, uint32_t* maskOut) {
+    *maskOut = 0;
+    uint32_t m = 0;
+    if (!mon || !safeReadU32(mon + ACTOR_ENEMY_RANK_TARGETS_OFF, &m)) return false;
+    *maskOut = m & SKILL_RANK_BITS;          // ranks 1..4 only, as rvRankFromGame
+    return true;
+}
+
+bool rvRankMarkName(uintptr_t base, uintptr_t mon, char* out, int outsz) {
+    out[0] = 0;
+    uintptr_t beg = 0;
+    const int n = rvSkillCount(mon, &beg);
+    for (int i = 0; i < n && beg; i++) {
+        const uintptr_t skill = beg + (uintptr_t)i * MONSTER_SKILL_STRIDE;
+        uintptr_t eb = 0, ee = 0;
+        if (!safeReadPtr(skill + SKILL_EFFECTS_OFF, &eb) ||
+            !safeReadPtr(skill + SKILL_EFFECTS_OFF + 8, &ee)) continue;
+        if (eb <= 0x10000 || ee <= eb) continue;             // no effects on this skill
+        int64_t cnt = (int64_t)((ee - eb) / 8);
+        if (cnt > RV_MARK_EFFECT_MAX) {
+            logLine("rankmark: skill %d of monster=%p claims %lld effects, capping", i, (void*)mon,
+                    (long long)cnt);
+            cnt = RV_MARK_EFFECT_MAX;
+        }
+        bool marks = false;
+        for (int64_t k = 0; k < cnt && !marks; k++) {
+            uintptr_t eff = 0;
+            uint8_t flag = 0;
+            if (safeReadPtr(eb + (uintptr_t)k * 8, &eff) && eff > 0x10000 &&
+                safeReadU8(eff + EFFECT_PERFORMER_RANK_TARGET_OFF, &flag) && flag) marks = true;
+        }
+        if (!marks) continue;
+        if (rvSkillName(base, mon, i, out, outsz) && out[0]) return true;
+    }
+    logLine("rankmark: no marking skill found on monster=%p (%d skills) — naming the monster", (void*)mon, n);
+    return rvMonsterName(base, mon, out, outsz) && out[0];
+}
+
+void rvRankMarkRanks(uint32_t mask, char* out, int outsz) {
+    char list[32] = { 0 };
+    int n = 0;
+    for (int i = 0; i < 4; i++) {
+        if (!(mask & (1u << i))) continue;
+        char piece[8];
+        _snprintf(piece, sizeof piece, "%s%d", n ? ", " : "", i + 1);
+        strncat(list, piece, sizeof list - strlen(list) - 1);
+        n++;
+    }
+    _snprintf(out, outsz, axs(n > 1 ? AXS_AB_POSITION_MANY_FMT : AXS_AB_POSITION_ONE_FMT), list);
+    out[outsz - 1] = 0;
+}
+
+bool rvRankMarkClause(uintptr_t base, int slot, int slotEnd, char* out, int outsz) {
+    out[0] = 0;
+    if (slot < 1 || slot > 4) return false;
+    uint32_t want = 0;
+    for (int r = slot; r <= (slotEnd > slot ? slotEnd : slot) && r <= 4; r++) want |= 1u << (r - 1);
+
+    uintptr_t foes[RV_MAX_ENEMIES];
+    const int ne = rvEnemyList(base, foes, RV_MAX_ENEMIES);
+    for (int i = 0; i < ne; i++) {
+        uint32_t m = 0;
+        if (!rvRankMarksOf(foes[i], &m) || !(m & want)) continue;
+        char dead[96];
+        if (rvCorpseWord(base, foes[i], dead, sizeof dead)) {
+            logLine("rankmark: corpse monster=%p still holds mask 0x%x — not spoken", (void*)foes[i], m);
+            continue;
+        }
+        char nm[160];
+        if (!rvRankMarkName(base, foes[i], nm, sizeof nm)) {
+            logLine("rankmark: rank %d is marked by monster=%p but nothing names it", slot, (void*)foes[i]);
+            continue;
+        }
+        if (strstr(out, nm)) continue;                       // two monsters, one skill: say it once
+        if (out[0]) strncat(out, ", ", outsz - strlen(out) - 1);
+        strncat(out, nm, outsz - strlen(out) - 1);
+    }
+    return out[0] != 0;
 }
 
 // ---- WHICH SKILLS THE GAME'S TOOLTIP ACTUALLY DRAWS ----
@@ -2415,6 +2671,15 @@ void rvSetActive(uintptr_t base, bool on) {
     logLine("roomview %s", on ? "active" : "inactive");
 }
 
+// ---- ROOM INDEX OF AN ACTOR (the pickers' bridge into the tooltip reader) ----
+int rvRoomIndexOfActor(uintptr_t base, uintptr_t actor) {
+    if (!actor) return -1;
+    RvEntry all[RV_MAX_ROWS];
+    int n = rvBuildRoom(base, all, RV_MAX_ROWS);
+    for (int i = 0; i < n; i++) if (all[i].actor && all[i].actor == actor) return i;
+    return -1;
+}
+
 void rvSpeakTipLine(uintptr_t base, int tipDir) {
     RvEntry rows[RV_MAX_ROWS];
     int n = rvBuildRoom(base, rows, RV_MAX_ROWS);
@@ -2456,6 +2721,33 @@ void rvSpeakTipLine(uintptr_t base, int tipDir) {
     g_rvTipLine = line;
     logLine("roomview tipline %d/%d (row %d) -> \"%s\"", line, nl, g_rvCursor, lines[line]);
     postSpeech(lines[line]);
+}
+
+// ---- READ ONE RANK ON DEMAND ----
+void rvSpeakRank(uintptr_t base, bool enemy, int rank) {
+    RvEntry rows[RV_MAX_ROWS];
+    int n = rvBuildRoom(base, rows, RV_MAX_ROWS);
+    for (int i = 0; i < n; i++) {
+        const RvEntry& e = rows[i];
+        if (e.kind != RV_ACTOR || !e.actor || e.enemy != enemy) continue;
+        if (rank < e.slot || rank > e.slotEnd) continue;
+        char out[512];
+        if (!rvRowText(base, e, out, sizeof out)) {
+            char pos[64];
+            rvPosForEntry(e, pos, sizeof pos);
+            _snprintf(out, sizeof out, "%s. %s.", rvGenericLabel(e), pos);
+            out[sizeof out - 1] = 0;
+        }
+        logLine("roomview rank-read %s rank %d -> row %d/%d -> \"%s\"",
+                enemy ? "enemy" : "party", rank, i, n, out);
+        postSpeech(out);
+        return;
+    }
+    char msg[96];
+    _snprintf(msg, sizeof msg, axs(enemy ? AXS_RV_ENEMY_RANK_EMPTY_FMT : AXS_RV_RANK_EMPTY_FMT), rank);
+    msg[sizeof msg - 1] = 0;
+    logLine("roomview rank-read %s rank %d -> nobody (rows=%d)", enemy ? "enemy" : "party", rank, n);
+    postSpeech(msg);
 }
 
 bool rvTipPanelSwitch(uintptr_t base, int dir, bool repeat) {
@@ -2572,6 +2864,39 @@ void rvAnnounceEntry(uintptr_t base, bool withCounts) {
         if (wayOn) _snprintf(head + ho, sizeof head - ho, " %s", axs(AXS_RV_WAY_ON_OPEN));
         logLine("roomview enter: party=%d enemies=%d props=%d doors=%d wave=%d wayon=%d",
                 np, ne, npr, nd, wave ? 1 : 0, wayOn ? 1 : 0);
+        if (axDebugLogEnabled()) {
+            bool room = false;
+            uintptr_t area = rvCurrentArea(base, &room);
+            uintptr_t raw[RV_MAX_PROPS];
+            int nraw = area ? rvAreaPropsRaw(area, raw, RV_MAX_PROPS) : 0;
+            uintptr_t lit[RV_MAX_PROPS];
+            int nlit = rvHighlightList(base, lit, RV_MAX_PROPS);
+            float loX = 0, hiX = 0, loY = 0, hiY = 0;
+            bool haveBox = rvReachBox(base, &loX, &hiX, &loY, &hiY);
+            logLine("roomview props: area=%p room=%d owns=%d highlighted=%d band x=[%.1f..%.1f] "
+                    "y=[%.1f..%.1f]%s", (void*)area, room ? 1 : 0, nraw, nlit, loX, hiX, loY, hiY,
+                    haveBox ? "" : " (box unreadable)");
+            for (int i = 0; i < nraw; i++) {
+                int32_t kind = -1; uint8_t live = 0, flag121 = 0, seen = 0;
+                float px = 0, py = 0;
+                safeReadU32(raw[i] + PROP_TYPE_ENUM_OFF, reinterpret_cast<uint32_t*>(&kind));
+                safeReadU8(raw[i] + PROP_ACTIVE_OFF, &live);
+                safeReadU8(raw[i] + PROP_LIT_OFF, &flag121);
+                safeReadU8(raw[i] + PROP_TRAP_SEEN_OFF, &seen);
+                rvReadF32(raw[i] + PROP_POS_X_OFF, &px);
+                rvReadF32(raw[i] + PROP_POS_Y_OFF, &py);
+                bool in = false; int dir = 0; float dx = 0;
+                bool gate = rvPropReach(base, raw[i], &in, &dir, &dx);
+                bool isLit = false;
+                for (int j = 0; j < nlit; j++) if (lit[j] == raw[i]) { isLit = true; break; }
+                char nm[160] = {0};
+                rvPropName(base, raw[i], nm, sizeof nm);
+                logLine("roomview prop[%d]=%p \"%s\" kind=%d live=%u f121=%u seen=%u at=(%.1f,%.1f) "
+                        "listed=%d lit=%d gate=%s dir=%+d dx=%.1f", i, (void*)raw[i], nm, kind,
+                        live, flag121, seen, px, py, rvPropListable(raw[i]) ? 1 : 0, isLit ? 1 : 0,
+                        !gate ? "unreadable" : in ? "in" : "OUT", dir, dx);
+            }
+        }
     } else {
         _snprintf(head, sizeof head, "%s", axs(AXS_RV_HEAD));
     }
@@ -2614,7 +2939,7 @@ bool abEnterFromRoom(uintptr_t base, const char* head) {
     rvSetActive(base, false);
     abSetActive(base, true);
     logLine("stitch: dungeon view -> action bar (items=%d, return row=%d)", n, g_abRoomReturn);
-    abSpeakLabel(base, &items[0], abSlotCount(items, n), head ? head : "Actions.");
+    abSpeakLabel(base, &items[0], abSlotCount(items, n), head ? head : axs(AXS_AB_HEADER_ACTIONS));
     return true;
 }
 
@@ -2635,6 +2960,65 @@ bool rvEnterFromBar(uintptr_t base) {
     logLine("stitch: action bar -> dungeon view, return row=%d", want);
     rvAnnounceEntry(base, false);
     return true;
+}
+
+// ---- ENTER ON A PARTY ROW: MOVE THIS HERO ----
+static uintptr_t g_rvMovePend      = 0;     // the hero whose selection click is in flight
+static DWORD     g_rvMovePendUntil = 0;
+static const DWORD RV_MOVE_PEND_MS = 1500;
+
+static bool rvMoveHero(uintptr_t base, uintptr_t actor) {
+    uintptr_t root = mapRoot(base);
+    if (!root || !actor) return false;
+    if (abSelectedHero(base) == actor) return abBeginMoveSelected(base);
+    if (abBattleLive(root)) {
+        logLine("move: hero %p is not the selected (acting) hero in a fight -- refusing", (void*)actor);
+        postSpeech(axs(AXS_AB_CANT_USE_NOW));
+        return true;
+    }
+    int rank = rvRankFromGame(actor);
+    if (rank < 1 || !abClickHeroRank(base, rank)) {
+        logLine("move: could not click hero %p (rank %d) to select them", (void*)actor, rank);
+        postSpeech(axs(AXS_AB_CANT_USE_NOW));
+        return true;
+    }
+    g_rvMovePend = actor;
+    g_rvMovePendUntil = GetTickCount() + RV_MOVE_PEND_MS;
+    return true;
+}
+
+void serviceRvMovePend(uintptr_t base) {
+    if (!g_rvMovePend) return;
+    if (!mapRoot(base)) { g_rvMovePend = 0; return; }           // the raid went away under it
+    if (abSelectedHero(base) == g_rvMovePend) {
+        g_rvMovePend = 0;
+        logLine("move: the selection landed on the clicked hero -> opening the move list");
+        abBeginMoveSelected(base);
+        return;
+    }
+    if ((long)(GetTickCount() - g_rvMovePendUntil) >= 0) {
+        logLine("move: the click did not move the selection within %u ms -- giving up", RV_MOVE_PEND_MS);
+        g_rvMovePend = 0;
+        postSpeech(axs(AXS_AB_CANT_USE_NOW));
+    }
+}
+
+bool rvCursorOnParty(uintptr_t base) {
+    if (!g_rvActive) return false;
+    RvEntry rows[RV_MAX_ROWS];
+    int n = rvBuildRoom(base, rows, RV_MAX_ROWS);
+    if (n <= 0 || g_rvCursor < 0 || g_rvCursor >= n) return false;
+    const RvEntry& e = rows[g_rvCursor];
+    return e.kind == RV_ACTOR && !e.enemy && e.actor != 0;
+}
+
+bool rvCursorOnDoor(uintptr_t base) {
+    if (!g_rvActive) return false;
+    RvEntry rows[RV_MAX_ROWS];
+    int n = rvBuildRoom(base, rows, RV_MAX_ROWS);
+    if (n <= 0 || g_rvCursor < 0 || g_rvCursor >= n) return false;
+    const RvEntry& e = rows[g_rvCursor];
+    return e.kind == RV_DOOR || e.kind == RV_HIDDEN_DOOR;
 }
 
 bool routeRoomKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
@@ -2685,8 +3069,43 @@ bool routeRoomKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
         const RvEntry& e = rows[g_rvCursor];
         if (e.kind == RV_ADVANCE) return rvAdvanceRoom(base);
         if (e.kind == RV_ACTOR && !e.enemy && pitActivateHero(base, e.actor)) return true;
+        if (e.kind == RV_ACTOR && !e.enemy && e.actor) {
+            if (mod & (KMOD_LSHIFT | KMOD_RSHIFT)) return abReorderPartyNow(base);
+            return rvMoveHero(base, e.actor);
+        }
+        if (e.kind == RV_DOOR) {
+            uint32_t scan = klScancodeForKey(SDLK_w);
+            if (!scan) { logLine("roomview: no scancode for W on this layout -- door not opened"); return false; }
+            if (!enqueueSynthKey(SDL_EVT_KEYDOWN, scan, SDLK_w, 0) ||
+                !enqueueSynthKey(SDL_EVT_KEYUP,   scan, SDLK_w, 0)) {
+                logLine("roomview: W tap for the door row DROPPED (synth queue full)");
+                return true;
+            }
+            logLine("roomview: Enter on the exit row -> the game's W");
+            return true;
+        }
         if (e.kind != RV_PROP) return false;                         // not ours — the game's key
         if (propIsTrap(e.obj)) return rvDisarmTrap(base, e.obj);
+        {
+            int dir = 0;
+            if (!rvPropUsableHere(base, e.obj, &dir)) {
+                if (dir != 0 && twBeginStepToProp(base, e.obj)) {
+                    char nm[160] = {0};
+                    if (!rvPropName(base, e.obj, nm, sizeof nm))
+                        _snprintf(nm, sizeof nm, "%s", axs(AXS_RV_LABEL_OBJECT));
+                    nm[sizeof nm - 1] = 0;
+                    char msg[220];
+                    _snprintf(msg, sizeof msg, axs(AXS_RV_WALKING_TO_FMT), nm);
+                    msg[sizeof msg - 1] = 0;
+                    postSpeech(msg);
+                    return true;
+                }
+                logLine("curio: prop %p is out of reach and cannot be walked to (dir=%d)",
+                        (void*)e.obj, dir);
+                postSpeech(axs(AXS_RV_CANT_USE_HERE));
+                return true;
+            }
+        }
         return rvInteractProp(base, e.obj);
     }
 

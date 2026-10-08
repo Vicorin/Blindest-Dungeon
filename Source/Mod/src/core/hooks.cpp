@@ -55,6 +55,28 @@ static bool installPollHook(uintptr_t base) {
                     &g_iatSlot, reinterpret_cast<void**>(&g_origPoll));
 }
 
+// ---- The pad getters ----
+static uintptr_t* g_padBtnSlot  = nullptr;
+static uintptr_t* g_padAxisSlot = nullptr;
+static void installPadHooks(uintptr_t base) {
+    void* ob = nullptr; void* oa = nullptr;
+    bool b = patchIat(base, "SDL_GameControllerGetButton", reinterpret_cast<void*>(&OurPadGetButton),
+                      &g_padBtnSlot, &ob);
+    bool a = b && patchIat(base, "SDL_GameControllerGetAxis", reinterpret_cast<void*>(&OurPadGetAxis),
+                           &g_padAxisSlot, &oa);
+    if (b && !a && g_padBtnSlot) {
+        DWORD old = 0;
+        if (VirtualProtect(g_padBtnSlot, sizeof(uintptr_t), PAGE_READWRITE, &old)) {
+            *g_padBtnSlot = reinterpret_cast<uintptr_t>(ob);
+            VirtualProtect(g_padBtnSlot, sizeof(uintptr_t), old, &old);
+        }
+        g_padBtnSlot = nullptr; ob = nullptr;
+    }
+    padSetOriginals(a ? ob : nullptr, a ? oa : nullptr);
+    logLine("pad hooks: button=%d axis=%d%s", b ? 1 : 0, a ? 1 : 0,
+            a ? "" : " -- the pad stays the game's; the mod only follows its focus");
+}
+
 // ---- Verify-before-write for every vtable slot patch ----
 static bool vftableIs(uintptr_t base, uintptr_t vftRva, const char* expectDecorated, const char* tag) {
     uintptr_t col = 0; uint32_t tdRva = 0; char name[128] = {0};
@@ -367,14 +389,17 @@ static DWORD WINAPI SpeechThread(LPVOID) {
     }
     if (axGameBuild() == AX_BUILD_UNKNOWN) {
         logLine("=== UNKNOWN GAME BINARY: PE stamp 0x%08x size 0x%x, the mod knows Steam "
-                "0x%08x / 0x%x and DRM-free 0x%08x / 0x%x -- NO hooks installed, mod inactive ===",
+                "0x%08x / 0x%x and DRM-free 0x%08x / 0x%x or 0x%08x / 0x%x -- NO hooks "
+                "installed, mod inactive ===",
                 peStamp, peSize, GAME_PE_TIMESTAMP, GAME_PE_SIZEOFIMAGE,
-                GAME_PE_TIMESTAMP_DRMFREE, GAME_PE_SIZEOFIMAGE_DRMFREE);
+                GAME_PE_TIMESTAMP_DRMFREE, GAME_PE_SIZEOFIMAGE_DRMFREE,
+                GAME_PE_TIMESTAMP_DRMFREE_PREV, GAME_PE_SIZEOFIMAGE_DRMFREE_PREV);
         char msg[256];
         _snprintf(msg, 256, "Accessibility mod: this version of Darkest Dungeon is not "
-                  "supported yet (game build %08x, the mod expects %08x on Steam or %08x on "
-                  "GOG). Mod inactive; the game runs without it.",
-                  peStamp, GAME_PE_TIMESTAMP, GAME_PE_TIMESTAMP_DRMFREE);
+                  "supported yet (game build %08x, the mod expects %08x on Steam or %08x or "
+                  "%08x on GOG). Mod inactive; the game runs without it.",
+                  peStamp, GAME_PE_TIMESTAMP, GAME_PE_TIMESTAMP_DRMFREE,
+                  GAME_PE_TIMESTAMP_DRMFREE_PREV);
         msg[255] = 0;
         speakUtf8(msg, true);
         Sleep(8000);                        // let the line finish before speech goes away
@@ -389,6 +414,7 @@ static DWORD WINAPI SpeechThread(LPVOID) {
 
     bool hooked = installPollHook(g_base);
     if (hooked) installTextHooks(g_base);   // best-effort naming open/close signal
+    if (hooked) installPadHooks(g_base);
     if (hooked) installMenuHook(g_base);    // capture the options-menu object (vtable slot)
     if (hooked) installTutorialHook(g_base);
     if (hooked) installTownEventHook(g_base);

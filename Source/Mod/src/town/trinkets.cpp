@@ -1159,3 +1159,28 @@ void checkRealmInv(uintptr_t base) {
         }
     }
 }
+
+// ---- PAD FOCUS FOLLOWER ----
+bool riFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    uint32_t cc = (uint32_t)(uint64_t)id;
+    int nActs = riActionCount(base);
+    int idx = -1;
+    if (cc == (uint32_t)RI_ELEM_UNEQUIP && nActs > 0) {
+        idx = 0;
+    } else if (cc - (uint32_t)RI_ELEM_SORT_BASE < (uint32_t)(nActs > 0 ? nActs - 1 : 0)) {
+        idx = 1 + (int)(cc - (uint32_t)RI_ELEM_SORT_BASE);
+    } else {
+        int64_t firstId = 0;
+        int family = provSlotElemCount(base, RI_GRID_OWNER_TAG, &firstId);
+        int64_t raw = id - firstId;
+        if (family <= 0 || raw < 0 || raw >= family) return false;
+        int occ[RI_MAX_TRINKETS];
+        int slots = riOccupiedSlots(base, occ, RI_MAX_TRINKETS);
+        for (int g = 0; g < slots; g++) if (occ[g] == (int)raw) { idx = nActs + g; break; }
+    }
+    if (idx < 0) return false;
+    g_riSlot = idx;
+    riSpeakRow(base, nullptr);
+    return true;
+}

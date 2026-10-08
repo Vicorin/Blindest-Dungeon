@@ -531,6 +531,25 @@ bool routeQuestToggle(uintptr_t base, uint32_t sym, uint8_t repeat) {
     return qtEnterFromRoom(base);
 }
 
+// ---- THE BUTTON PRESS, as a callable ----
+void qtActivateButton(uintptr_t base) {
+    QtBtn btn = qtCurrentButton(base);
+    if (btn == QTB_NONE) { postSpeech(axs(AXS_NOT_AVAILABLE)); return; }
+
+    if (btn == QTB_FINISH) {
+        if (!frontEndClickElementId((int64_t)QT_CREST_ID)) {
+            logLine("quest: click refused for the crest 0x%08x (not on screen)", QT_CREST_ID);
+            postSpeech(axs(AXS_NOT_AVAILABLE));
+        }
+        return;
+    }
+
+    bool asks = qtRetreatAsksFirst(base);
+    if (!qtRetreatActivate(base)) { postSpeech(axs(AXS_NOTHING_HAPPENED)); return; }
+    if (asks) g_qtRetreatWatchUntil = GetTickCount() + 1500;
+    else      logLine("quest retreat: no dialog expected here — the battle banners report it");
+}
+
 bool routeQuestKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {   // (de-static'd
     if (mod & (KMOD_LALT | KMOD_RALT)) return false;
     if (mod & (KMOD_LCTRL | KMOD_RCTRL)) return false;   // no buffer here; don't claim what we can't use
@@ -567,21 +586,9 @@ bool routeQuestKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
             qtSpeakRow(base, g_qtCursor);
             return true;
         }
-        QtBtn btn = qtCurrentButton(base);
-        if (btn == QTB_NONE || g_qtCursor != btnRow) { postSpeech(axs(AXS_NOT_AVAILABLE)); return true; }
-
-        if (btn == QTB_FINISH) {
-            if (!frontEndClickElementId((int64_t)QT_CREST_ID)) {
-                logLine("quest: click refused for the crest 0x%08x (not on screen)", QT_CREST_ID);
-                postSpeech(axs(AXS_NOT_AVAILABLE));
-            }
-            return true;
-        }
-
-        bool asks = qtRetreatAsksFirst(base);
-        if (!qtRetreatActivate(base)) { postSpeech(axs(AXS_NOTHING_HAPPENED)); return true; }
-        if (asks) g_qtRetreatWatchUntil = GetTickCount() + 1500;
-        else      logLine("quest retreat: no dialog expected here — the battle banners report it");
+        // THE BUTTON ROW -- the cursor is on it, so press it.
+        if (g_qtCursor != btnRow) { postSpeech(axs(AXS_NOT_AVAILABLE)); return true; }
+        qtActivateButton(base);
         return true;
     }
 
@@ -1010,4 +1017,16 @@ bool routeQuestDoneKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repea
         return true;
     }
     return false;
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool qcFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_qcOpen) return false;
+    uint32_t cc = (uint32_t)(uint64_t)id;
+    if (cc == (uint32_t)QT_HAMLET_ID)        g_qcCursor = 0;
+    else if (cc == (uint32_t)QT_CONTINUE_ID) g_qcCursor = 1;
+    else return false;
+    qcSpeakChoice(base);
+    return true;
 }

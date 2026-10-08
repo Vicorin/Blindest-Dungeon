@@ -631,32 +631,45 @@ static bool csQuirkReplacedClause(uintptr_t base, uint32_t hash, char* out, int 
     return out[0] != 0;
 }
 
-static int csQuirkFilteredIndex(uintptr_t base, int i, bool wantDisease) {
+enum CsQuirkFilter { CS_QF_POSITIVE, CS_QF_NEGATIVE, CS_QF_DISEASE };
+
+static bool csQuirkMatches(uintptr_t quirk, CsQuirkFilter f) {
+    if (csQuirkIsDisease(quirk)) return f == CS_QF_DISEASE;
+    uint8_t positive = 0;
+    if (!safeReadU8(quirk + QUIRK_IS_POSITIVE_OFF, &positive)) {
+        logLine("charsheet quirk: %p polarity unreadable — filed under negative", (void*)quirk);
+        return f == CS_QF_NEGATIVE;
+    }
+    return f == (positive ? CS_QF_POSITIVE : CS_QF_NEGATIVE);
+}
+
+static int csQuirkFilteredIndex(uintptr_t base, int i, CsQuirkFilter f) {
     if (i < 0) return -1;
     int n = csQuirkCount(base);
     int seen = 0;
     for (int k = 0; k < n; k++) {
         uintptr_t q = csQuirkClassAt(base, k);
         if (!q) continue;
-        if (csQuirkIsDisease(q) != wantDisease) continue;
+        if (!csQuirkMatches(q, f)) continue;
         if (seen == i) return k;
         seen++;
     }
     return -1;
 }
 
-static int csQuirkFilteredCount(uintptr_t base, bool wantDisease) {
+static int csQuirkFilteredCount(uintptr_t base, CsQuirkFilter f) {
     int n = csQuirkCount(base);
     int c = 0;
     for (int k = 0; k < n; k++) {
         uintptr_t q = csQuirkClassAt(base, k);
-        if (q && csQuirkIsDisease(q) == wantDisease) c++;
+        if (q && csQuirkMatches(q, f)) c++;
     }
     return c;
 }
 
-int csQuirkSectionCount(uintptr_t base)   { return csQuirkFilteredCount(base, false); }   // (de-static'd
-int csDiseaseSectionCount(uintptr_t base) { return csQuirkFilteredCount(base, true);  }
+int csQuirkPosSectionCount(uintptr_t base) { return csQuirkFilteredCount(base, CS_QF_POSITIVE); }
+int csQuirkNegSectionCount(uintptr_t base) { return csQuirkFilteredCount(base, CS_QF_NEGATIVE); }
+int csDiseaseSectionCount(uintptr_t base)  { return csQuirkFilteredCount(base, CS_QF_DISEASE);  }
 
 static bool csNeedsStop(const char* s) {
     size_t l = strlen(s);
@@ -760,14 +773,15 @@ bool csQuirkRowFrom(uintptr_t base, uintptr_t quirk, bool withKind, char* out, i
     return csQuirkRowCompose(base, quirk, 0, withKind, nullptr, nullptr, out, outsz);
 }
 
-static bool csQuirkRowAt(uintptr_t base, int i, bool wantDisease, bool consume,
+static bool csQuirkRowAt(uintptr_t base, int i, CsQuirkFilter f, bool consume,
                          char* out, int outsz) {
-    int k = csQuirkFilteredIndex(base, i, wantDisease);
+    int k = csQuirkFilteredIndex(base, i, f);
     if (k < 0) return false;
     uintptr_t quirk = csQuirkClassAt(base, k);
     uintptr_t entry = csQuirkEntryAt(base, k);
     bool replSpoken = false, newSpoken = false;
-    if (!csQuirkRowCompose(base, quirk, entry, !wantDisease, &replSpoken, &newSpoken, out, outsz))
+    // withKind=false for every filter: each section's heading is the kind.
+    if (!csQuirkRowCompose(base, quirk, entry, false, &replSpoken, &newSpoken, out, outsz))
         return false;
     if (consume && replSpoken && entry) {
         if (safeWriteU8(entry + QUIRK_ENTRY_REPLVIEW_OFF, 1))
@@ -784,11 +798,14 @@ static bool csQuirkRowAt(uintptr_t base, int i, bool wantDisease, bool consume,
     return true;
 }
 
-bool csQuirkRowText(uintptr_t base, int i, char* out, int outsz) {
-    return csQuirkRowAt(base, i, false, true, out, outsz);
+bool csQuirkPosRowText(uintptr_t base, int i, char* out, int outsz) {
+    return csQuirkRowAt(base, i, CS_QF_POSITIVE, true, out, outsz);
+}
+bool csQuirkNegRowText(uintptr_t base, int i, char* out, int outsz) {
+    return csQuirkRowAt(base, i, CS_QF_NEGATIVE, true, out, outsz);
 }
 bool csDiseaseRowText(uintptr_t base, int i, char* out, int outsz) {
-    return csQuirkRowAt(base, i, true, true, out, outsz);
+    return csQuirkRowAt(base, i, CS_QF_DISEASE, true, out, outsz);
 }
 
 // ------------------------------------------------------------
@@ -2676,7 +2693,8 @@ void csDumpSheet(uintptr_t base, uintptr_t panel) {
             const char* kind = quirk ? csQuirkKind(quirk) : nullptr;
 
             char row[MAILBOX_SZ];
-            bool gotRow = csQuirkRowAt(base, i, false, false, row, sizeof row);
+            bool gotRow = quirk && csQuirkRowCompose(base, quirk, csQuirkEntryAt(base, i), true,
+                                                     nullptr, nullptr, row, sizeof row);
             logLine("  cs-quirk[%d] rec=%p id=\"%s\" kind=%s row=%s%s%s", i, (void*)quirk,
                     gotId ? id : "(unreadable)", kind ? kind : "(unreadable)",
                     gotRow ? "\"" : "(unreadable)", gotRow ? row : "", gotRow ? "\"" : "");

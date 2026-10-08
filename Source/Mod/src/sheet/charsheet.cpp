@@ -931,11 +931,14 @@ typedef int  (*CsTipFn)(uintptr_t base, int i, char lines[AB_TIP_MAX_LINES][AB_T
 
 struct CsSectionDef {
     const char* titleKey;
+                            // = section 0, the title line
     CsCountFn   count;
     CsRowFn     row;
     CsTipFn     tip;
     const char* name;
     bool        hideWhenEmpty;
+    int         modTitle = -1;
+                               // words of its own (the two quirk columns). -1 = use titleKey.
 };
 
 static int  csTitleCount(uintptr_t base) { (void)base; return 1; }
@@ -946,7 +949,8 @@ static bool csTitleRowText(uintptr_t base, int i, char* out, int outsz) {
 
 static const CsSectionDef kCsSections[] = {
     { nullptr,                         csTitleCount,    csTitleRowText,    nullptr,             "hero"          },
-    { "character_title_quirks",        csQuirkSectionCount, csQuirkRowText, nullptr,            "quirks"        },
+    { nullptr, csQuirkPosSectionCount, csQuirkPosRowText, nullptr, "positive quirks", false, AXS_CS_SECTION_POS_QUIRKS },
+    { nullptr, csQuirkNegSectionCount, csQuirkNegRowText, nullptr, "negative quirks", false, AXS_CS_SECTION_NEG_QUIRKS },
     { "character_title_base_stats",    csStatCount,     csStatRowText,     csStatTipLines,      "base stats"    },
     { "character_title_equipment",     csEquipCount,    csEquipRowText,    nullptr,             "equipment"     },
     { "character_title_trinkets",      csTrinketCount,  csTrinketRowText,  nullptr,             "trinkets"      },
@@ -975,12 +979,15 @@ static void csSpeakSection(uintptr_t base) {
     g_csTipLine = 0;
     g_csTrkConfirmSlot = -1;
 
-    if (!s->titleKey) {              // row 0: the title line IS the announcement
+    if (!s->titleKey && s->modTitle < 0) {   // row 0: the title line IS the announcement
         csSpeakTitle(base, "section");
         return;
     }
     char title[128];
-    if (!resolveKey(base, s->titleKey, title, sizeof title)) {
+    if (s->modTitle >= 0) {          // the mod's own heading (the two quirk columns)
+        strncpy(title, axs((AxStrId)s->modTitle), sizeof title - 1);
+        title[sizeof title - 1] = 0;
+    } else if (!resolveKey(base, s->titleKey, title, sizeof title)) {
         logLine("charsheet section: \"%s\" did not resolve", s->titleKey);
         strncpy(title, s->name, sizeof title - 1);   // the log name is English, but it is not silence
         title[sizeof title - 1] = 0;
@@ -1149,9 +1156,7 @@ bool routeCharSheetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repea
             int cap = csComMaxSelected(base);
             if (!equipped && csComSkillEquippedCount(base) >= cap) {
                 char full[160];
-                _snprintf(full, sizeof full,
-                          "You already have %d skills equipped. Unequip one first, "
-                          "or press 1 to %d to put this one in a slot.", cap, cap);
+                _snprintf(full, sizeof full, axs(AXS_CS_COM_CAP_FMT), cap, cap);
                 full[sizeof full - 1] = 0;
                 postSpeech(full);
                 return true;
@@ -1266,8 +1271,7 @@ bool routeCharSheetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repea
                     strncpy(g_csTrkConfirmName, name, sizeof g_csTrkConfirmName - 1);
                     g_csTrkConfirmName[sizeof g_csTrkConfirmName - 1] = 0;
                     char utter[320];
-                    _snprintf(utter, sizeof utter,
-                              "Unequip %s? Press Enter again to confirm.", name);
+                    _snprintf(utter, sizeof utter, axs(AXS_CS_TRK_UNEQUIP_CONFIRM_FMT), name);
                     utter[sizeof utter - 1] = 0;
                     postSpeech(utter);
                     return true;
@@ -1467,7 +1471,7 @@ void serviceCharSheet(uintptr_t base) {
             g_csTrkWatchUntil = 0;
             char utter[320];
             _snprintf(utter, sizeof utter, axs(AXS_CS_TRK_UNEQUIPPED_FMT),
-                      g_csTrkWatchName[0] ? g_csTrkWatchName : "the trinket");
+                      g_csTrkWatchName[0] ? g_csTrkWatchName : axs(AXS_CS_TRK_FALLBACK));
             utter[sizeof utter - 1] = 0;
             logLine("charsheet trinket: unequip observed (slot %d empty)", g_csTrkWatchSlot);
             postSpeech(utter);
@@ -1587,4 +1591,38 @@ void checkTownRename(uintptr_t base) {
         postSpeech(axs(AXS_CS_RENAME_NO_BOX));
     }
     if (on) g_trOpenWatchUntil = 0;
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool csFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_csOpen) return false;
+    uint32_t cc = (uint32_t)(uint64_t)id;
+    uint32_t dc = cc - (CS_COMSKILL_OWNER + CS_COMSKILL_CLICK_TAG);
+    uint32_t dk = cc - (CS_CAMSKILL_OWNER + CS_COMSKILL_CLICK_TAG);
+    if (dc < (uint32_t)CS_COMSKILL_MAX) {
+        int order[CS_COMSKILL_MAX];
+        int cnt = csComSortedOrder(base, order);
+        for (int col = 0; col < cnt; col++) {
+            if (order[col] != (int)dc) continue;
+            for (int s = 0; s < kCsSectionCount; s++) {
+                if (kCsSections[s].row != csComSectionRow) continue;
+                g_csSection = s;
+                g_csRow = col + CS_COM_PIP_ITEMS;
+                csMoveRow(base, 0);
+                return true;
+            }
+        }
+        return false;
+    }
+    if (dk < (uint32_t)csCampSkillCount(base)) {
+        for (int s = 0; s < kCsSectionCount; s++) {
+            if (kCsSections[s].row != csCampSkillRowText) continue;
+            g_csSection = s;
+            g_csRow = (int)dk;
+            csMoveRow(base, 0);
+            return true;
+        }
+    }
+    return false;
 }

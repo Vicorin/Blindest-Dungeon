@@ -724,6 +724,15 @@ static int bldColumnCount(uintptr_t panel, int* showingOut) {
     return n;
 }
 
+bool bldColumnsLiveFor(uintptr_t base, const char* id) {
+    if (g_bldMode != 0 || strcmp(g_bldId, id) != 0) return false;
+    uintptr_t root = resTownRoot(base);
+    uintptr_t panel = root ? bldOpenPanel(root) : 0;
+    if (!panel) return false;
+    int showing = 0;
+    return bldColumnCount(panel, &showing) > 1;
+}
+
 static void bldColumnName(uintptr_t base, uintptr_t panel, int col, char* out, int outsz) {
     out[0] = 0;
     uintptr_t items[16];
@@ -1906,7 +1915,8 @@ struct GyRow {
     int64_t elemId;
     char    text[MAILBOX_SZ];   // joined memorial text (name. week. story.)
 };
-static GyRow g_gyRows[128];
+static const int GY_MAX_ROWS = 512;
+static GyRow g_gyRows[GY_MAX_ROWS];
 static int   g_gyRowCount = 0;
 static int   g_gyRow = 0;
 
@@ -1942,8 +1952,8 @@ static int gyBuildModel(uintptr_t base, uintptr_t panel) {
     if (!safeReadPtr(container + TL_KIDS_BEG_OFF, &beg) ||
         !safeReadPtr(container + TL_KIDS_END_OFF, &end) || end < beg) return 0;
     int cells = (int)((end - beg) >> 3);
-    if (cells > TL_WALK_KIDS_MAX) cells = TL_WALK_KIDS_MAX;
-    for (int c = 0; c < cells && g_gyRowCount < 128; c++) {
+    if (cells > TL_LIST_CELLS_MAX) cells = TL_LIST_CELLS_MAX;
+    for (int c = 0; c < cells && g_gyRowCount < GY_MAX_ROWS; c++) {
         uintptr_t cell = 0;
         if (!safeReadPtr(beg + (uintptr_t)c * 8, &cell) || !tlLooksLikeWidget(base, cell)) continue;
         char text[MAILBOX_SZ];
@@ -2982,7 +2992,7 @@ static void bldActRowText(uintptr_t base, uintptr_t panel, const BldActRow* r, i
         char nm[96];
         bldActName(base, r->actId, nm, sizeof nm);
         char head[192];
-        if (actCount > 1) {
+        if (actCount > 1 && axPositionCounts()) {   // the count rides inside the sentence
             _snprintf(head, sizeof head, axs(AXS_ACT_WING_POS_FMT), nm, r->actOrd + 1, actCount);
         } else {
             _snprintf(head, sizeof head, "%s.", nm);
@@ -3169,7 +3179,8 @@ static void qtOpenRowText(uintptr_t base, int row, char* out, int outsz) {
     QtCand cands[64];
     int n = qtCandidates(base, g_qtOpenActivity, g_qtOpenSlot, g_qtOpenMode, cands, 64);
     if (row <= 0 || row > n) {
-        _snprintf(out, outsz, axs(AXS_QT_PLACEHOLDER_POS_FMT), n + 1);
+        if (axPositionCounts()) _snprintf(out, outsz, axs(AXS_QT_PLACEHOLDER_POS_FMT), n + 1);
+        else                    _snprintf(out, outsz, "%s", axs(AXS_QT_PLACEHOLDER));
         out[outsz - 1] = 0;
         return;
     }
@@ -5729,13 +5740,36 @@ bool routeBldKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
         }
         char who[64] = {0};
         safeReadCStr(r->pendingHero + HERO_NAME_OFF, who, sizeof who);
-        if (!frontEndClickElementId((int64_t)r->slotElem)) {
+        uintptr_t src = feGetElementById((int64_t)r->slotElem);
+        float sx = 0, sy = 0;
+        if (!src || !elemCenter(src, &sx, &sy)) {
             logLine("bldact: slot element 0x%x not on screen for the pending remove", r->slotElem);
+            diagDumpFocusElements(base, "bldact-unpend-noslot");
             postSpeech(axs(AXS_BLD_CANT_DO_NOW));
             return true;
         }
+        int64_t dropId = 0;
+        uintptr_t drop = feFindElementByFamily(base, BLD_ROSTER_ELEM_FAMILY,
+                                               BLD_ROSTER_OWNER_TAG, &dropId);
+        float tx = 0, ty = 0;
+        if (!drop || !elemCenter(drop, &tx, &ty)) {
+            logLine("bldact: pending remove of \"%s\" -- no roster row on screen to drag onto", who);
+            diagDumpFocusElements(base, "bldact-unpend-noroster");
+            postSpeech(axs(AXS_BLD_CANT_DO_NOW));
+            return true;
+        }
+        char what[160];
+        _snprintf(what, sizeof what, "activity unpend %s slot %d", who[0] ? who : "hero",
+                  r->slotIdx + 1);
+        what[sizeof what - 1] = 0;
+        if (!synthDragPoints(sx, sy, tx, ty, what)) {   // refused only while another gesture flies
+            postSpeech(axs(AXS_BLD_CANT_DO_NOW));
+            return true;
+        }
+        logLine("bldact: unpend drag \"%s\" slot elem 0x%x (%.0f,%.0f) -> roster row 0x%llx (%.0f,%.0f)",
+                who, r->slotElem, sx, sy, (unsigned long long)dropId, tx, ty);
         g_bldActWatch = 4;
-        g_bldActWatchUntil = GetTickCount() + 1500;
+        g_bldActWatchUntil = GetTickCount() + 2000;
         g_bldActWatchAct = r->activity;
         g_bldActWatchSlot = r->slotIdx;
         g_bldActWatchHero = r->pendingHero;
@@ -6270,4 +6304,38 @@ void checkBuilding(uintptr_t base) {
         else if (panel && (g_bldActive || g_bldResume)) { g_bldProbes++; bldProbe(base, root, panel, g_bldProbeWhy); }
         else logLine("building: pending probe(%s) dropped, surface gone", g_bldProbeWhy);
     }
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool bldFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (g_bldMode != 0 || g_bldRecDrag != 0 || g_qtOpen) return false;
+    uintptr_t root = resTownRoot(base);
+    uintptr_t panel = root ? bldOpenPanel(root) : 0;
+    if (!panel) return false;
+    uintptr_t sys = 0;
+    int kind = bldRowKindOf(base, panel, &sys);
+    uint32_t cc = (uint32_t)(uint64_t)id;
+    int row = -1;
+    if (kind == 1) {
+        int slots[64];
+        int n = bldStoreRows(sys, slots, 64);
+        uint32_t d = cc - (uint32_t)INV_FOURCC_BASE;
+        if (d < (uint32_t)n) row = (int)d;
+    } else if (kind == 2) {
+        BldRecruit rows[16];
+        int n = bldRecruitRows(base, panel, rows, 16, nullptr);
+        for (int i = 0; i < n; i++)
+            if ((uint32_t)BLD_ELEM_RCT_BASE + (uint32_t)rows[i].slot == cc) { row = i; break; }
+    } else if (kind == 3) {
+        BldActRow rows[48];
+        int n = bldActRows(base, panel, rows, 48);
+        for (int i = 0; i < n; i++)
+            if (rows[i].trtDrop < 0 && rows[i].slotElem == cc) { row = i; break; }
+    } else {
+        return false;
+    }
+    if (row < 0) return false;
+    g_bldRow = row;
+    return bldSpeakOptionRow(base, panel, nullptr);
 }

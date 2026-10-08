@@ -25,6 +25,7 @@ static const int CL_MAX_LIVE = 24;
 static const int CL_TREE_CAP = 256;
 
 static const int CLOG_MAX      = 150;
+static const int CLOG_PAGE     = 10;
 
 // ---- the popup TYPE, and why it takes a second source ----
 static const uintptr_t RD_POPUP_Q_BEGIN_OFF = 0x3168;
@@ -232,7 +233,7 @@ static const char* clogAt(int fromNewest) {
     return g_clogLines[idx];
 }
 
-static void clogAdd(const char* line) {
+void clogAdd(const char* line) {
     if (!line || !line[0]) return;
     int slot = (g_clogHead + g_clogCount) % CLOG_MAX;
     strncpy(g_clogLines[slot], line, CLOG_LINE_MAX - 1);
@@ -653,8 +654,159 @@ static void clRankScanSide(uintptr_t base, const uintptr_t* now, int n,
     }
 }
 
+// ---- RANK-TARGET MARKS: a monster marks a hero rank ----
+struct ClMarkSnap { uintptr_t actor; uint32_t mask; };
+static ClMarkSnap g_clMark[RV_MAX_ENEMIES];
+static int        g_clMarkN = -1;                      // -1 = no baseline yet
+
+static void clMarkScan(uintptr_t base, const uintptr_t* foes, int ne) {
+    ClMarkSnap next[RV_MAX_ENEMIES];
+    const bool baseline = (g_clMarkN < 0);
+    for (int i = 0; i < ne; i++) {
+        uint32_t old = 0;
+        bool known = false;
+        for (int j = 0; j < g_clMarkN; j++)
+            if (g_clMark[j].actor == foes[i]) { old = g_clMark[j].mask; known = true; break; }
+        uint32_t cur = 0;
+        if (!rvRankMarksOf(foes[i], &cur)) cur = old;
+        next[i].actor = foes[i];
+        next[i].mask  = cur;
+
+        if (baseline || !known) {
+            if (cur) logLine("rankmark: monster=%p first seen holding mask 0x%x — baselined, not announced",
+                             (void*)foes[i], cur);
+            continue;
+        }
+        if (cur == old) continue;
+        const uint32_t added = cur & ~old;
+        logLine("rankmark: monster=%p mask 0x%x -> 0x%x (added 0x%x)", (void*)foes[i], old, cur, added);
+        if (!added) continue;                          // cleared: the follow-up speaks for itself
+
+        char name[160], ranks[64], line[CLOG_LINE_MAX];
+        if (!rvRankMarkName(base, foes[i], name, sizeof name)) {
+            logLine("rankmark: monster=%p marked 0x%x but nothing names it — nothing spoken",
+                    (void*)foes[i], added);
+            continue;
+        }
+        rvRankMarkRanks(added, ranks, sizeof ranks);
+        _snprintf(line, sizeof line, "%s: %s.", name, ranks);
+        line[sizeof line - 1] = 0;
+        logLine("rankmark: -> \"%s\"", line);
+        clRankAnnounce(line);
+    }
+    for (int i = 0; i < ne; i++) g_clMark[i] = next[i];
+    g_clMarkN = ne;
+}
+
+// ---- SHAPE-SHIFTER MORPH: the Flesh's parts change form ----
+static const DWORD CL_SHAPE_SETTLE_MS = 1000;
+struct ClShapeSnap { uintptr_t actor; const char* form; };
+static ClShapeSnap g_clShape[RV_MAX_ENEMIES];
+static int         g_clShapeN = -1;                    // -1 = no baseline yet
+static DWORD       g_clShapeChangedAt = 0;             // tick of the newest unspoken swap
+static bool        g_clShapePending = false;
+
+static void clShapeScan(uintptr_t base, const uintptr_t* foes, int ne) {
+    ClShapeSnap next[RV_MAX_ENEMIES];
+    const bool baseline = (g_clShapeN < 0);
+    const DWORD now = GetTickCount();
+    for (int i = 0; i < ne; i++) {
+        const char* old = nullptr;
+        bool known = false;
+        for (int j = 0; j < g_clShapeN; j++)
+            if (g_clShape[j].actor == foes[i]) { old = g_clShape[j].form; known = true; break; }
+        const char* cur = rvShapeFormWord(foes[i]);
+        if (!cur) cur = old;
+        next[i].actor = foes[i];
+        next[i].form  = cur;
+
+        if (baseline || !known) {
+            if (cur) logLine("shapeshift: monster=%p first seen as \"%s\" -- baselined, not announced",
+                             (void*)foes[i], cur);
+            continue;
+        }
+        if (cur == old) continue;
+        logLine("shapeshift: monster=%p \"%s\" -> \"%s\" (enemy idx %d)",
+                (void*)foes[i], old ? old : "", cur, i);
+        g_clShapeChangedAt = now;
+        g_clShapePending = true;
+    }
+    for (int i = 0; i < ne; i++) g_clShape[i] = next[i];
+    g_clShapeN = ne;
+
+    if (!g_clShapePending || now - g_clShapeChangedAt < CL_SHAPE_SETTLE_MS) return;
+    g_clShapePending = false;
+
+    char line[CLOG_LINE_MAX] = { 0 };
+    if (!resolveKey(base, "buff_rule_data_tooltip_transform", line, sizeof line) || !line[0]) {
+        logLine("shapeshift: \"buff_rule_data_tooltip_transform\" did not resolve -- nothing spoken");
+        return;
+    }
+    logLine("shapeshift: -> \"%s\"", line);
+    clRankAnnounce(line);
+}
+
+// ---- CAPTORS: a hero goes into the pot, and comes out again ----
+struct ClCaptorSnap { uintptr_t actor; uint32_t guid; };
+static ClCaptorSnap g_clCaptor[RV_MAX_ENEMIES];
+static int          g_clCaptorN = -1;                  // -1 = no baseline yet
+
+static void clCaptorScan(uintptr_t base, const uintptr_t* foes, int ne) {
+    ClCaptorSnap next[RV_MAX_ENEMIES];
+    const bool baseline = (g_clCaptorN < 0);
+    for (int i = 0; i < ne; i++) {
+        uint32_t old = 0;
+        bool known = false;
+        for (int j = 0; j < g_clCaptorN; j++)
+            if (g_clCaptor[j].actor == foes[i]) { old = g_clCaptor[j].guid; known = true; break; }
+        const uint32_t cur = rvCaptorPrisonerGuid(foes[i]);
+        next[i].actor = foes[i];
+        next[i].guid  = cur;
+
+        if (baseline || !known) {
+            if (cur) logLine("captor: monster=%p first seen holding guid %u -- baselined, not announced",
+                             (void*)foes[i], cur);
+            continue;
+        }
+        if (cur == old) continue;
+
+        char hero[160] = { 0 };
+        char line[CLOG_LINE_MAX] = { 0 };
+        if (cur) {
+            char holder[160] = { 0 };
+            if (!rvMonsterClassName(base, foes[i], holder, sizeof holder)) holder[0] = 0;
+            if (!rvCaptiveHeroName(base, foes[i], hero, sizeof hero)) {
+                logLine("captor: monster=%p guid %u -> %u but the captive would not name -- nothing spoken",
+                        (void*)foes[i], old, cur);
+                continue;
+            }
+            _snprintf(line, sizeof line, axs(AXS_CT_CAPTURED_FMT), hero, holder);
+        } else {
+            uintptr_t h = bldActHeroByGuid(base, old);
+            char cls[96];
+            if (!h || !abHeroNameClassOf(base, h, hero, sizeof hero, cls, sizeof cls) || !hero[0]) {
+                logLine("captor: monster=%p guid %u -> 0 but the released hero would not name -- nothing spoken",
+                        (void*)foes[i], old);
+                continue;
+            }
+            _snprintf(line, sizeof line, axs(AXS_CT_RELEASED_FMT), hero);
+        }
+        line[sizeof line - 1] = 0;
+        logLine("captor: monster=%p guid %u -> %u (enemy idx %d) -> \"%s\"",
+                (void*)foes[i], old, cur, i, line);
+        clRankAnnounce(line);
+    }
+    for (int i = 0; i < ne; i++) g_clCaptor[i] = next[i];
+    g_clCaptorN = ne;
+}
+
 static void clRankScan(uintptr_t base, uintptr_t root) {
-    if (!root || !abBattleLive(root)) { g_clRankPartyN = -1; g_clRankFoesN = -1; return; }
+    if (!root || !abBattleLive(root)) {
+        g_clRankPartyN = -1; g_clRankFoesN = -1; g_clMarkN = -1;
+        g_clShapeN = -1; g_clShapePending = false;
+        g_clCaptorN = -1;
+        return;
+    }
 
     uintptr_t turnActor = abCurrentTurnActor(root);
     uintptr_t tgt[8];
@@ -678,6 +830,9 @@ static void clRankScan(uintptr_t base, uintptr_t root) {
     int ne = rvEnemyList(base, foes, RV_MAX_ENEMIES);
     clRankScanSide(base, party, np, g_clRankParty, &g_clRankPartyN, true,  turnActor, tgt, nTgt);
     clRankScanSide(base, foes,  ne, g_clRankFoes,  &g_clRankFoesN,  false, turnActor, tgt, nTgt);
+    clMarkScan(base, foes, ne);
+    clShapeScan(base, foes, ne);
+    clCaptorScan(base, foes, ne);
 }
 
 void serviceCombatText(uintptr_t base) {
@@ -688,6 +843,9 @@ void serviceCombatText(uintptr_t base) {
         g_clBuffSnapN = 0;
         g_clRankPartyN = -1;
         g_clRankFoesN  = -1;
+        g_clMarkN      = -1;
+        g_clShapeN     = -1;
+        g_clShapePending = false;
         for (int i = 0; i < CL_BUFFNEW_MAX; i++) g_clBuffNew[i].actor = 0;
         return;
     }
@@ -1025,28 +1183,92 @@ void serviceBark(uintptr_t base) {
 }
 
 // ---- the log view ----
-static void clogSpeakCursor() {
+static void clogSpeakCursor(const char* prefix = nullptr) {
     const char* s = clogAt(g_clogCursor);
     if (!s) { postSpeech(axs(AXS_CLOG_EMPTY)); return; }
     char pos[64];
     _snprintf(pos, sizeof pos, axs(AXS_POS_N_OF_M), g_clogCursor + 1, g_clogCount);
     pos[sizeof pos - 1] = 0;
-    char msg[CLOG_LINE_MAX + 128];
-    _snprintf(msg, sizeof msg, clEndsSentence(s) ? "%s %s" : "%s. %s", s, pos);
+    char msg[CLOG_LINE_MAX + 192];
+    _snprintf(msg, sizeof msg, clEndsSentence(s) ? "%s%s%s %s" : "%s%s%s. %s",
+              prefix ? prefix : "", prefix ? " " : "", s, pos);
     msg[sizeof msg - 1] = 0;
     postSpeech(msg);
+}
+
+// ---- the clear question ----
+static bool g_clogClearAsk = false;
+static int  g_clogClearSel = 0;     // 0 = Delete, 1 = Cancel
+
+bool clogClearAskActive() { return g_clogOpen && g_clogClearAsk; }
+
+static AxStrId clogClearOptionId() {
+    return g_clogClearSel == 0 ? AXS_CLOG_CLEAR_DELETE : AXS_CLOG_CLEAR_CANCEL;
+}
+
+void clogReannounceClearAsk(uintptr_t base) {
+    (void)base;
+    char q[192], msg[256];
+    _snprintf(q, sizeof q, axs(AXS_CLOG_CLEARQ_FMT), g_clogCount);
+    q[sizeof q - 1] = 0;
+    _snprintf(msg, sizeof msg, "%s %s", q, axs(clogClearOptionId()));
+    msg[sizeof msg - 1] = 0;
+    postSpeech(msg);
+}
+
+static void clogClear() {
+    logLine("combatlog: cleared by the player (%d lines dropped)", g_clogCount);
+    g_clogHead = 0; g_clogCount = 0; g_clogCursor = 0;
+}
+
+static bool routeLogClearAskKey(uint32_t sym, uint8_t repeat) {
+    if (repeat) return true;                                  // every key here ACTS: one per press
+    bool enter = (sym == SDLK_RETURN || sym == SDLK_KP_ENTER || sym == SDLK_SPACE);
+    if (sym == SDLK_LEFT || sym == SDLK_RIGHT || sym == SDLK_UP || sym == SDLK_DOWN) {
+        g_clogClearSel ^= 1;                                  // two options: any arrow is a toggle
+        postSpeech(axs(clogClearOptionId()));
+    } else if (enter) {
+        g_clogClearAsk = false;
+        if (g_clogClearSel == 0) { clogClear(); postSpeech(axs(AXS_CLOG_CLEARED)); }
+        else clogSpeakCursor(axs(AXS_CANCELLED));             // back on the row they were reading
+    } else if (sym == SDLK_ESCAPE) {
+        g_clogClearAsk = false;                               // changed their mind: the log stays
+        clogSpeakCursor(axs(AXS_CANCELLED));
+    } else if (sym == SDLK_DELETE) {
+        clogReannounceClearAsk(0);                            // a second Delete re-asks, never acts
+    }
+    return true;
 }
 
 void clogSetOpen(bool on) {
     g_clogOpen = on;
     if (on) g_clogCursor = 0;   // always open on the NEWEST line
+    g_clogClearAsk = false;
     logLine("combatlog: %s (%d lines)", on ? "opened" : "closed", g_clogCount);
 }
 
 bool routeLogKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {   // (de-static'd
-    (void)base; (void)mod;
+    (void)base;
+    if (g_clogClearAsk) return routeLogClearAskKey(sym, repeat);
+
     if (sym == SDLK_ESCAPE) {
         if (!repeat) { clogSetOpen(false); postSpeech(axs(AXS_CLOG_CLOSED)); }
+        return true;
+    }
+    if (sym == SDLK_DELETE && !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL))) {
+        if (repeat) return true;
+        if (g_clogCount == 0) { postSpeech(axs(AXS_CLOG_EMPTY)); return true; }
+        g_clogClearAsk = true;
+        g_clogClearSel = 0;
+        clogReannounceClearAsk(base);
+        return true;
+    }
+    if (sym == SDLK_PAGEUP || sym == SDLK_PAGEDOWN) {
+        if (mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL)) return false;
+        if (axNavHoldRepeat(repeat)) return true;           // throttled repeat: claimed, no step
+        if (g_clogCount == 0) { postSpeech(axs(AXS_CLOG_EMPTY)); return true; }
+        axStepCursor(&g_clogCursor, g_clogCount, sym == SDLK_PAGEUP ? CLOG_PAGE : -CLOG_PAGE);
+        clogSpeakCursor();
         return true;
     }
     {

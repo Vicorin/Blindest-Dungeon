@@ -573,3 +573,19 @@ void dstReannounce(uintptr_t base) {
     prefix[sizeof prefix - 1] = 0;
     dstSpeakRow(base, prefix);
 }
+
+// ---- PAD FOCUS FOLLOWER ----
+bool dstFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    int n = dstCollect(base, false);
+    if (n <= 0) return false;
+    int stripIdx = (int)((uint32_t)(uint64_t)id - (uint32_t)DST_CHK_ID_BASE);
+    if (stripIdx < 0 || stripIdx >= DST_MAX_ROWS) return false;
+    for (int i = 0; i < n; i++) {
+        if (g_dstRows[i].stripIdx != stripIdx) continue;
+        g_dstRow = i;
+        dstSpeakRow(base, nullptr);
+        return true;
+    }
+    return false;
+}

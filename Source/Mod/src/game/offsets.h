@@ -11,17 +11,29 @@ static const uint32_t GAME_PE_SIZEOFIMAGE = 0x2fae000;
 static const uint32_t GAME_PE_TIMESTAMP_DRMFREE   = 0x6ab13742;
 static const uint32_t GAME_PE_SIZEOFIMAGE_DRMFREE = 0x2f86000;
 
-enum AxGameBuild { AX_BUILD_UNKNOWN = -1, AX_BUILD_STEAM = 0, AX_BUILD_DRMFREE = 1 };
+// ---- THE THIRD COLUMN: the DRM-free build GOG actually ships ----
+static const uint32_t GAME_PE_TIMESTAMP_DRMFREE_PREV   = 0x6aa1be59;
+static const uint32_t GAME_PE_SIZEOFIMAGE_DRMFREE_PREV = 0x2f86000;
+
+enum AxGameBuild { AX_BUILD_UNKNOWN = -1, AX_BUILD_STEAM = 0, AX_BUILD_DRMFREE = 1, AX_BUILD_DRMFREE_PREV = 2 };
 AxGameBuild axGameBuild();
 const char* axGameBuildName();
-inline uintptr_t axRva(uintptr_t steam, uintptr_t drmfree) {
-    return axGameBuild() == AX_BUILD_DRMFREE ? drmfree : steam;
+inline bool axIsDrmFree() {
+    AxGameBuild b = axGameBuild();
+    return b == AX_BUILD_DRMFREE || b == AX_BUILD_DRMFREE_PREV;
+}
+inline uintptr_t axRva(uintptr_t steam, uintptr_t drmfree, uintptr_t drmfreePrev) {
+    switch (axGameBuild()) {
+        case AX_BUILD_DRMFREE:      return drmfree;
+        case AX_BUILD_DRMFREE_PREV: return drmfreePrev;
+        default:                    return steam;
+    }
 }
 
 // ---- Reverse-engineered offsets ----
-inline const uintptr_t FOCUS_ID_RVA = axRva(0x1086f70, 0x1063f70);
-inline const uintptr_t VEC_BEGIN_RVA = axRva(0x2c27128, 0x2bffd28);
-inline const uintptr_t VEC_END_RVA = axRva(0x2c27130, 0x2bffd30);
+inline const uintptr_t FOCUS_ID_RVA = axRva(0x1086f70, 0x1063f70, 0x1063f70);
+inline const uintptr_t VEC_BEGIN_RVA = axRva(0x2c27128, 0x2bffd28, 0x2bffd68);
+inline const uintptr_t VEC_END_RVA = axRva(0x2c27130, 0x2bffd30, 0x2bffd70);
 static const uintptr_t ELEM_STRIDE      = 0x108;      // bytes per FocusElement
 static const uintptr_t ELEM_ID_OFF      = 0x00;       // int64 id (matches FOCUS_ID)
 static const uintptr_t ELEM_OWNER_OFF   = 0x08;       // ptr to owning widget
@@ -31,7 +43,7 @@ static const uintptr_t ELEM_FOCUSABLE_OFF = 0x24;     // byte: 1 = focusable
 static const uintptr_t ELEM_SKIP_OFF      = 0x26;     // byte: nav skips if set
 
 // ---- TextBoxWidget ----
-inline const uintptr_t TBW_VFTABLE_RVA = axRva(0xe5ab60, 0xe3d998);
+inline const uintptr_t TBW_VFTABLE_RVA = axRva(0xe5ab60, 0xe3d998, 0xe3d9c8);
 static const uintptr_t TBW_TEXT_OFF     = 0x198;      // inline UTF-8 text buffer (<=512)
 static const uintptr_t TBW_TEXT_PTR_OFF = 0x398;      // fallback string pointer
 // ---- Widget-tree layout (the WidgetCell shape; SharedUI layout primitives) ----
@@ -40,12 +52,12 @@ static const uintptr_t TL_KIDS_END_OFF     = 0x158;     // layout widget+: vecto
 static const uintptr_t TL_CELL_CONTENT_OFF = 0x150;     // cell+: its single content widget
 static const uintptr_t TL_ATTACH_BEG_OFF   = 0x90;      // any widget+: attached-children begin
 static const uintptr_t TL_ATTACH_END_OFF   = 0x98;      // any widget+: attached-children end
-inline const uintptr_t RDATA_BEGIN_RVA = axRva(0xc65068, 0xc4a068);
-inline const uintptr_t RDATA_END_RVA = axRva(0x107c000, 0x1059000);
+inline const uintptr_t RDATA_BEGIN_RVA = axRva(0xc65068, 0xc4a068, 0xc4a068);
+inline const uintptr_t RDATA_END_RVA = axRva(0x107c000, 0x1059000, 0x1059000);
 
 // ---- Surface ROOT globals shared across modules ----
-inline const uintptr_t MAP_ROOT_RVA = axRva(0x117db48, 0x1158040);
-inline const uintptr_t RES_CAMPAIGN_RVA = axRva(0x117d9b8, 0x1157eb8);
+inline const uintptr_t MAP_ROOT_RVA = axRva(0x117db48, 0x1158040, 0x1158080);
+inline const uintptr_t RES_CAMPAIGN_RVA = axRva(0x117d9b8, 0x1157eb8, 0x1157ef8);
 static const uintptr_t RAID_IN_COMBAT_OFF = 0x4b20;  // raid root+: int, 0 = not in combat (was 0x4ab0)
 
 // ---- TOWN MAP layout ----
@@ -63,10 +75,10 @@ static const uintptr_t TM_DEF_HASH_OFF     = 0x40;   // BuildingType -> gameHash
 static const uintptr_t TM_DEF_SCREEN_OFF   = 0x4d;   // BuildingType -> char: 0 = opens no screen
 static const uintptr_t TM_BLD_UNLOCKED_OFF = 0x184;  // char: 0 = locked (click never arms)
 static const uintptr_t TM_BLD_HIDDEN_OFF   = 0x171;  // char: set + locked = not drawn at all
-inline const uintptr_t TM_ARENA_DLC_RVA = axRva(0x2a5c08a, 0x2a34c8a);
+inline const uintptr_t TM_ARENA_DLC_RVA = axRva(0x2a5c08a, 0x2a34c8a, 0x2a34cca);
 static const uintptr_t TM_CAMP_DISTRICTS_UNLOCKED = 0x11f0; // Campaign+: char, Cornerstones fired
 static const uintptr_t TM_CAMP_DISTRICTS_ENABLED  = 0x11f1; // Campaign+: char, feature on this save
-inline const uintptr_t TM_DDIS_OVERRIDE_RVA = axRva(0x2a5d25b, 0x2a35e5b);
+inline const uintptr_t TM_DDIS_OVERRIDE_RVA = axRva(0x2a5d25b, 0x2a35e5b, 0x2a35e9b);
 
 // ---- ItemStack layout ----
 static const uintptr_t ITEM_STRIDE        = 0x5a8;  // bytes per ItemStack (was 0xe0)
@@ -94,7 +106,7 @@ static const uintptr_t HEROCLASS_DISP_OFF = 0x89;    // HeroClass+: cached local
 static const uintptr_t HEROCLASS_DISP_LATCH_OFF = 0xdd;  // HeroClass+: byte, display name resolved
 
 // ---- TOWN-EVENT registry layout ----
-inline const uintptr_t PROV_EVTREG_RVA = axRva(0x117d940, 0x1157e48);
+inline const uintptr_t PROV_EVTREG_RVA = axRva(0x117d940, 0x1157e48, 0x1157e88);
 static const uintptr_t PROV_EVTREG_BEG_OFF  = 0x18;     // reg+: vector<Event> begin (BY VALUE)
 static const uintptr_t PROV_EVTREG_END_OFF  = 0x20;     // reg+: vector end
 static const uintptr_t PROV_EVT_STRIDE      = 0x2f8;    // (was 0x2f0)
@@ -107,28 +119,28 @@ static const uintptr_t PROV_EVTDATA_HASH    = 0x44;     // record+: the id hash 
 static const uintptr_t PROV_EVTDATA_AMT     = 0x48;     // record+: float amount
 static const uintptr_t PROV_CAMP_EVENT_OFF  = 0x1838;
 
-inline const uintptr_t RESOLVER_RVA = axRva(0x43c770, 0x42b100);
+inline const uintptr_t RESOLVER_RVA = axRva(0x43c770, 0x42b100, 0x42b100);
 typedef void* (*ResolveFn)(void* out, const char* key);
 
 // ---- Vtable-hook targets (patched by core/hooks.cpp; some offsets also read by their ----
-inline const uintptr_t MENU_VFTABLE_RVA = axRva(0xed53d0, 0xeb7c68);
+inline const uintptr_t MENU_VFTABLE_RVA = axRva(0xed53d0, 0xeb7c68, 0xeb7cf0);
 static const int       MENU_DRAW_SLOT   = 23;
-inline const uintptr_t TUT_VFTABLE_RVA = axRva(0xed6b90, 0xeb9450);
+inline const uintptr_t TUT_VFTABLE_RVA = axRva(0xed6b90, 0xeb9450, 0xeb94b0);
 static const int       TUT_SHOW_SLOT   = 23;
-inline const uintptr_t TUT_LAYOUT_RVA = axRva(0x2becaa8, 0x2bc56a8);
+inline const uintptr_t TUT_LAYOUT_RVA = axRva(0x2becaa8, 0x2bc56a8, 0x2bc56e8);
 static const uintptr_t TUT_LAYOUT_CLOSE_OFF = 0x24;    // close_button_offset, relative to base_pos
-inline const uintptr_t JP_VFT_RVA = axRva(0xed4c70, 0xeb7540);
+inline const uintptr_t JP_VFT_RVA = axRva(0xed4c70, 0xeb7540, 0xeb7590);
 static const int       JP_SHOW_SLOT     = 23;
 static const uintptr_t JP_STATE_OFF     = 0x58;      // int UI::Panel::Base lifecycle: 0 out, 1..4 up
 static const uintptr_t JP_PAGE_OFF      = 0x410;     // uint: page index == the loc-key number
-inline const uintptr_t LTO_VFTABLE_RVA = axRva(0xec55b8, 0xea7e88);
+inline const uintptr_t LTO_VFTABLE_RVA = axRva(0xec55b8, 0xea7e88, 0xea7ee0);
 static const int       LTO_RENDER_SLOT = 5;
-inline const uintptr_t TE_VFTABLE_RVA = axRva(0xeb38a0, 0xe960b0);
+inline const uintptr_t TE_VFTABLE_RVA = axRva(0xeb38a0, 0xe960b0, 0xe96100);
 static const int       TE_SHOW_SLOT    = 23;
-inline const uintptr_t PANEL_BANNER_VFTABLE_RVA = axRva(0xebaa98, 0xe9d350);
+inline const uintptr_t PANEL_BANNER_VFTABLE_RVA = axRva(0xebaa98, 0xe9d350, 0xe9d3c8);
 static const int       PANEL_UPDATE_SLOT        = 2;        // same vtable slot as Panel_Map's
-inline const uintptr_t POPUP_PROC_RVA = axRva(0x76abd0, 0x756770);
-inline const uintptr_t POPUP_CALLSITE_RVA = axRva(0x74fc4c, 0x73b91c);
+inline const uintptr_t POPUP_PROC_RVA = axRva(0x76abd0, 0x756770, 0x756650);
+inline const uintptr_t POPUP_CALLSITE_RVA = axRva(0x74fc4c, 0x73b91c, 0x73b7fc);
 
 // ---- Front-end flow states ----
 static const int FE_STATE_PREAMBLE = 4;   // States::PREAMBLE (verify via festate log)
@@ -178,12 +190,12 @@ static const uintptr_t SDL_KEY_REPEAT_OFF   = 0x0D;
 static const uintptr_t SDL_KEY_SCAN_OFF     = 0x10;   // SDL_KeyboardEvent.keysym.scancode (keysym+0x00).
 static const uintptr_t SDL_KEY_SYM_OFF      = 0x14;   // SDL_KeyboardEvent.keysym.sym  (keysym+0x04)
 static const uintptr_t SDL_KEY_MOD_OFF      = 0x18;
-inline const uintptr_t INPUT_MODE_RVA = axRva(0x117cd94, 0x11572d8);
+inline const uintptr_t INPUT_MODE_RVA = axRva(0x117cd94, 0x11572d8, 0x1157318);
 
 // ---- Building recruit displays: vftables + slot layout ----
-inline const uintptr_t BLD_BHRD_VFT_RVA = axRva(0xeb2830, 0xe950f0);
-inline const uintptr_t BLD_HRD_VFT_RVA = axRva(0xeb2410, 0xe94d08);
-inline const uintptr_t BLD_SHRD_VFT_RVA = axRva(0xeb2968, 0xe95240);
+inline const uintptr_t BLD_BHRD_VFT_RVA = axRva(0xeb2830, 0xe950f0, 0xe95178);
+inline const uintptr_t BLD_HRD_VFT_RVA = axRva(0xeb2410, 0xe94d08, 0xe94d20);
+inline const uintptr_t BLD_SHRD_VFT_RVA = axRva(0xeb2968, 0xe95240, 0xe95290);
 static const uintptr_t BLD_RCT_SLOTS_BEG  = 0x350;    // recruit display+: slot vector begin (was 0x348)
 static const uintptr_t BLD_RCT_SLOTS_END  = 0x358;
 static const uintptr_t BLD_RCT_SLOT_STRIDE= 0x10;
@@ -196,8 +208,8 @@ static const uintptr_t HERO_NAME_OFF      = 0x08;    // Hero+: inline C-string, 
 static const uintptr_t HERO_TRINKET_SYSTEM_OFF = 0x1210;  // Hero+: embedded Inventory::System (was 0x1190)
 static const uintptr_t ACTOR_HEROCLASS_OFF = 0x12b0; // actor+: HeroClass* (was 0x1230)
 static const uintptr_t ACTOR_ID_OFF       = 0x130c;
-inline const uintptr_t HERO_VFT = axRva(0xe7c638, 0xe5efa0);
-inline const uintptr_t MONSTER_VFT = axRva(0xe9b020, 0xe7d978);
+inline const uintptr_t HERO_VFT = axRva(0xe7c638, 0xe5efa0, 0xe5ef80);
+inline const uintptr_t MONSTER_VFT = axRva(0xe9b020, 0xe7d978, 0xe7d9f0);
 static const float     CS_PERCENT_SCALE   = 100.0f;
 static const uintptr_t HERO_WEAPON_LEVEL_OFF = 0x12bc;
 static const uintptr_t HERO_ARMOUR_LEVEL_OFF = 0x12c0;
@@ -218,7 +230,7 @@ static const uintptr_t HERO_QUIRK_END_OFF    = 0x1318; // Hero+: -> one past the
 static const uintptr_t QUIRK_ENTRY_STRIDE    = 0x38;   // (was 0x30)
 static const uintptr_t QUIRK_ENTRY_CLASS_OFF = 0x00;   // entry+: Quirk::Class const*
 static const uintptr_t QUIRK_ID_OFF          = 0x00;   // Quirk::Class+: inline C-string id
-inline const uintptr_t QUIRK_REGISTRY_RVA = axRva(0x117d988, 0x1157e90);
+inline const uintptr_t QUIRK_REGISTRY_RVA = axRva(0x117d988, 0x1157e90, 0x1157ed0);
 static const uintptr_t QUIRK_REGISTRY_STRIDE = 0x1f8;
 static const uintptr_t ACTOR_SEL_BEG_OFF  = 0x1358;
 static const uintptr_t ACTOR_SEL_END_OFF  = 0x1360;
@@ -228,13 +240,13 @@ static const uintptr_t HEROCLASS_SKILLVEC_OFF = 0xbd0;
 static const uintptr_t HEROCLASS_SKILLVEC_END_OFF = 0xbd8; // HeroClass+: end of that outer vector
 static const uintptr_t SKILL_STRIDE       = 0x508;   // bytes per ActorCombatSkill (was 0x4f8)
 static const uintptr_t SKILL_ID_OFF       = 0x08;    // ActorCombatSkill+: inline C-string skill id
-inline const uintptr_t RAID_SCREEN_RVA = axRva(0x117ddf0, 0x1158248);
+inline const uintptr_t RAID_SCREEN_RVA = axRva(0x117ddf0, 0x1158248, 0x1158288);
 static const uintptr_t CS_PANEL_OPEN_OFF  = 0x58;
-static const uintptr_t ACTOR_IS_MONSTER_OFF = 0x1296; // actor+: char, 0 = hero          (was 0x1216)
+static const uintptr_t ACTOR_IS_MONSTER_OFF = 0x1296; // actor+: char, 0 = CAMPAIGN hero (was 0x1216)
 static const uintptr_t ACTOR_TRAIT_OFF    = 0x11e0;
 static const uintptr_t ACTOR_VIRTUE_OFF   = 0x11e4;
 static const uintptr_t HERO_RESOLVE_XP_OFF  = 0x12b8; // Hero+: uint32 "resolve_xp"        (was 0x1238)
-inline const uintptr_t RESOLVE_TABLE_RVA = axRva(0x117d938, 0x1157e40);
+inline const uintptr_t RESOLVE_TABLE_RVA = axRva(0x117d938, 0x1157e40, 0x1157e80);
 static const uintptr_t RESOLVE_VEC_BEGIN    = 0x00;
 static const uintptr_t RESOLVE_VEC_END      = 0x08;
 static const int       RESOLVE_MAX_LEVELS   = 16;     // sanity cap (the ladder ships 7: 0..6)
@@ -256,10 +268,10 @@ static const uintptr_t HEROCLASS_CAMPVEC_OFF     = 0x10f0;
 static const uintptr_t HEROCLASS_CAMPVEC_END_OFF = 0x10f8;
 static const uintptr_t ACTOR_CAMP_KNOWN_OFF      = 0x1340;
 static const uintptr_t ACTOR_CAMP_KNOWN_END_OFF  = 0x1348;
-inline const uintptr_t CAMP_REGISTRY_RVA = axRva(0x117d968, 0x1157e70);
+inline const uintptr_t CAMP_REGISTRY_RVA = axRva(0x117d968, 0x1157e70, 0x1157eb0);
 static const uintptr_t CAMP_REGISTRY_STRIDE = 0x18;
 static const uintptr_t CAMP_SKILL_HASH_OFF = 0x48;    // SkillClass+: hash of the id (h = h*0x35 + c)
-inline const uintptr_t RI_CIRCUS_FLAG_RVA = axRva(0x2a5c08b, 0x2a34c8b);
+inline const uintptr_t RI_CIRCUS_FLAG_RVA = axRva(0x2a5c08b, 0x2a34c8b, 0x2a34ccb);
 
 // ---- Roster list / embark strip layout ----
 static const uintptr_t PTY_ROSTERLIST_OFF    = 0x2f48;
@@ -274,7 +286,7 @@ static const uintptr_t PTY_SLOTS_BEG_OFF     = 0x36c8;
 static const uintptr_t PTY_SLOTS_END_OFF     = 0x36d0;
 static const uintptr_t PTY_SLOT_IFACE_OFF    = 0x158;    // slot widget -> slot interface
 static const uintptr_t ACTOR_STRESS_OFF      = 0x128c;   // Hero+: float, current stress (was 0x120c)
-inline const uintptr_t RI_TOGGLE_RVA = axRva(0x673ec0, 0x660170);
+inline const uintptr_t RI_TOGGLE_RVA = axRva(0x673ec0, 0x660170, 0x660050);
 typedef void (*RiToggleFn)(void);
 
 // ---- The IN-RAID MAP's area graph, its projection and the party move fn ----
@@ -313,26 +325,26 @@ static const uintptr_t TILE_HDOOR_KIND_OFF      = 0x24; // tile+: int door kind 
 static const int       TILE_HDOOR_KIND_HIDDEN   = 2;
 static const uintptr_t TILE_HDOOR_SEEN_OFF      = 0x44; // tile+: byte, the door has been FOUND
 static const uintptr_t TILE_HDOOR_ACCESS_OFF    = 0x45; // tile+: byte, hidden_door_accessible (template)
-inline const uintptr_t RD_INTERACT_HIDDEN_RVA = axRva(0x768140, 0x753d50);
+inline const uintptr_t RD_INTERACT_HIDDEN_RVA = axRva(0x768140, 0x753d50, 0x753c30);
 
-inline const uintptr_t MAP_PROJ_SCALE_RVA = axRva(0x2bd1e00, 0x2baaa00);
-inline const uintptr_t MAP_PROJ_CONST_RVA = axRva(0xed7724, 0xeb9f04);
-inline const uintptr_t MAP_PROJ_PANX_RVA = axRva(0x2bd1df0, 0x2baa9f0);
-inline const uintptr_t MAP_PROJ_PANY_RVA = axRva(0x2bd1df4, 0x2baa9f4);
-inline const uintptr_t MAP_SCREEN_W_RVA = axRva(0xed793c, 0xeba114);
-inline const uintptr_t MAP_SCREEN_H_RVA = axRva(0xed7908, 0xeba0e4);
+inline const uintptr_t MAP_PROJ_SCALE_RVA = axRva(0x2bd1e00, 0x2baaa00, 0x2baaa40);
+inline const uintptr_t MAP_PROJ_CONST_RVA = axRva(0xed7724, 0xeb9f04, 0xeb9f64);
+inline const uintptr_t MAP_PROJ_PANX_RVA = axRva(0x2bd1df0, 0x2baa9f0, 0x2baaa30);
+inline const uintptr_t MAP_PROJ_PANY_RVA = axRva(0x2bd1df4, 0x2baa9f4, 0x2baaa34);
+inline const uintptr_t MAP_SCREEN_W_RVA = axRva(0xed793c, 0xeba114, 0xeba174);
+inline const uintptr_t MAP_SCREEN_H_RVA = axRva(0xed7908, 0xeba0e4, 0xeba144);
                                                        // party-tile-index formula's offset constant (raidmap.cpp)
-inline const uintptr_t MAP_PAN2_X_RVA = axRva(0x2bd1df8, 0x2baa9f8);
-inline const uintptr_t MAP_PAN2_Y_RVA = axRva(0x2bd1dfc, 0x2baa9fc);
-inline const uintptr_t MAP_MS_OFFX = axRva(0x2c28730, 0x2c01328), MAP_MS_OFFY = axRva(0x2c28734, 0x2c0132c);
-inline const uintptr_t MAP_MS_DIVX = axRva(0x2c28738, 0x2c01330), MAP_MS_DIVY = axRva(0x2c2873c, 0x2c01334);
-inline const uintptr_t MAP_MS_NUM = axRva(0xed7788, 0xeb9f68);
-inline const uintptr_t MAP_MS_BNDX = axRva(0x2c28740, 0x2c01338), MAP_MS_BNDY = axRva(0x2c28744, 0x2c0133c);
-inline const uintptr_t FOCUSED_WIDGET_RVA = axRva(0x1086f68, 0x1063f68);
-inline const uintptr_t MOVE_FN_RVA = axRva(0x763be0, 0x74f7f0);
-inline const uintptr_t MOVE_GATE_RVA = axRva(0x427a80, 0x416360);
-inline const uintptr_t MOVE_MGR_RVA = axRva(0x117ddf0, 0x1158248);
-inline const uintptr_t MAP_ZOOM2_RVA = axRva(0x2bd1e04, 0x2baaa04);
+inline const uintptr_t MAP_PAN2_X_RVA = axRva(0x2bd1df8, 0x2baa9f8, 0x2baaa38);
+inline const uintptr_t MAP_PAN2_Y_RVA = axRva(0x2bd1dfc, 0x2baa9fc, 0x2baaa3c);
+inline const uintptr_t MAP_MS_OFFX = axRva(0x2c28730, 0x2c01328, 0x2c01368), MAP_MS_OFFY = axRva(0x2c28734, 0x2c0132c, 0x2c0136c);
+inline const uintptr_t MAP_MS_DIVX = axRva(0x2c28738, 0x2c01330, 0x2c01370), MAP_MS_DIVY = axRva(0x2c2873c, 0x2c01334, 0x2c01374);
+inline const uintptr_t MAP_MS_NUM = axRva(0xed7788, 0xeb9f68, 0xeb9fc8);
+inline const uintptr_t MAP_MS_BNDX = axRva(0x2c28740, 0x2c01338, 0x2c01378), MAP_MS_BNDY = axRva(0x2c28744, 0x2c0133c, 0x2c0137c);
+inline const uintptr_t FOCUSED_WIDGET_RVA = axRva(0x1086f68, 0x1063f68, 0x1063f68);
+inline const uintptr_t MOVE_FN_RVA = axRva(0x763be0, 0x74f7f0, 0x74f6d0);
+inline const uintptr_t MOVE_GATE_RVA = axRva(0x427a80, 0x416360, 0x416360);
+inline const uintptr_t MOVE_MGR_RVA = axRva(0x117ddf0, 0x1158248, 0x1158288);
+inline const uintptr_t MAP_ZOOM2_RVA = axRva(0x2bd1e04, 0x2baaa04, 0x2baaa44);
 
 static const int AREA_CONTENT_TRAP = 3;         // needed by name (the trap prop)
 static const int AREA_CONTENT_OBSTACLE = 4;     // needed by name (the visited gate: the arrival
@@ -355,7 +367,7 @@ static const uintptr_t MONSTER_SKILL_STRIDE = 0x4f8;    // (was 0x4e8)
 static const uintptr_t MONSTER_SKILL_ID_OFF = 0x08;     // inline char[0x40]
 static const char* const MT_SKILL_KEY_FMT   = "str_monster_skill_%s";
 // ---- THE SEEN-SKILLS STORE ----
-inline const uintptr_t MONSTER_SKILL_SEEN_MAP_RVA = axRva(0x117d9e0, 0x1157ed8);
+inline const uintptr_t MONSTER_SKILL_SEEN_MAP_RVA = axRva(0x117d9e0, 0x1157ed8, 0x1157f18);
 static const uintptr_t ACTOR_CUR_HP_OFF      = 0x1038; // Hero+: float, current health (was 0xfbc)
 static const uintptr_t ACTOR_RANK_MASK_OFF   = 0x1018;
 static const uintptr_t ACTOR_SCREEN_X_OFF    = 0x48;   // float: WORLD x (camera-relative), both sides
@@ -375,20 +387,20 @@ static const uintptr_t BATTLE_TURNENTRY_DEAD_OFF = 0x0c;
 static const int BS_TURN_START = 0x1c;
 
 // ---- THE BUTCHER'S CIRCUS PIT: choosing WHICH hero acts (dlc/butchers_circus/pit.cpp) ----
-inline const uintptr_t PIT_ACTIVATE_HERO_RVA = axRva(0x5a7450, 0x595720);
-inline const uintptr_t PIT_CAN_ACTIVATE_RVA = axRva(0x5a9cd0, 0x597ef0);
-inline const uintptr_t PIT_SELECT_HERO_RVA = axRva(0x5a7810, 0x595ad0);
+inline const uintptr_t PIT_ACTIVATE_HERO_RVA = axRva(0x5a7450, 0x595720, 0x595620);
+inline const uintptr_t PIT_CAN_ACTIVATE_RVA = axRva(0x5a9cd0, 0x597ef0, 0x597df0);
+inline const uintptr_t PIT_SELECT_HERO_RVA = axRva(0x5a7810, 0x595ad0, 0x5959d0);
 static const uintptr_t BATTLE_ACTIVATED_OFF  = 0x1e9;     // Battle+: byte, a hero is activated
 static const int BS_BEFORE_TURN_START = 0x11;
 #define PIT_SELECT_HERO_KEY "str_ui_select_a_hero"
 #define PIT_HOLD_BANNER_KEY "hold_to_activate_hero"
 // ---- TELLING THE OPPONENT WHAT YOUR HERO DID ----
-inline const uintptr_t MP_SEND_TURN_RVA = axRva(0x7604f0, 0x74c140);
+inline const uintptr_t MP_SEND_TURN_RVA = axRva(0x7604f0, 0x74c140, 0x74c020);
 static const uintptr_t ACTOR_CHOSEN_SKILL_OFF = 0x8e0;
 static const uintptr_t ACTOR_TARGETS_OFF      = 0x8f0;   // {begin, end, cap}
-inline const uintptr_t MP_VEC_ASSIGN_RVA = axRva(0x4729a0, 0x461320);
+inline const uintptr_t MP_VEC_ASSIGN_RVA = axRva(0x4729a0, 0x461320, 0x461320);
 // ---- Battle::SetSingleTarget -- WHERE THE MISSING RNG DRAW LIVES ----
-inline const uintptr_t SET_SINGLE_TARGET_RVA = axRva(0x5a14d0, 0x58f940);
+inline const uintptr_t SET_SINGLE_TARGET_RVA = axRva(0x5a14d0, 0x58f940, 0x58f840);
 static const int BS_TURN_CHOOSING_LO = 0x1c;
 static const int BS_TURN_CHOOSING_HI = 0x1e;
 static const int BS_TURN_DO_SKILL    = 0x20;
@@ -431,28 +443,28 @@ const char* const TURNS_FMT_KEY  = "tray_status_bar_tooltip_turns_remaining_form
 const uintptr_t ACTOR_MODE_ID_OFF  = 0x11d8;
 const uintptr_t HEROCLASS_MOVESKILL_OFF = 0xbe8;
 const uint32_t  REST_FOURCC      = 0x72657374; // "rest" — the respite screen's finish button
-inline const uintptr_t CAMP_BUFFREG_FLAG_RVA = axRva(0x2a5c08b, 0x2a34c8b);
-inline const uintptr_t CAMP_BUFF_HASDESC_RVA = axRva(0x7b9e50, 0x7a5a00);
-inline const uintptr_t EFF_BUFFLIST_BUILD_RVA = axRva(0x4bbde0, 0x4aa700);
-inline const uintptr_t EFF_BUFFLIST_FREE_RVA = axRva(0x4c36f0, 0x4b1fe0);
-inline const uintptr_t BUFF_RENDER_ONE_RVA = axRva(0x7b9f70, 0x7a5b20);
+inline const uintptr_t CAMP_BUFFREG_FLAG_RVA = axRva(0x2a5c08b, 0x2a34c8b, 0x2a34ccb);
+inline const uintptr_t CAMP_BUFF_HASDESC_RVA = axRva(0x7b9e50, 0x7a5a00, 0x7a58e0);
+inline const uintptr_t EFF_BUFFLIST_BUILD_RVA = axRva(0x4bbde0, 0x4aa700, 0x4aa700);
+inline const uintptr_t EFF_BUFFLIST_FREE_RVA = axRva(0x4c36f0, 0x4b1fe0, 0x4b1fd0);
+inline const uintptr_t BUFF_RENDER_ONE_RVA = axRva(0x7b9f70, 0x7a5b20, 0x7a5a00);
 const uintptr_t EFF_BUFFLIST_STRIDE    = 0x1d0;
 const int       EFF_BUFFLIST_MAX       = 32;       // sanity cap, same spirit as AB_EFF_MAX_PER_VEC
 const uintptr_t EFF_SUMMON_BEG_OFF   = 0x1b0;      // vector begin; end at +0x1b8 (was 0x1a8)
 const uintptr_t EFF_SUMMON_END_OFF   = 0x1b8;      //                            (was 0x1b0)
 const uintptr_t EFF_SUMMON_STRIDE    = 0x14;       // the game steps piVar10 + 5 ints
 const int       EFF_SUMMON_MAX       = 8;          // sanity cap on one effect's summon list
-inline const uintptr_t MONCLASS_VEC_RVA = axRva(0x2c2a870, 0x2c03410);
-inline const uintptr_t MONCLASS_VEC_ALT_RVA = axRva(0x2c2a888, 0x2c03428);
+inline const uintptr_t MONCLASS_VEC_RVA = axRva(0x2c2a870, 0x2c03410, 0x2c03450);
+inline const uintptr_t MONCLASS_VEC_ALT_RVA = axRva(0x2c2a888, 0x2c03428, 0x2c03468);
 const uintptr_t MONCLASS_HASH_OFF    = 0xcc;       // int: the id hash the summon entry carries
 const int       MONCLASS_MAX         = 4096;       // sanity cap on the registry walk
 const uintptr_t SKILL_LEVEL_OFF    = 0x394;
 const uintptr_t SKILL_VALIDMODES_OFF      = 0x3b8;
 const uintptr_t SKILL_VALIDMODES_SIZE_OFF = 0x3c0;
 const char* const SKILL_NAME_FMT   = "combat_skill_name_%s_%s";  // % (class id, skill id)
-inline const uintptr_t MOVE_SKILL_RVA = axRva(0x5af000, 0x59d090);
-inline const uintptr_t SKILL_PCT_MULT_RVA = axRva(0xed78d4, 0xeba0b0);
-inline const uintptr_t EFF_ONE_RVA = axRva(0xed7788, 0xeb9f68);
+inline const uintptr_t MOVE_SKILL_RVA = axRva(0x5af000, 0x59d090, 0x59cf90);
+inline const uintptr_t SKILL_PCT_MULT_RVA = axRva(0xed78d4, 0xeba0b0, 0xeba110);
+inline const uintptr_t EFF_ONE_RVA = axRva(0xed7788, 0xeb9f68, 0xeb9fc8);
 
 // ---- Phase 3 round 24: what THE CAMP and dllmain.cpp both read ----
 const uintptr_t ACTOR_CAMP_SEL_BEG_OFF    = 0x1328;
@@ -475,13 +487,13 @@ const uintptr_t BUFFREC_SOURCE_OFF    = 0x54;   // int   "source" -- a source-TY
 const int       STAT_TYPE_STEALTH     = 0x2b;   // the one condition stat_type the combat text
 
 // ---- dllmain.cpp ----
-inline const uintptr_t POOL_PTR_RVA = axRva(0xd9edf0, 0x0);
-inline const uintptr_t KEYBIND_TABLE_RVA = axRva(0x2a6f0d0, 0x2a47cd0);
+inline const uintptr_t POOL_PTR_RVA = axRva(0xd9edf0, 0x0, 0x0);
+inline const uintptr_t KEYBIND_TABLE_RVA = axRva(0x2a6f0d0, 0x2a47cd0, 0x2a47d10);
 // ---- core\subtitles.cpp ----
-inline const uintptr_t DARKEST_APP_RVA = axRva(0x2a5bb40, 0x2a34740);
+inline const uintptr_t DARKEST_APP_RVA = axRva(0x2a5bb40, 0x2a34740, 0x2a34780);
 // ---- dlc\butchers_circus\prizebox.cpp ----
-inline const uintptr_t PB_VFT_RVA = axRva(0xea9d08, 0xe8c5d8);
-inline const uintptr_t PB_OPEN_BANNER_RVA = axRva(0x659c80, 0x645f50);
+inline const uintptr_t PB_VFT_RVA = axRva(0xea9d08, 0xe8c5d8, 0xe8c628);
+inline const uintptr_t PB_OPEN_BANNER_RVA = axRva(0x659c80, 0x645f50, 0x645e30);
 static const uintptr_t PB_BC_SECTIONS_BEG  = 0xa8;
 static const uintptr_t PB_BC_SECTIONS_END  = 0xb0;
 static const uintptr_t PB_BC_SECTION_STRIDE= 0x48;
@@ -492,13 +504,13 @@ static const uintptr_t PB_BC_PIECE_STRIDE  = 0xb8;
 static const uintptr_t PB_BC_PIECE_NAME    = 0x38;   // piece+
 static const uintptr_t PB_BC_PIECE_UNLOCKED= 0x00;   // piece+ byte
 // ---- dlc\butchers_circus\rankings.cpp: THE RANKING BOARD ----
-inline const uintptr_t RB_VFT_RVA = axRva(0xeaa0c8, 0xe8c998);
+inline const uintptr_t RB_VFT_RVA = axRva(0xeaa0c8, 0xe8c998, 0xe8c9e8);
 static const uint32_t  RB_TAB_ELEM_ID = 0x727369;
 // ---- dlc\butchers_circus\banner.cpp: THE BANNER DESIGNER ----
-inline const uintptr_t BD_VFT_RVA = axRva(0xea5ee0, 0xe88868);
+inline const uintptr_t BD_VFT_RVA = axRva(0xea5ee0, 0xe88868, 0xe888b8);
 static const uint32_t  BD_ELEM_ID = 0x627369;
-inline const uintptr_t BD_STEP_RVA = axRva(0x636f90, 0x6250a0);
-inline const uintptr_t BD_PIECES_PER_ROW_RVA = axRva(0x2b7d83c, 0x2b5643c);
+inline const uintptr_t BD_STEP_RVA = axRva(0x636f90, 0x6250a0, 0x624f80);
+inline const uintptr_t BD_PIECES_PER_ROW_RVA = axRva(0x2b7d83c, 0x2b5643c, 0x2b5647c);
 // ---- dlc\butchers_circus\matchresults.cpp + prizebox.cpp: the PRIZE-BOOTH RECORDS ----
 static const uintptr_t BCR_CAMP_BLDMAP_OFF = 0x11f8;
 static const uintptr_t BCR_MAPNODE_LEFT    = 0x00;
@@ -519,223 +531,225 @@ static const uintptr_t BCR_RC_BANNER_STRIDE= 0x30;
 static const uintptr_t BCR_RC_BANNER_NAME  = 0x00;   // entry+: char[0x20] part name
 static const uintptr_t BCR_RC_BANNER_SECTION = 0x20; // entry+: char[0x10] section name
 // ---- dlc\butchers_circus\dueling.cpp ----
-inline const uintptr_t DG_VFT_RVA = axRva(0xea6398, 0xe88f80);
-inline const uintptr_t IW_VFT_RVA = axRva(0xea65d8, 0x0);
-inline const uintptr_t IW_SEND_RVA = axRva(0x819b20, 0x0);
-inline const uintptr_t MP_API_RVA = axRva(0x117d040, 0x0);
-inline const uintptr_t MP_ALT_GATE_RVA = axRva(0x2a5cd7f, 0x2a3597f);
-inline const uintptr_t MP_DISCONNECT_RVA = axRva(0x3625d0, 0x0);
-inline const uintptr_t MP_SENT_ERASE_RVA = axRva(0x363a10, 0x0);
-inline const uintptr_t DG_EDIT_TOGGLE_RVA = axRva(0x63a540, 0x627b50);
+inline const uintptr_t DG_VFT_RVA = axRva(0xea6398, 0xe88f80, 0xe88fd0);
+inline const uintptr_t IW_VFT_RVA = axRva(0xea65d8, 0x0, 0x0);
+inline const uintptr_t IW_SEND_RVA = axRva(0x819b20, 0x0, 0x0);
+inline const uintptr_t MP_API_RVA = axRva(0x117d040, 0x0, 0x0);
+inline const uintptr_t MP_ALT_GATE_RVA = axRva(0x2a5cd7f, 0x2a3597f, 0x2a359bf);
+inline const uintptr_t MP_DISCONNECT_RVA = axRva(0x3625d0, 0x0, 0x0);
+inline const uintptr_t MP_SENT_ERASE_RVA = axRva(0x363a10, 0x0, 0x0);
+inline const uintptr_t DG_EDIT_TOGGLE_RVA = axRva(0x63a540, 0x627b50, 0x627a30);
 // ---- dlc\butchers_circus\ring.cpp ----
-inline const uintptr_t RING_PANEL_VFT_RVA = axRva(0xeb4d60, 0xe97750);
-inline const uintptr_t RING_TOGGLE_RVA = axRva(0x648d60, 0x6350f0);
-inline const uintptr_t RING_INSPECT_RVA = axRva(0x648c20, 0x634fb0);
-inline const uintptr_t RANKDISP_VFT_RVA = axRva(0xeb5638, 0xe97f60);
-inline const uintptr_t RING_PUTDOWN_RVA = axRva(0x648640, 0x6349d0);
-inline const uintptr_t UI_PLAY_SOUND_RVA = axRva(0x22fac0, 0x22d800);
-inline const uintptr_t UI_DRAGDROP_MGR_RVA = axRva(0x117cd98, 0x11572e0);
-inline const uintptr_t RING_MM_VFT_RVA = axRva(0xea6e68, 0xe89780);
-inline const uintptr_t TOWNDISP_VFT_RVA = axRva(0xeb4e68, 0xe97688);
+inline const uintptr_t RING_PANEL_VFT_RVA = axRva(0xeb4d60, 0xe97750, 0xe976a0);
+inline const uintptr_t RING_TOGGLE_RVA = axRva(0x648d60, 0x6350f0, 0x634fd0);
+inline const uintptr_t RING_INSPECT_RVA = axRva(0x648c20, 0x634fb0, 0x634e90);
+inline const uintptr_t RANKDISP_VFT_RVA = axRva(0xeb5638, 0xe97f60, 0xe97f08);
+inline const uintptr_t RING_PUTDOWN_RVA = axRva(0x648640, 0x6349d0, 0x6348b0);
+inline const uintptr_t UI_PLAY_SOUND_RVA = axRva(0x22fac0, 0x22d800, 0x22d800);
+inline const uintptr_t UI_DRAGDROP_MGR_RVA = axRva(0x117cd98, 0x11572e0, 0x1157320);
+inline const uintptr_t RING_MM_VFT_RVA = axRva(0xea6e68, 0xe89780, 0xe89788);
+inline const uintptr_t TOWNDISP_VFT_RVA = axRva(0xeb4e68, 0xe97688, 0xe97770);
 static const int       TD_PROGRESS_FWD_SLOT = 20;      // ...::ProgressForwardInternal
-inline const uintptr_t TD_PROGRESS_FWD_RVA = axRva(0x6d5d30, 0x6c1b20);
+inline const uintptr_t TD_PROGRESS_FWD_RVA = axRva(0x6d5d30, 0x6c1b20, 0x6c1a00);
 // ---- the DIRECT-CHALLENGE (lobby) ready handshake ----
-inline const uintptr_t RING_CHALLENGE_ID_RVA = axRva(0x2a5c1b0, 0x2a34db0);
+inline const uintptr_t RING_CHALLENGE_ID_RVA = axRva(0x2a5c1b0, 0x2a34db0, 0x2a34df0);
                                                   // 0 = no direct challenge (solo / ranked queue)
-inline const uintptr_t RING_CHALLENGE_STATE_RVA = axRva(0x2a5bb40, 0x2a34740);
+inline const uintptr_t RING_CHALLENGE_STATE_RVA = axRva(0x2a5bb40, 0x2a34740, 0x2a34780);
                                                   // Same address as DARKEST_APP_RVA (+0x00).
-inline const uintptr_t RING_NOT_STEAM_RVA = axRva(0x2a5cd7f, 0x2a3597f);
-inline const uintptr_t STEAM_FRIENDS_CTX_RVA = axRva(0x109fd28, 0x0);
+inline const uintptr_t RING_NOT_STEAM_RVA = axRva(0x2a5cd7f, 0x2a3597f, 0x2a359bf);
+inline const uintptr_t STEAM_FRIENDS_CTX_RVA = axRva(0x109fd28, 0x0, 0x0);
 // ---- dlc\color_of_madness\wave.cpp ----
-inline const uintptr_t COM_WAVE_QID_RVA = axRva(0x26186e4, 0x25f3134);
-inline const uintptr_t COM_TIER_KEY_TAB_RVA = axRva(0xde8d00, 0xdcd2e8);
-inline const uintptr_t COM_THRESHOLD_FN_RVA = axRva(0x503650, 0x4f1e70);
-inline const uintptr_t COM_CAN_ADVANCE_FN_RVA = axRva(0x5034e0, 0x4f1d00);
+inline const uintptr_t COM_WAVE_QID_RVA = axRva(0x26186e4, 0x25f3134, 0x25f3174);
+inline const uintptr_t COM_TIER_KEY_TAB_RVA = axRva(0xde8d00, 0xdcd2e8, 0xdcd310);
+inline const uintptr_t COM_THRESHOLD_FN_RVA = axRva(0x503650, 0x4f1e70, 0x4f1e60);
+inline const uintptr_t COM_CAN_ADVANCE_FN_RVA = axRva(0x5034e0, 0x4f1d00, 0x4f1cf0);
 // ---- frontend\dialog.cpp ----
-inline const uintptr_t CD_SYSTEM_PTR_RVA = axRva(0x117de50, 0x1158328);
+inline const uintptr_t CD_SYSTEM_PTR_RVA = axRva(0x117de50, 0x1158328, 0x1158368);
 // ---- frontend\display.cpp ----
-inline const uintptr_t FE_DISPLAY_PTR_RVA = axRva(0x117d8b0, 0x1157dc0);
-inline const uintptr_t FE_NEWGAME_RVA = axRva(0x416bc0, 0x406550);
-inline const uintptr_t FE_DELETE_RVA = axRva(0x40f660, 0x3ff140);
-inline const uintptr_t FE_CONTENT_REG_RVA = axRva(0x117d868, 0x1157d80);
+inline const uintptr_t FE_DISPLAY_PTR_RVA = axRva(0x117d8b0, 0x1157dc0, 0x1157e00);
+inline const uintptr_t FE_NEWGAME_RVA = axRva(0x416bc0, 0x406550, 0x406550);
+inline const uintptr_t FE_DELETE_RVA = axRva(0x40f660, 0x3ff140, 0x3ff140);
+inline const uintptr_t FE_CONTENT_REG_RVA = axRva(0x117d868, 0x1157d80, 0x1157dc0);
 // ---- frontend\loading.cpp ----
-inline const uintptr_t LS_PTR_RVA = axRva(0x117de68, 0x1158338);
+inline const uintptr_t LS_PTR_RVA = axRva(0x117de68, 0x1158338, 0x1158378);
 // ---- frontend\naming.cpp ----
-inline const uintptr_t COMMIT_NAME_RVA = axRva(0x2a5cd90, 0x2a35990);
+inline const uintptr_t COMMIT_NAME_RVA = axRva(0x2a5cd90, 0x2a35990, 0x2a359d0);
 // ---- frontend\options.cpp ----
-inline const uintptr_t OPT_DESC_ARR_RVA = axRva(0x2a620c0, 0x2a3acc0);
-inline const uintptr_t OPT_CAT_ARR_RVA = axRva(0x2a61ef0, 0x2a3aaf0);
-inline const uintptr_t OPT_VALARR_PTR_RVA = axRva(0x117d888, 0x1157da0);
-inline const uintptr_t OPT_LANG_BEGIN_RVA = axRva(0x2a87f30, 0x2a60b30);
-inline const uintptr_t OPT_LANG_END_RVA = axRva(0x2a87f38, 0x2a60b38);
-inline const uintptr_t OPT_LANG_CUR_RVA = axRva(0x2a87fa0, 0x2a60ba0);
+inline const uintptr_t OPT_DESC_ARR_RVA = axRva(0x2a620c0, 0x2a3acc0, 0x2a3ad00);
+inline const uintptr_t OPT_CAT_ARR_RVA = axRva(0x2a61ef0, 0x2a3aaf0, 0x2a3ab30);
+inline const uintptr_t OPT_VALARR_PTR_RVA = axRva(0x117d888, 0x1157da0, 0x1157de0);
+inline const uintptr_t OPT_LANG_BEGIN_RVA = axRva(0x2a87f30, 0x2a60b30, 0x2a60b70);
+inline const uintptr_t OPT_LANG_END_RVA = axRva(0x2a87f38, 0x2a60b38, 0x2a60b78);
+inline const uintptr_t OPT_LANG_CUR_RVA = axRva(0x2a87fa0, 0x2a60ba0, 0x2a60be0);
 static const int       OPT_DESC_COUNT    = 48;
-inline const uintptr_t OPT_ROWVIS_FN_RVA = axRva(0x8032d0, 0x7eef40);
-inline const uintptr_t OPT_TOGGLE_CB_RVA = axRva(0x8066d0, 0x7f2340);
+inline const uintptr_t OPT_ROWVIS_FN_RVA = axRva(0x8032d0, 0x7eef40, 0x7eee20);
+inline const uintptr_t OPT_TOGGLE_CB_RVA = axRva(0x8066d0, 0x7f2340, 0x7f2220);
 // ---- frontend\sharedui.cpp ----
-inline const uintptr_t GL_SINGLETON_RVA = axRva(0x117de48, 0x1158320);
-inline const uintptr_t GL_VFT_RVA = axRva(0xec94f8, 0xeabdd8);
-inline const uintptr_t HP_SINGLETON_RVA = axRva(0x117de40, 0x1158318);
-inline const uintptr_t HP_VFT_RVA = axRva(0xec9270, 0xeabb50);
-inline const uintptr_t CP_SINGLETON_RVA = axRva(0x117de38, 0x1158310);
-inline const uintptr_t CP_VFT_RVA = axRva(0xec8f30, 0xeab930);
-inline const uintptr_t JP_SYSCLASS_RVA = axRva(0x117d998, 0x1157ea0);
+inline const uintptr_t GL_SINGLETON_RVA = axRva(0x117de48, 0x1158320, 0x1158360);
+inline const uintptr_t GL_VFT_RVA = axRva(0xec94f8, 0xeabdd8, 0xeabe28);
+inline const uintptr_t HP_SINGLETON_RVA = axRva(0x117de40, 0x1158318, 0x1158358);
+inline const uintptr_t HP_VFT_RVA = axRva(0xec9270, 0xeabb50, 0xeabba0);
+inline const uintptr_t CP_SINGLETON_RVA = axRva(0x117de38, 0x1158310, 0x1158350);
+inline const uintptr_t CP_VFT_RVA = axRva(0xec8f30, 0xeab930, 0xeab9b8);
+inline const uintptr_t JP_SYSCLASS_RVA = axRva(0x117d998, 0x1157ea0, 0x1157ee0);
 // ---- input\synth.cpp ----
-inline const uintptr_t FE_CURSOR_X_RVA = axRva(0x117cda8, 0x11572dc);
-inline const uintptr_t FE_CURSOR_Y_RVA = axRva(0x117cdac, 0x11572f0);
-inline const uintptr_t CTRL_CONNECTED_RVA = axRva(0x1180129, 0x115a5f9);
-inline const uintptr_t INPUT_GATE_RVA = axRva(0x117cd90, 0x115729c);
-inline const uintptr_t MOUSE_SUPPRESS_RVA = axRva(0x1174ada, 0x114f02a);
-inline const uintptr_t MOUSE_SUPPRESS_B_RVA = axRva(0x1174adb, 0x114f02b);
-inline const uintptr_t MOUSE_INWINDOW_RVA = axRva(0x1174add, 0x114f02d);
-inline const uintptr_t INPUT_ENABLE_VEC_RVA = axRva(0x2c27a20, 0x2c00620);
-inline const uintptr_t INPUT_ENABLE_SIZE_RVA = axRva(0x2c27a38, 0x2c00638);
-inline const uintptr_t VP_OFF_X_RVA = axRva(0x2c28730, 0x2c01328);
-inline const uintptr_t VP_OFF_Y_RVA = axRva(0x2c28734, 0x2c0132c);
-inline const uintptr_t VP_DEN_X_RVA = axRva(0x2c28738, 0x2c01330);
-inline const uintptr_t VP_DEN_Y_RVA = axRva(0x2c2873c, 0x2c01334);
-inline const uintptr_t VP_BOUND_X_RVA = axRva(0x2c28740, 0x2c01338);
-inline const uintptr_t VP_BOUND_Y_RVA = axRva(0x2c28744, 0x2c0133c);
-inline const uintptr_t VP_NUM_RVA = axRva(0xed7788, 0xeb9f68);
+inline const uintptr_t FE_CURSOR_X_RVA = axRva(0x117cda8, 0x11572dc, 0x115731c);
+inline const uintptr_t FE_CURSOR_Y_RVA = axRva(0x117cdac, 0x11572f0, 0x1157330);
+inline const uintptr_t CTRL_CONNECTED_RVA = axRva(0x1180129, 0x115a5f9, 0x115a639);
+inline const uintptr_t INPUT_GATE_RVA = axRva(0x117cd90, 0x115729c, 0x11572dc);
+// ---- THE GAMEPAD ACTION TABLE ----
+inline const uintptr_t PAD_ACTION_TABLE_RVA = axRva(0x2612810, 0x25ecce0, 0x25ecd20);
+inline const uintptr_t MOUSE_SUPPRESS_RVA = axRva(0x1174ada, 0x114f02a, 0x114f06a);
+inline const uintptr_t MOUSE_SUPPRESS_B_RVA = axRva(0x1174adb, 0x114f02b, 0x114f06b);
+inline const uintptr_t MOUSE_INWINDOW_RVA = axRva(0x1174add, 0x114f02d, 0x114f06d);
+inline const uintptr_t INPUT_ENABLE_VEC_RVA = axRva(0x2c27a20, 0x2c00620, 0x2c00660);
+inline const uintptr_t INPUT_ENABLE_SIZE_RVA = axRva(0x2c27a38, 0x2c00638, 0x2c00678);
+inline const uintptr_t VP_OFF_X_RVA = axRva(0x2c28730, 0x2c01328, 0x2c01368);
+inline const uintptr_t VP_OFF_Y_RVA = axRva(0x2c28734, 0x2c0132c, 0x2c0136c);
+inline const uintptr_t VP_DEN_X_RVA = axRva(0x2c28738, 0x2c01330, 0x2c01370);
+inline const uintptr_t VP_DEN_Y_RVA = axRva(0x2c2873c, 0x2c01334, 0x2c01374);
+inline const uintptr_t VP_BOUND_X_RVA = axRva(0x2c28740, 0x2c01338, 0x2c01378);
+inline const uintptr_t VP_BOUND_Y_RVA = axRva(0x2c28744, 0x2c0133c, 0x2c0137c);
+inline const uintptr_t VP_NUM_RVA = axRva(0xed7788, 0xeb9f68, 0xeb9fc8);
 // ---- raid\actionbar.cpp ----
-inline const uintptr_t TP_CUTOFF_MISS_RVA = axRva(0x2acb8f8, 0x2aa44f8);
-inline const uintptr_t TP_CUTOFF_HIT_RVA = axRva(0x2acb8fc, 0x2aa44fc);
-inline const uintptr_t TP_DEATHBLOW_RVA = axRva(0x2acbba0, 0x2aa47a0);
-inline const uintptr_t BUFF_UPKEEP_RVA = axRva(0x47b510, 0x469e90);
-inline const uintptr_t TARGET_VALID_RVA = axRva(0x484430, 0x472db0);
-inline const uintptr_t TARGET_ANY_RVA = axRva(0x484280, 0x472c00);
-inline const uintptr_t DO_SKILL_RVA = axRva(0x5af430, 0x59d4c0);
-inline const uintptr_t EFF_PCT_D_RVA = axRva(0xed7838, 0xeba018);
-inline const uintptr_t TOGGLE_CHARSHEET_RVA = axRva(0x427990, 0x416270);
+inline const uintptr_t TP_CUTOFF_MISS_RVA = axRva(0x2acb8f8, 0x2aa44f8, 0x2aa4538);
+inline const uintptr_t TP_CUTOFF_HIT_RVA = axRva(0x2acb8fc, 0x2aa44fc, 0x2aa453c);
+inline const uintptr_t TP_DEATHBLOW_RVA = axRva(0x2acbba0, 0x2aa47a0, 0x2aa47e0);
+inline const uintptr_t BUFF_UPKEEP_RVA = axRva(0x47b510, 0x469e90, 0x469e90);
+inline const uintptr_t TARGET_VALID_RVA = axRva(0x484430, 0x472db0, 0x472db0);
+inline const uintptr_t TARGET_ANY_RVA = axRva(0x484280, 0x472c00, 0x472c00);
+inline const uintptr_t DO_SKILL_RVA = axRva(0x5af430, 0x59d4c0, 0x59d3c0);
+inline const uintptr_t EFF_PCT_D_RVA = axRva(0xed7838, 0xeba018, 0xeba078);
+inline const uintptr_t TOGGLE_CHARSHEET_RVA = axRva(0x427990, 0x416270, 0x416270);
 // ---- raid\camp.cpp ----
-inline const uintptr_t CAMP_PERFORM_RVA = axRva(0x5bce30, 0x5aaec0);
-inline const uintptr_t MEAL_TABLE_RVA = axRva(0x2acb8c8, 0x2aa44c8);
-inline const uintptr_t MEAL_COUNT_RVA = axRva(0x2acb8d0, 0x2aa44d0);
-inline const uintptr_t CAMP_CAN_START_RVA = axRva(0x7658f0, 0x751500);
+inline const uintptr_t CAMP_PERFORM_RVA = axRva(0x5bce30, 0x5aaec0, 0x5aadc0);
+inline const uintptr_t MEAL_TABLE_RVA = axRva(0x2acb8c8, 0x2aa44c8, 0x2aa4508);
+inline const uintptr_t MEAL_COUNT_RVA = axRva(0x2acb8d0, 0x2aa44d0, 0x2aa4510);
+inline const uintptr_t CAMP_CAN_START_RVA = axRva(0x7658f0, 0x751500, 0x7513e0);
 // ---- raid\combattext.cpp ----
-inline const uintptr_t POPUP_TYPE_TABLE_RVA = axRva(0x2bd68d0, 0x2baf4d0);
+inline const uintptr_t POPUP_TYPE_TABLE_RVA = axRva(0x2bd68d0, 0x2baf4d0, 0x2baf510);
 // ---- raid\dungeonview.cpp ----
-inline const uintptr_t RD_INTERACT_TRAP_RVA = axRva(0x767f70, 0x753b80);
-inline const uintptr_t RD_INTERACT_PROP_RVA = axRva(0x768320, 0x753f30);
-inline const uintptr_t TRAP_SCOUT_BONUS_RVA = axRva(0x2acbbf0, 0x2aa47f0);
-inline const uintptr_t TRAP_DIFF_BASE_BEG_RVA = axRva(0x2acbe68, 0x2aa4a68);
-inline const uintptr_t TRAP_DIFF_BASE_END_RVA = axRva(0x2acbe70, 0x2aa4a70);
-inline const uintptr_t REACH_BOX_WIDTH_RVA = axRva(0x2acbbb8, 0x2aa47b8);
-inline const uintptr_t REACH_BOX_HEIGHT_RVA = axRva(0x2acbbbc, 0x2aa47bc);
+inline const uintptr_t RD_INTERACT_TRAP_RVA = axRva(0x767f70, 0x753b80, 0x753a60);
+inline const uintptr_t RD_INTERACT_PROP_RVA = axRva(0x768320, 0x753f30, 0x753e10);
+inline const uintptr_t TRAP_SCOUT_BONUS_RVA = axRva(0x2acbbf0, 0x2aa47f0, 0x2aa4830);
+inline const uintptr_t TRAP_DIFF_BASE_BEG_RVA = axRva(0x2acbe68, 0x2aa4a68, 0x2aa4aa8);
+inline const uintptr_t TRAP_DIFF_BASE_END_RVA = axRva(0x2acbe70, 0x2aa4a70, 0x2aa4ab0);
+inline const uintptr_t REACH_BOX_WIDTH_RVA = axRva(0x2acbbb8, 0x2aa47b8, 0x2aa47f8);
+inline const uintptr_t REACH_BOX_HEIGHT_RVA = axRva(0x2acbbbc, 0x2aa47bc, 0x2aa47fc);
 // ---- raid\eventscroll.cpp ----
-inline const uintptr_t OE_ACT_INVESTIGATE = axRva(0x707ef0, 0x6f3b90);
-inline const uintptr_t OE_ACT_CURIO_PASS = axRva(0x707e00, 0x6f3aa0);
-inline const uintptr_t OE_ACT_CLEAR = axRva(0x708300, 0x6f3fa0);
-inline const uintptr_t OE_ACT_OBST_PASS = axRva(0x7080d0, 0x6f3d70);
-inline const uintptr_t OE_ACT_ANCESTOR = axRva(0x708090, 0x6f3d30);
-inline const uintptr_t OE_ACT_EAT = axRva(0x707780, 0x6f3420);
-inline const uintptr_t OE_ACT_STARVE = axRva(0x707710, 0x6f33b0);
-inline const uintptr_t HUNGER_ROUND_RVA = axRva(0xed7788, 0xeb9f68);
-inline const uintptr_t FOOD_TYPEHASH_RVA = axRva(0x2a77a34, 0x2a520a4);
-inline const uintptr_t OE_USE_ITEM_RVA = axRva(0x72c010, 0x717cb0);
-inline const uintptr_t ITEM_ASSIGN_RVA = axRva(0x3f1f80, 0x3e1cb0);
-inline const uintptr_t ITEM_CLEAR_RVA = axRva(0x5d2ed0, 0x5c0f60);
-inline const uintptr_t OE_INTERACT_LOOKUP_RVA = axRva(0x4aa880, 0x4991a0);
-inline const uintptr_t OE_OBSTACLE_CLEAR_BODY_RVA = axRva(0x703ae0, 0x6ef780);
-inline const uintptr_t CURIO_TRACKER_RVA = axRva(0x117d9d0, 0x1157ed0);
-inline const uintptr_t CURIO_TRACKER_QUERY_RVA = axRva(0x5572c0, 0x545a00);
-inline const uintptr_t CURIO_TRACKER_GATE_RVA = axRva(0x4247d0, 0x4130b0);
-inline const uintptr_t QUEST_ITEM_TYPEHASH_RVA = axRva(0x2a794a8, 0x2a539b8);
+inline const uintptr_t OE_ACT_INVESTIGATE = axRva(0x707ef0, 0x6f3b90, 0x6f3a70);
+inline const uintptr_t OE_ACT_CURIO_PASS = axRva(0x707e00, 0x6f3aa0, 0x6f3980);
+inline const uintptr_t OE_ACT_CLEAR = axRva(0x708300, 0x6f3fa0, 0x6f3e80);
+inline const uintptr_t OE_ACT_OBST_PASS = axRva(0x7080d0, 0x6f3d70, 0x6f3c50);
+inline const uintptr_t OE_ACT_ANCESTOR = axRva(0x708090, 0x6f3d30, 0x6f3c10);
+inline const uintptr_t OE_ACT_EAT = axRva(0x707780, 0x6f3420, 0x6f3300);
+inline const uintptr_t OE_ACT_STARVE = axRva(0x707710, 0x6f33b0, 0x6f3290);
+inline const uintptr_t HUNGER_ROUND_RVA = axRva(0xed7788, 0xeb9f68, 0xeb9fc8);
+inline const uintptr_t FOOD_TYPEHASH_RVA = axRva(0x2a77a34, 0x2a520a4, 0x2a520e4);
+inline const uintptr_t OE_USE_ITEM_RVA = axRva(0x72c010, 0x717cb0, 0x717b90);
+inline const uintptr_t ITEM_ASSIGN_RVA = axRva(0x3f1f80, 0x3e1cb0, 0x3e1cb0);
+inline const uintptr_t ITEM_CLEAR_RVA = axRva(0x5d2ed0, 0x5c0f60, 0x5c0e60);
+inline const uintptr_t OE_INTERACT_LOOKUP_RVA = axRva(0x4aa880, 0x4991a0, 0x4991a0);
+inline const uintptr_t OE_OBSTACLE_CLEAR_BODY_RVA = axRva(0x703ae0, 0x6ef780, 0x6ef660);
+inline const uintptr_t CURIO_TRACKER_RVA = axRva(0x117d9d0, 0x1157ed0, 0x1157f10);
+inline const uintptr_t CURIO_TRACKER_QUERY_RVA = axRva(0x5572c0, 0x545a00, 0x545900);
+inline const uintptr_t CURIO_TRACKER_GATE_RVA = axRva(0x4247d0, 0x4130b0, 0x4130b0);
+inline const uintptr_t QUEST_ITEM_TYPEHASH_RVA = axRva(0x2a794a8, 0x2a539b8, 0x2a539f8);
 // ---- raid\inventory.cpp ----
-inline const uintptr_t INV_NOID_TYPEHASH_RVA = axRva(0x2a80f38, 0x2a5b608);
-inline const uintptr_t DUNGEON_CTRL_RVA = axRva(0x117d8d8, 0x1157de8);
-inline const uintptr_t HERO_USE_ITEM_RVA = axRva(0x424f40, 0x413820);
-inline const uintptr_t USE_ITEM_PICK_RVA = axRva(0x426570, 0x414e50);
-inline const uintptr_t INV_DISCARD_RVA = axRva(0x72a840, 0x7164e0);
-inline const uintptr_t INV_POUR_RVA = axRva(0x5d5a20, 0x5c3ab0);
-inline const uintptr_t INV_SETIDENT_RVA = axRva(0x5d3730, 0x5c17c0);
+inline const uintptr_t INV_NOID_TYPEHASH_RVA = axRva(0x2a80f38, 0x2a5b608, 0x2a5b648);
+inline const uintptr_t DUNGEON_CTRL_RVA = axRva(0x117d8d8, 0x1157de8, 0x1157e28);
+inline const uintptr_t HERO_USE_ITEM_RVA = axRva(0x424f40, 0x413820, 0x413820);
+inline const uintptr_t USE_ITEM_PICK_RVA = axRva(0x426570, 0x414e50, 0x414e50);
+inline const uintptr_t INV_DISCARD_RVA = axRva(0x72a840, 0x7164e0, 0x7163c0);
+inline const uintptr_t INV_POUR_RVA = axRva(0x5d5a20, 0x5c3ab0, 0x5c39b0);
+inline const uintptr_t INV_SETIDENT_RVA = axRva(0x5d3730, 0x5c17c0, 0x5c16c0);
 // ---- raid\light.cpp ----
-inline const uintptr_t TORCH_TABLE_RVA = axRva(0x2acbb20, 0x2aa4720);
-inline const uintptr_t TORCH_TITLE_FMT_RVA = axRva(0x109b2bc, 0x10780ac);
+inline const uintptr_t TORCH_TABLE_RVA = axRva(0x2acbb20, 0x2aa4720, 0x2aa4760);
+inline const uintptr_t TORCH_TITLE_FMT_RVA = axRva(0x109b2bc, 0x10780ac, 0x10780ac);
 // ---- raid\loot.cpp ----
-inline const uintptr_t LOOT_TAKE_ONE_RVA = axRva(0x70ad60, 0x6f6a00);
+inline const uintptr_t LOOT_TAKE_ONE_RVA = axRva(0x70ad60, 0x6f6a00, 0x6f68e0);
 // ---- raid\quest.cpp ----
-inline const uintptr_t QT_GOALDESC_RVA = axRva(0x808fa0, 0x7f4c10);
-inline const uintptr_t QT_LOGVEC_RVA = axRva(0x117d930, 0x1157e38);
+inline const uintptr_t QT_GOALDESC_RVA = axRva(0x808fa0, 0x7f4c10, 0x7f4af0);
+inline const uintptr_t QT_LOGVEC_RVA = axRva(0x117d930, 0x1157e38, 0x1157e78);
 static const uintptr_t QT_LOGVEC_BEG       = 0x48;      // owner+: definition vector begin
 static const uintptr_t QT_LOGVEC_END       = 0x50;      // owner+: definition vector end
 static const uintptr_t QT_LOG_STRIDE       = 0x780;     // (was 0x730)
 static const uintptr_t QT_LOG_QUESTID_OFF  = 0x40;      // def+0x40 == Quest+0x40 identifies the entry
 static const int       QT_LOG_MAX          = 256;       // sanity cap on the definition walk
-inline const uintptr_t QT_RETREAT_CONFIRM_RVA = axRva(0x73fc10, 0x72b8e0);
-inline const uintptr_t QT_RETREAT_CAP4_RVA = axRva(0x109b440, 0x1078230);
-inline const uintptr_t QT_NOABANDON_QID_RVA = axRva(0x2a63bc8, 0x2a3e098);
-inline const uintptr_t QT_WAVE_QID_RVA = axRva(0x26186e4, 0x25f3134);
-inline const uintptr_t QT_PANEL_VFTABLE_RVA = axRva(0xebe428, 0xea0598);
+inline const uintptr_t QT_RETREAT_CONFIRM_RVA = axRva(0x73fc10, 0x72b8e0, 0x72b7c0);
+inline const uintptr_t QT_RETREAT_CAP4_RVA = axRva(0x109b440, 0x1078230, 0x1078230);
+inline const uintptr_t QT_NOABANDON_QID_RVA = axRva(0x2a63bc8, 0x2a3e098, 0x2a3e0d8);
+inline const uintptr_t QT_WAVE_QID_RVA = axRva(0x26186e4, 0x25f3134, 0x25f3174);
+inline const uintptr_t QT_PANEL_VFTABLE_RVA = axRva(0xebe428, 0xea0598, 0xea05e8);
 // ---- raid\raidmap.cpp ----
-inline const uintptr_t PARTY_TILE_K_OFFSET_RVA = axRva(0xed7908, 0xeba0e4);
-inline const uintptr_t PARTY_TILE_K_SCALE_RVA = axRva(0xed76bc, 0xeb9e9c);
-inline const uintptr_t KEY_IS_DOWN_RVA = axRva(0x289bb0, 0x287440);
-inline const uintptr_t KEY_STATE_ARRAY_RVA = axRva(0x2c27b50, 0x2c00750);
+inline const uintptr_t PARTY_TILE_K_OFFSET_RVA = axRva(0xed7908, 0xeba0e4, 0xeba144);
+inline const uintptr_t PARTY_TILE_K_SCALE_RVA = axRva(0xed76bc, 0xeb9e9c, 0xeb9efc);
+inline const uintptr_t KEY_IS_DOWN_RVA = axRva(0x289bb0, 0x287440, 0x287440);
+inline const uintptr_t KEY_STATE_ARRAY_RVA = axRva(0x2c27b50, 0x2c00750, 0x2c00790);
 // ---- raid\results.cpp ----
-inline const uintptr_t RR_DISPLAY_RVA = axRva(0x117ddf8, 0x11582e0);
+inline const uintptr_t RR_DISPLAY_RVA = axRva(0x117ddf8, 0x11582e0, 0x1158320);
                                                        // app-state 0xb, NULLED leaving — the gate
-inline const uintptr_t RR_OUTCOME_KEY_RVA = axRva(0x2be0530, 0x2bb9130);
-inline const uintptr_t RR_PROFILE_GET_RVA = axRva(0x54c950, 0x53b090);
-inline const uintptr_t RR_GOLD_TYPEHASH_RVA = axRva(0x2a7c964, 0x2a56fd4);
+inline const uintptr_t RR_OUTCOME_KEY_RVA = axRva(0x2be0530, 0x2bb9130, 0x2bb9170);
+inline const uintptr_t RR_PROFILE_GET_RVA = axRva(0x54c950, 0x53b090, 0x53af90);
+inline const uintptr_t RR_GOLD_TYPEHASH_RVA = axRva(0x2a7c964, 0x2a56fd4, 0x2a57014);
 // ---- sheet\charsheet.cpp ----
-inline const uintptr_t CS_TRK_UNEQUIP_RVA = axRva(0x7f8270, 0x7e3f10);
-inline const uintptr_t CS_COMSKILL_TOGGLE_RVA = axRva(0x5c9b10, 0x5b7ba0);
+inline const uintptr_t CS_TRK_UNEQUIP_RVA = axRva(0x7f8270, 0x7e3f10, 0x7e3df0);
+inline const uintptr_t CS_COMSKILL_TOGGLE_RVA = axRva(0x5c9b10, 0x5b7ba0, 0x5b7aa0);
 // ---- sheet\composers.cpp ----
-inline const uintptr_t CS_RESIST_TABLE_RVA = axRva(0x2ad3810, 0x2aac410);
-inline const uintptr_t CS_RESIST_VALUE_RVA = axRva(0x478600, 0x466f80);
-inline const uintptr_t CS_QUIRK_DESC_RVA = axRva(0x80b0c0, 0x7f6d30);
-inline const uintptr_t CAMP_ET_SKIP_RVA = axRva(0x2a801b4, 0x2a5a8b4);
-inline const uintptr_t CAMP_ET_PCT_RVA[2]  = { axRva(0x2a804c8, 0x2a5aa98), axRva(0x2a80334, 0x2a5aa34) };
-inline const uintptr_t CAMP_ET_RAW_RVA[3]  = { axRva(0x2a80218, 0x2a5a918), axRva(0x2a801b8, 0x2a5a8b8), axRva(0x2a80274, 0x2a5a974) };
-inline const uintptr_t CAMP_ET_PLAIN_RVA[7] = { axRva(0x2a80154, 0x2a5a744), axRva(0x2a80338, 0x2a5aa38), axRva(0x2a80214, 0x2a5a914), axRva(0x2a800f4, 0x2a5a6f4),
-                                                axRva(0x2a800f8, 0x2a5a6f8), axRva(0x2a80158, 0x2a5a748), axRva(0x2a802d4, 0x2a5a9d4) }; // format, verbatim
-inline const uintptr_t CAMP_ET_SUFFIX_RVA = axRva(0x2a800f8, 0x2a5a6f8);
-inline const uintptr_t CAMP_ET_ITEM_RVA = axRva(0x2a80278, 0x2a5a978);
-inline const uintptr_t CAMP_ET_BUFF_RVA = axRva(0x2a802d8, 0x2a5a9d8);
-inline const uintptr_t CAMP_BUFFREG_RVA = axRva(0x117d960, 0x1157e68);
-inline const uintptr_t CAMP_BUFF_DESC_RVA = axRva(0x7ba490, 0x7a6040);
-inline const uintptr_t BUFF_SRCTYPE_TABLE_RVA = axRva(0x2aa62a0, 0x2a7eea0);
-inline const uintptr_t BUFF_STATTYPE_TABLE_RVA = axRva(0x2aa7030, 0x2a7fc30);
-inline const uintptr_t BUFF_DURTYPE_TABLE_RVA = axRva(0x2aa6cc0, 0x2a7f8c0);
-inline const uintptr_t SCOUT_BASE_RVA = axRva(0x2acbb94, 0x2aa4794);
-inline const uintptr_t BUFF_RULE_GATE_RVA = axRva(0x475210, 0x463b90);
-inline const uintptr_t TRAIT_REG_RVA = axRva(0x117d9a8, 0x1157eb0);
+inline const uintptr_t CS_RESIST_TABLE_RVA = axRva(0x2ad3810, 0x2aac410, 0x2aac450);
+inline const uintptr_t CS_RESIST_VALUE_RVA = axRva(0x478600, 0x466f80, 0x466f80);
+inline const uintptr_t CS_QUIRK_DESC_RVA = axRva(0x80b0c0, 0x7f6d30, 0x7f6c10);
+inline const uintptr_t CAMP_ET_SKIP_RVA = axRva(0x2a801b4, 0x2a5a8b4, 0x2a5a8f4);
+inline const uintptr_t CAMP_ET_PCT_RVA[2]  = { axRva(0x2a804c8, 0x2a5aa98, 0x2a5aad8), axRva(0x2a80334, 0x2a5aa34, 0x2a5aa74) };
+inline const uintptr_t CAMP_ET_RAW_RVA[3]  = { axRva(0x2a80218, 0x2a5a918, 0x2a5a958), axRva(0x2a801b8, 0x2a5a8b8, 0x2a5a8f8), axRva(0x2a80274, 0x2a5a974, 0x2a5a9b4) };
+inline const uintptr_t CAMP_ET_PLAIN_RVA[7] = { axRva(0x2a80154, 0x2a5a744, 0x2a5a784), axRva(0x2a80338, 0x2a5aa38, 0x2a5aa78), axRva(0x2a80214, 0x2a5a914, 0x2a5a954), axRva(0x2a800f4, 0x2a5a6f4, 0x2a5a734),
+                                                axRva(0x2a800f8, 0x2a5a6f8, 0x2a5a738), axRva(0x2a80158, 0x2a5a748, 0x2a5a788), axRva(0x2a802d4, 0x2a5a9d4, 0x2a5aa14) }; // format, verbatim
+inline const uintptr_t CAMP_ET_SUFFIX_RVA = axRva(0x2a800f8, 0x2a5a6f8, 0x2a5a738);
+inline const uintptr_t CAMP_ET_ITEM_RVA = axRva(0x2a80278, 0x2a5a978, 0x2a5a9b8);
+inline const uintptr_t CAMP_ET_BUFF_RVA = axRva(0x2a802d8, 0x2a5a9d8, 0x2a5aa18);
+inline const uintptr_t CAMP_BUFFREG_RVA = axRva(0x117d960, 0x1157e68, 0x1157ea8);
+inline const uintptr_t CAMP_BUFF_DESC_RVA = axRva(0x7ba490, 0x7a6040, 0x7a5f20);
+inline const uintptr_t BUFF_SRCTYPE_TABLE_RVA = axRva(0x2aa62a0, 0x2a7eea0, 0x2a7eee0);
+inline const uintptr_t BUFF_STATTYPE_TABLE_RVA = axRva(0x2aa7030, 0x2a7fc30, 0x2a7fc70);
+inline const uintptr_t BUFF_DURTYPE_TABLE_RVA = axRva(0x2aa6cc0, 0x2a7f8c0, 0x2a7f900);
+inline const uintptr_t SCOUT_BASE_RVA = axRva(0x2acbb94, 0x2aa4794, 0x2aa47d4);
+inline const uintptr_t BUFF_RULE_GATE_RVA = axRva(0x475210, 0x463b90, 0x463b90);
+inline const uintptr_t TRAIT_REG_RVA = axRva(0x117d9a8, 0x1157eb0, 0x1157ef0);
 // ---- town\buildings.cpp ----
-inline const uintptr_t BLD_URD_VFT_RVA = axRva(0xeb3b30, 0xe96420);
-inline const uintptr_t BLD_REG_BEGIN_RVA = axRva(0x2c29fa0, 0x2c02b40);
-inline const uintptr_t BLD_REG_END_RVA = axRva(0x2c29fa8, 0x2c02b48);
-inline const uintptr_t BLD_TSD_VFT_RVA = axRva(0xeaed20, 0xe919d8);
-inline const uintptr_t BLD_CTSD_VFT_RVA = axRva(0xeaf008, 0xe91688);
-inline const uintptr_t BLD_SWITCH_FN_RVA = axRva(0x685da0, 0x672050);
-inline const uintptr_t BLD_CTSD_SHOWROW_RVA = axRva(0x687a90, 0x673d40);
-inline const uintptr_t BLD_SHARD_PRICE_KEY_RVA = axRva(0x2a6baf8, 0x2a46348);
-inline const uintptr_t BLD_PRICE_FN_RVA = axRva(0x591560, 0x57fc90);
-inline const uintptr_t BLD_PRICE_KEY_RVA = axRva(0x2a6ba34, 0x2a46234);
-inline const uintptr_t BLD_TRINKDB_PTR_RVA = axRva(0x117d978, 0x1157e80);
-inline const uintptr_t BLD_TRECDB_BEG_RVA = axRva(0x2c2aa20, 0x2c035c0);
-inline const uintptr_t BLD_TRECDB_END_RVA = axRva(0x2c2aa28, 0x2c035c8);
-inline const uintptr_t BLD_TRKGRP_TABLE_RVA = axRva(0x2acda90, 0x2aa6690);
-inline const uintptr_t BLD_CLASSDB_RVA = axRva(0x2c2a7b8, 0x2c03358);
-inline const uintptr_t BLD_CLASSDB_ALT_RVA = axRva(0x2c2a798, 0x2c03338);
-inline const uintptr_t BLD_RCT_INSPECT_RVA = axRva(0x6b96e0, 0x6a5990);
-inline const uintptr_t BLD_RCT_INSPECT_VFT = axRva(0xeb2330, 0xe94c60);
-inline const uintptr_t BLD_STATUE_VFT_RVA = axRva(0xeb2eb8, 0xe95420);
-inline const uintptr_t ST_DISPATCH_RVA = axRva(0x6bd6c0, 0x6a9970);
-inline const uintptr_t BLD_GRAVE_VFT_RVA = axRva(0xeacc80, 0xe8f560);
-inline const uintptr_t RCT_COUNT_RVA = axRva(0x5814b0, 0x56fbf0);
-inline const uintptr_t RCT_MAX_RVA = axRva(0x5815a0, 0x56fce0);
-inline const uintptr_t BLD_HSRD_VFT_RVA = axRva(0xeae588, 0xe90e40);
-inline const uintptr_t ACT_SLOTLOCKED_RVA = axRva(0x52c790, 0x51af80);
-inline const uintptr_t ACT_EVTLOCKED_RVA = axRva(0x52c6f0, 0x51aee0);
-inline const uintptr_t ACT_COSTSMONEY_RVA = axRva(0x52c850, 0x51b040);
-inline const uintptr_t ACT_COSTBYID_RVA = axRva(0x52c8e0, 0x51b0d0);
-inline const uintptr_t ACT_CANAFFORD_RVA = axRva(0x55eb20, 0x54d260);
-inline const uintptr_t ACT_COSTFREE_RVA = axRva(0x3a2560, 0x396200);
-inline const uintptr_t ACT_CANHERO_RVA = axRva(0x52c240, 0x51aa30);
-inline const uintptr_t ACT_CONTAGION_LEVEL_RVA = axRva(0x6328e0, 0x6209f0);
+inline const uintptr_t BLD_URD_VFT_RVA = axRva(0xeb3b30, 0xe96420, 0xe96470);
+inline const uintptr_t BLD_REG_BEGIN_RVA = axRva(0x2c29fa0, 0x2c02b40, 0x2c02b80);
+inline const uintptr_t BLD_REG_END_RVA = axRva(0x2c29fa8, 0x2c02b48, 0x2c02b88);
+inline const uintptr_t BLD_TSD_VFT_RVA = axRva(0xeaed20, 0xe919d8, 0xe91a28);
+inline const uintptr_t BLD_CTSD_VFT_RVA = axRva(0xeaf008, 0xe91688, 0xe91710);
+inline const uintptr_t BLD_SWITCH_FN_RVA = axRva(0x685da0, 0x672050, 0x671f30);
+inline const uintptr_t BLD_CTSD_SHOWROW_RVA = axRva(0x687a90, 0x673d40, 0x673c20);
+inline const uintptr_t BLD_SHARD_PRICE_KEY_RVA = axRva(0x2a6baf8, 0x2a46348, 0x2a46388);
+inline const uintptr_t BLD_PRICE_FN_RVA = axRva(0x591560, 0x57fc90, 0x57fb90);
+inline const uintptr_t BLD_PRICE_KEY_RVA = axRva(0x2a6ba34, 0x2a46234, 0x2a46274);
+inline const uintptr_t BLD_TRINKDB_PTR_RVA = axRva(0x117d978, 0x1157e80, 0x1157ec0);
+inline const uintptr_t BLD_TRECDB_BEG_RVA = axRva(0x2c2aa20, 0x2c035c0, 0x2c03600);
+inline const uintptr_t BLD_TRECDB_END_RVA = axRva(0x2c2aa28, 0x2c035c8, 0x2c03608);
+inline const uintptr_t BLD_TRKGRP_TABLE_RVA = axRva(0x2acda90, 0x2aa6690, 0x2aa66d0);
+inline const uintptr_t BLD_CLASSDB_RVA = axRva(0x2c2a7b8, 0x2c03358, 0x2c03398);
+inline const uintptr_t BLD_CLASSDB_ALT_RVA = axRva(0x2c2a798, 0x2c03338, 0x2c03378);
+inline const uintptr_t BLD_RCT_INSPECT_RVA = axRva(0x6b96e0, 0x6a5990, 0x6a5870);
+inline const uintptr_t BLD_RCT_INSPECT_VFT = axRva(0xeb2330, 0xe94c60, 0xe94ce8);
+inline const uintptr_t BLD_STATUE_VFT_RVA = axRva(0xeb2eb8, 0xe95420, 0xe95470);
+inline const uintptr_t ST_DISPATCH_RVA = axRva(0x6bd6c0, 0x6a9970, 0x6a9850);
+inline const uintptr_t BLD_GRAVE_VFT_RVA = axRva(0xeacc80, 0xe8f560, 0xe8f5b0);
+inline const uintptr_t RCT_COUNT_RVA = axRva(0x5814b0, 0x56fbf0, 0x56faf0);
+inline const uintptr_t RCT_MAX_RVA = axRva(0x5815a0, 0x56fce0, 0x56fbe0);
+inline const uintptr_t BLD_HSRD_VFT_RVA = axRva(0xeae588, 0xe90e40, 0xe90e90);
+inline const uintptr_t ACT_SLOTLOCKED_RVA = axRva(0x52c790, 0x51af80, 0x51ae80);
+inline const uintptr_t ACT_EVTLOCKED_RVA = axRva(0x52c6f0, 0x51aee0, 0x51ade0);
+inline const uintptr_t ACT_COSTSMONEY_RVA = axRva(0x52c850, 0x51b040, 0x51af40);
+inline const uintptr_t ACT_COSTBYID_RVA = axRva(0x52c8e0, 0x51b0d0, 0x51afd0);
+inline const uintptr_t ACT_CANAFFORD_RVA = axRva(0x55eb20, 0x54d260, 0x54d160);
+inline const uintptr_t ACT_COSTFREE_RVA = axRva(0x3a2560, 0x396200, 0x396200);
+inline const uintptr_t ACT_CANHERO_RVA = axRva(0x52c240, 0x51aa30, 0x51a930);
+inline const uintptr_t ACT_CONTAGION_LEVEL_RVA = axRva(0x6328e0, 0x6209f0, 0x6208d0);
 static const uintptr_t ACT_CONTAGION_TIP_OFF   = 0x2b0;     // ItemContainerDisplay+: the tooltip
-inline const uintptr_t INF_SYS_RVA = axRva(0x117d920, 0x1157e28);
+inline const uintptr_t INF_SYS_RVA = axRva(0x117d920, 0x1157e28, 0x1157e68);
 static const uintptr_t INF_GATE_OFF      = 0x30;      // sys+: char, the builder's first early-out
 static const uintptr_t INF_LVLS_OFF      = 0x38;      // sys+: level-def vector begin (end at +8)
 static const uintptr_t INF_ELEMS_OFF     = 0x50;      // sys+: sequence-element vector begin (end +8)
@@ -743,77 +757,77 @@ static const uintptr_t INF_LVL_STRIDE    = 0x78;
 static const uintptr_t INF_ELEM_STRIDE   = 0x60;
                                                       //   show_ui char@+0x5c (the json field, 1:1)
 static const uintptr_t INF_CAMP_CUR_OFF  = 0x17d4;    // Campaign+: current sequence-element id hash
-inline const uintptr_t ACT_REQFREE_RVA = axRva(0x2325a0, 0x2302e0);
-inline const uintptr_t ACT_REQ_NOTQUIRKS_VFT = axRva(0xe8dc98, 0xe70628);
+inline const uintptr_t ACT_REQFREE_RVA = axRva(0x2325a0, 0x2302e0, 0x2302e0);
+inline const uintptr_t ACT_REQ_NOTQUIRKS_VFT = axRva(0xe8dc98, 0xe70628, 0xe70600);
                                                          //   NotHaveQuirks::vftable (RTTI, pass 62)
-inline const uintptr_t ACT_PICK_RVA = axRva(0x684ac0, 0x670d70);
-inline const uintptr_t ACT_CONFIRM_RVA = axRva(0x67ece0, 0x66af90);
-inline const uintptr_t ACT_UNCOMMIT_RVA = axRva(0x67f1e0, 0x66b490);
-inline const uintptr_t BLD_QTAD_VFT_RVA = axRva(0xeb0028, 0xe92918);
-inline const uintptr_t QT_CLICK_RVA = axRva(0x697560, 0x683810);
-inline const uintptr_t QT_ACTMULT_RVA = axRva(0x117d910, 0x1157e18);
-inline const uintptr_t HA_BSMITH_VFT_RVA = axRva(0xeaa3c0, 0xe8cc98);
-inline const uintptr_t HA_GUILD_VFT_RVA = axRva(0xead028, 0xe8f8d8);
-inline const uintptr_t HA_CAMPT_VFT_RVA = axRva(0xeab298, 0xe8db78);
-inline const uintptr_t HA_PICK_RVA = axRva(0x67b880, 0x667b30);
-inline const uintptr_t HA_PICK_VFT_RVA = axRva(0xead900, 0xe90220);
-inline const uintptr_t HA_PURCH_MAP_RVA = axRva(0x2b54640, 0x2b2d240);
-inline const uintptr_t HA_ALLBOUGHT_RVA = axRva(0x2b54690, 0x2b2d290);
-inline const uintptr_t HA_DISC1_RVA = axRva(0x2b54650, 0x2b2d250);
-inline const uintptr_t HA_DISC2_RVA = axRva(0x2b54660, 0x2b2d260);
-inline const uintptr_t HA_DISC3_RVA = axRva(0x2b54670, 0x2b2d270);
-inline const uintptr_t BN_LAYOUT_MAP_RVA = axRva(0x2b7b9d8, 0x2b545d8);
+inline const uintptr_t ACT_PICK_RVA = axRva(0x684ac0, 0x670d70, 0x670c50);
+inline const uintptr_t ACT_CONFIRM_RVA = axRva(0x67ece0, 0x66af90, 0x66ae70);
+inline const uintptr_t ACT_UNCOMMIT_RVA = axRva(0x67f1e0, 0x66b490, 0x66b370);
+inline const uintptr_t BLD_QTAD_VFT_RVA = axRva(0xeb0028, 0xe92918, 0xe92930);
+inline const uintptr_t QT_CLICK_RVA = axRva(0x697560, 0x683810, 0x6836f0);
+inline const uintptr_t QT_ACTMULT_RVA = axRva(0x117d910, 0x1157e18, 0x1157e58);
+inline const uintptr_t HA_BSMITH_VFT_RVA = axRva(0xeaa3c0, 0xe8cc98, 0xe8cce8);
+inline const uintptr_t HA_GUILD_VFT_RVA = axRva(0xead028, 0xe8f8d8, 0xe8f960);
+inline const uintptr_t HA_CAMPT_VFT_RVA = axRva(0xeab298, 0xe8db78, 0xe8dbc8);
+inline const uintptr_t HA_PICK_RVA = axRva(0x67b880, 0x667b30, 0x667a10);
+inline const uintptr_t HA_PICK_VFT_RVA = axRva(0xead900, 0xe90220, 0xe90270);
+inline const uintptr_t HA_PURCH_MAP_RVA = axRva(0x2b54640, 0x2b2d240, 0x2b2d280);
+inline const uintptr_t HA_ALLBOUGHT_RVA = axRva(0x2b54690, 0x2b2d290, 0x2b2d2d0);
+inline const uintptr_t HA_DISC1_RVA = axRva(0x2b54650, 0x2b2d250, 0x2b2d290);
+inline const uintptr_t HA_DISC2_RVA = axRva(0x2b54660, 0x2b2d260, 0x2b2d2a0);
+inline const uintptr_t HA_DISC3_RVA = axRva(0x2b54670, 0x2b2d270, 0x2b2d2b0);
+inline const uintptr_t BN_LAYOUT_MAP_RVA = axRva(0x2b7b9d8, 0x2b545d8, 0x2b54618);
 // ---- town\districts.cpp ----
-inline const uintptr_t DST_VFT_RVA = axRva(0xeabab0, 0xe8e3c8);
-inline const uintptr_t DST_LAYOUT_RVA = axRva(0x2c2c870, 0x2c05410);
+inline const uintptr_t DST_VFT_RVA = axRva(0xeabab0, 0xe8e3c8, 0xe8e3e0);
+inline const uintptr_t DST_LAYOUT_RVA = axRva(0x2c2c870, 0x2c05410, 0x2c05450);
 // ---- town\embark.cpp ----
-inline const uintptr_t EMB_MASTERY_RVA = axRva(0x564f70, 0x5536b0);
-inline const uintptr_t EMB_NAMEID_RVA = axRva(0x80a650, 0x7f62c0);
-inline const uintptr_t EMB_SPECIFICS_RVA = axRva(0x808e00, 0x7f4a70);
-inline const uintptr_t EMB_FWDLABEL_RVA = axRva(0x6d5ae0, 0x6c18d0);
-inline const uintptr_t EMB_ROAMMGR_RVA = axRva(0x117db40, 0x1158038);
+inline const uintptr_t EMB_MASTERY_RVA = axRva(0x564f70, 0x5536b0, 0x5535b0);
+inline const uintptr_t EMB_NAMEID_RVA = axRva(0x80a650, 0x7f62c0, 0x7f61a0);
+inline const uintptr_t EMB_SPECIFICS_RVA = axRva(0x808e00, 0x7f4a70, 0x7f4950);
+inline const uintptr_t EMB_FWDLABEL_RVA = axRva(0x6d5ae0, 0x6c18d0, 0x6c17b0);
+inline const uintptr_t EMB_ROAMMGR_RVA = axRva(0x117db40, 0x1158038, 0x1158078);
 // ---- town\estate.cpp ----
-inline const uintptr_t TL_ROOT_RVA = axRva(0x117dbe0, 0x11580d0);
-inline const uintptr_t TL_CTRL_RVA = axRva(0x117d8e0, 0x1157df0);
-inline const uintptr_t TL_VFT_RVA = axRva(0xea9470, 0xe8b248);
-inline const uintptr_t TL_SHOW_RVA = axRva(0x6cc730, 0x6b89e0);
-inline const uintptr_t TL_CLOSE_RVA = axRva(0x6cc210, 0x6b84c0);
+inline const uintptr_t TL_ROOT_RVA = axRva(0x117dbe0, 0x11580d0, 0x1158110);
+inline const uintptr_t TL_CTRL_RVA = axRva(0x117d8e0, 0x1157df0, 0x1157e30);
+inline const uintptr_t TL_VFT_RVA = axRva(0xea9470, 0xe8b248, 0xe8b298);
+inline const uintptr_t TL_SHOW_RVA = axRva(0x6cc730, 0x6b89e0, 0x6b88c0);
+inline const uintptr_t TL_CLOSE_RVA = axRva(0x6cc210, 0x6b84c0, 0x6b83a0);
 // ---- town\events.cpp ----
-inline const uintptr_t TE_INFO_RVA = axRva(0x632020, 0x620130);
-inline const uintptr_t TE_HERO_AT_RVA = axRva(0x58d190, 0x57b8c0);
-inline const uintptr_t TE_INSPECT_RVA = axRva(0x6c6750, 0x6b2a00);
-inline const uintptr_t TE_INSPECT_VFT = axRva(0xeb35c8, 0xe96270);
+inline const uintptr_t TE_INFO_RVA = axRva(0x632020, 0x620130, 0x620010);
+inline const uintptr_t TE_HERO_AT_RVA = axRva(0x58d190, 0x57b8c0, 0x57b7c0);
+inline const uintptr_t TE_INSPECT_RVA = axRva(0x6c6750, 0x6b2a00, 0x6b28e0);
+inline const uintptr_t TE_INSPECT_VFT = axRva(0xeb35c8, 0xe96270, 0xe962c0);
 static const uintptr_t TE_DISP_SLOTS_BEG  = 0x120;      // TownEventDisplay+: vector<slot widget*> begin
 static const uintptr_t TE_DISP_SLOTS_END  = 0x128;
-inline const uintptr_t TE_FOCUSMGR_RVA = axRva(0x117d858, 0x1157d78);
-inline const uintptr_t TE_POPUPPOS_A_RVA = axRva(0x2771fb8, 0x0);
-inline const uintptr_t TE_POPUPPOS_B_RVA = axRva(0x2771fc0, 0x0);
-inline const uintptr_t TE_UISCALE_RVA = axRva(0xed7724, 0xeb9f04);
+inline const uintptr_t TE_FOCUSMGR_RVA = axRva(0x117d858, 0x1157d78, 0x1157db8);
+inline const uintptr_t TE_POPUPPOS_A_RVA = axRva(0x2771fb8, 0x0, 0x0);
+inline const uintptr_t TE_POPUPPOS_B_RVA = axRva(0x2771fc0, 0x0, 0x0);
+inline const uintptr_t TE_UISCALE_RVA = axRva(0xed7724, 0xeb9f04, 0xeb9f64);
 // ---- town\exchange.cpp ----
-inline const uintptr_t EX_TOGGLE_RVA = axRva(0x6cbde0, 0x6b8090);
-inline const uintptr_t EX_VFT_RVA = axRva(0xead4f0, 0xe8fdd8);
-inline const uintptr_t EX_RATES_RVA = axRva(0x117d918, 0x1157e20);
-inline const uintptr_t EX_REG_RVA = axRva(0x117d910, 0x1157e18);
-inline const uintptr_t EX_DEFQTY_RVA = axRva(0x67a6f0, 0x6669a0);
+inline const uintptr_t EX_TOGGLE_RVA = axRva(0x6cbde0, 0x6b8090, 0x6b7f70);
+inline const uintptr_t EX_VFT_RVA = axRva(0xead4f0, 0xe8fdd8, 0xe8fe28);
+inline const uintptr_t EX_RATES_RVA = axRva(0x117d918, 0x1157e20, 0x1157e60);
+inline const uintptr_t EX_REG_RVA = axRva(0x117d910, 0x1157e18, 0x1157e58);
+inline const uintptr_t EX_DEFQTY_RVA = axRva(0x67a6f0, 0x6669a0, 0x666880);
 // ---- town\map.cpp ----
-inline const uintptr_t TM_BLD_VFTABLE_RVA = axRva(0xeaa760, 0xe8d268);
+inline const uintptr_t TM_BLD_VFTABLE_RVA = axRva(0xeaa760, 0xe8d268, 0xe8d2b8);
 // ---- town\party.cpp ----
-inline const uintptr_t PTY_RL_SHOWSHEET_RVA = axRva(0x6a50b0, 0x691360);
+inline const uintptr_t PTY_RL_SHOWSHEET_RVA = axRva(0x6a50b0, 0x691360, 0x691240);
                                                          // body re-read: rows +0xa0/+0xa8 by 0x40, DAT_1411769f0)
-inline const uintptr_t PTY_PANEL_HIDE_RVA = axRva(0x7e9dc0, 0x7d5980);
-inline const uintptr_t PTY_DROP_RVA = axRva(0x66f370, 0x65b620);
-inline const uintptr_t PTY_CLEAR_RVA = axRva(0x66f120, 0x65b3d0);
-inline const uintptr_t ROS_SETSTATE_RVA = axRva(0x5817c0, 0x56ff00);
-inline const uintptr_t ROS_SORTBY_RVA = axRva(0x6ac480, 0x698730);
-inline const uintptr_t ROS_LISTORDER_RVA = axRva(0x6a8220, 0x6944d0);
-inline const uintptr_t ROS_SORT_LEVEL_VFT = axRva(0xeb19d8, 0xe942c8);
-inline const uintptr_t ROS_SORT_STRESS_VFT = axRva(0xeb12f0, 0xe93be0);
-inline const uintptr_t ROS_SORT_CLASS_VFT = axRva(0xeb1600, 0xe93f90);
-inline const uintptr_t ROS_SORT_BUILDING_VFT = axRva(0xeb1d48, 0xe94638);
+inline const uintptr_t PTY_PANEL_HIDE_RVA = axRva(0x7e9dc0, 0x7d5980, 0x7d5860);
+inline const uintptr_t PTY_DROP_RVA = axRva(0x66f370, 0x65b620, 0x65b500);
+inline const uintptr_t PTY_CLEAR_RVA = axRva(0x66f120, 0x65b3d0, 0x65b2b0);
+inline const uintptr_t ROS_SETSTATE_RVA = axRva(0x5817c0, 0x56ff00, 0x56fe00);
+inline const uintptr_t ROS_SORTBY_RVA = axRva(0x6ac480, 0x698730, 0x698610);
+inline const uintptr_t ROS_LISTORDER_RVA = axRva(0x6a8220, 0x6944d0, 0x6943b0);
+inline const uintptr_t ROS_SORT_LEVEL_VFT = axRva(0xeb19d8, 0xe942c8, 0xe94318);
+inline const uintptr_t ROS_SORT_STRESS_VFT = axRva(0xeb12f0, 0xe93be0, 0xe93c30);
+inline const uintptr_t ROS_SORT_CLASS_VFT = axRva(0xeb1600, 0xe93f90, 0xe93fe0);
+inline const uintptr_t ROS_SORT_BUILDING_VFT = axRva(0xeb1d48, 0xe94638, 0xe94688);
 // ---- town\provision.cpp ----
-inline const uintptr_t PROV_SELL_ONE_RVA = axRva(0x68b510, 0x6777c0);
+inline const uintptr_t PROV_SELL_ONE_RVA = axRva(0x68b510, 0x6777c0, 0x6776a0);
 // ---- town\trinkets.cpp ----
-inline const uintptr_t RI_VFT_RVA = axRva(0xeb0690, 0xe92f80);
-inline const uintptr_t RI_SELLDLG_RVA = axRva(0x69aeb0, 0x687160);
-inline const uintptr_t RI_COLS_RVA = axRva(0x2b7cdcc, 0x2b559cc);
-inline const uintptr_t RI_UNLOCK_KEY_RVA = axRva(0x2a5f8b8, 0x2a3c884);
+inline const uintptr_t RI_VFT_RVA = axRva(0xeb0690, 0xe92f80, 0xe92fd0);
+inline const uintptr_t RI_SELLDLG_RVA = axRva(0x69aeb0, 0x687160, 0x687040);
+inline const uintptr_t RI_COLS_RVA = axRva(0x2b7cdcc, 0x2b559cc, 0x2b55a0c);
+inline const uintptr_t RI_UNLOCK_KEY_RVA = axRva(0x2a5f8b8, 0x2a3c884, 0x2a3c8c4);

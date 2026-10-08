@@ -871,3 +871,19 @@ void checkTownMap(uintptr_t base) {
     }
     if (!root) { g_tmRow = 0; g_tmTipLine = 0; }     // left town: the next visit starts at the top
 }
+
+// ---- PAD FOCUS FOLLOWER ----
+bool tmFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (g_tjChainId[0] || g_bnSwitchUntil) return false;
+    int n = tmRows(base, false);
+    uint32_t cc = (uint32_t)(uint64_t)id;
+    for (int i = 0; i < n; i++) {
+        if (g_tmRows[i].elemId != cc) continue;
+        g_tmRow = i;
+        g_tmTipLine = 0;
+        tmSpeakRow(base, nullptr);
+        return true;
+    }
+    return false;
+}

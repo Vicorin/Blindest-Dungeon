@@ -59,7 +59,7 @@ static const uintptr_t DG_EDIT_BUF_OFF   = 0x778;
                                                   //   per keystroke, by the field widget itself.
 
 bool dgIsPanel(uintptr_t base, uintptr_t panel) {
-    if (axGameBuild() == AX_BUILD_DRMFREE) return false;
+    if (axIsDrmFree()) return false;
     uintptr_t vft = 0;
     if (!panel || !safeReadPtr(panel, &vft) || vft <= base) return false;
     return vft - base == DG_VFT_RVA;

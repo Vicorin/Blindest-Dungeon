@@ -20,8 +20,23 @@ struct AxEmbeddedLang { const char* name; const unsigned char* data; int size; }
 static char* g_axTr[AXS__COUNT] = { 0 };
 static char g_axLang[64] = { 0 };
 
+// ---- POSITION COUNTS ----
+static const AxStrId kAxPosIds[] = {
+    AXS_POS_N_OF_M, AXS_ITEM_N_OF_M, AXS_DG_FRIEND_N_OF_M, AXS_DG_FIELD_N_OF_M,
+    AXS_PB_LEVEL_N_OF_M, AXS_PB_REWARD_N_OF_M, AXS_RB_MATCH_N_OF_M, AXS_BD_TAB_SECTION_FMT,
+    AXS_BD_PIECE_N_OF_M, AXS_RNG_ROW_N_OF_M, AXS_HELP_PARA_N_OF_M, AXS_EMB_ROW_POS_FMT,
+    AXS_BLD_TRACK_POS_FMT, AXS_GY_GRAVE_POS_FMT, AXS_RCT_POS_FMT, AXS_ACT_SLOT_POS_FMT,
+    AXS_HA_HERO_POS_FMT, AXS_HA_COL_POS_FMT,
+};
+static bool axIsPosId(AxStrId id) {
+    for (int i = 0; i < (int)(sizeof kAxPosIds / sizeof kAxPosIds[0]); i++)
+        if (kAxPosIds[i] == id) return true;
+    return false;
+}
+
 const char* axs(AxStrId id) {
     if (id < 0 || id >= AXS__COUNT) return "";      // impossible via the enum; belt-and-braces
+    if (!axPositionCounts() && axIsPosId(id)) return "";
     return g_axTr[id] ? g_axTr[id] : kAxEnglish[id];
 }
 

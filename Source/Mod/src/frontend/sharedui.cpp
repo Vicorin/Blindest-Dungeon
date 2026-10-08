@@ -9,6 +9,8 @@
 static const uintptr_t GL_STATE_OFF     = 0x90;       // int tween state: 0 out, 1..3 in/up
 static const uintptr_t GL_MEDIA_OFF     = 0x88;       // "media_column" vertical layout (the rows)
 static const int GL_MAX_ROWS = 128;                   // campaign 64, +arena; generous cap
+static const int GL_MAX_CELLS  = GL_MAX_ROWS * 2;
+static const int GL_MAX_NODES  = GL_MAX_ROWS * 16;
 static const int GL_ROW_MAX  = 512;                   // a definition can be a sentence or two
 static const int GL_TEXTS_MAX = 4;
 
@@ -100,8 +102,9 @@ static int glCollect(uintptr_t base, uintptr_t obj, bool probe) {
     if (!safeReadPtr(media + TL_KIDS_BEG_OFF, &beg) || !safeReadPtr(media + TL_KIDS_END_OFF, &end) ||
         end < beg) return 0;
     int cells = (int)((end - beg) >> 3);
-    if (cells > TL_WALK_KIDS_MAX) cells = TL_WALK_KIDS_MAX;
-    int count = 0, budget = TL_WALK_NODES_MAX;
+    if (probe) logLine("glossary probe: media column has %d cells (cap %d)", cells, GL_MAX_CELLS);
+    if (cells > GL_MAX_CELLS) cells = GL_MAX_CELLS;
+    int count = 0, budget = GL_MAX_NODES;
     for (int c = 0; c < cells && count < GL_MAX_ROWS; c++) {
         uintptr_t cell = 0;
         if (!safeReadPtr(beg + (uintptr_t)c * 8, &cell) || !tlLooksLikeWidget(base, cell)) continue;
@@ -726,11 +729,12 @@ static bool jpCollect(uintptr_t base, uintptr_t obj, bool probe) {
     bool haveX = jpTableStr(base, JP_SC_TEXTS_OFF,  (int)idx, text,  sizeof text);
 
     char header[JP_ROW_SZ];
-    if (haveT && g_jpTotal > 0)
+    const bool sayPage = g_jpTotal > 0 && axPositionCounts();
+    if (haveT && sayPage)
         _snprintf(header, sizeof header, axs(AXS_JP_HDR_TITLE_POS), title, (int)idx + 1, g_jpTotal);
     else if (haveT)
         _snprintf(header, sizeof header, axs(AXS_JP_HDR_TITLE), title);
-    else if (g_jpTotal > 0)
+    else if (sayPage)
         _snprintf(header, sizeof header, axs(AXS_JP_HDR_POS), (int)idx + 1, g_jpTotal);
     else
         _snprintf(header, sizeof header, "%s", axs(AXS_JP_HDR));

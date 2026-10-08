@@ -175,7 +175,7 @@ static void exRowText(uintptr_t base, uintptr_t panel, char* out, int outsz) {
     char name[96], srcName[96];
     if (g_exCol == 0) {
         if (g_exRow >= g_exLeftN) g_exRow = g_exLeftN ? g_exLeftN - 1 : 0;
-        if (g_exLeftN == 0) { strncpy(out, "No heirlooms.", outsz - 1); out[outsz-1] = 0; return; }
+        if (g_exLeftN == 0) { strncpy(out, axs(AXS_EX_NO_HEIRLOOMS), outsz - 1); out[outsz-1] = 0; return; }
         ExRow* r = &g_exLeft[g_exRow];
         exTypeTitle(base, r->id, name, sizeof name);
         if (r->id == src)
@@ -184,7 +184,7 @@ static void exRowText(uintptr_t base, uintptr_t panel, char* out, int outsz) {
             _snprintf(out, outsz, axs(AXS_EX_HELD_FMT), name, r->held);
     } else {
         if (g_exRow >= g_exRightN) g_exRow = g_exRightN ? g_exRightN - 1 : 0;
-        if (g_exRightN == 0) { strncpy(out, "Nothing to trade for.", outsz - 1); out[outsz-1] = 0; return; }
+        if (g_exRightN == 0) { strncpy(out, axs(AXS_EX_NOTHING_TO_TRADE_FOR), outsz - 1); out[outsz-1] = 0; return; }
         ExRow* r = &g_exRight[g_exRow];
         exTypeTitle(base, r->id, name, sizeof name);
         exTypeTitle(base, src, srcName, sizeof srcName);
@@ -230,7 +230,9 @@ void exReannounce(uintptr_t base) {
         if (panel) { exSpeakPicker(base, panel); return; }
         g_exPicking = false;
     }
-    exSpeakRow(base, "Heirloom exchange. ", true);
+    char pfx[128];                                    // the title + the space the frame needs
+    _snprintf(pfx, sizeof pfx, "%s ", axs(AXS_EX_TITLE)); pfx[sizeof pfx - 1] = 0;
+    exSpeakRow(base, pfx, true);
 }
 
 static void exProbe(uintptr_t base, uintptr_t panel) {
@@ -467,7 +469,9 @@ void checkExchange(uintptr_t base) {
             safeReadU32(panel + EX_SEL_SRC_OFF, &src);
             for (int i = 0; i < g_exLeftN; i++)
                 if (g_exLeft[i].id == src) { g_exRow = i; break; }
-            exSpeakRow(base, "Heirloom exchange. ", true);   // land ON something, in one utterance
+            char pfx[128];
+            _snprintf(pfx, sizeof pfx, "%s ", axs(AXS_EX_TITLE)); pfx[sizeof pfx - 1] = 0;
+            exSpeakRow(base, pfx, true);                     // land ON something, in one utterance
         } else {
             postSpeech(axs(AXS_EX_TITLE));
         }
@@ -539,4 +543,19 @@ void checkExchange(uintptr_t base) {
             postSpeech(axs(AXS_EX_TRADE_DIDNT_HAPPEN));
         }
     }
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool exFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_exActive || g_exPicking) return false;
+    uintptr_t panel = exPanel(base);
+    if (!panel) return false;
+    exCollect(base, panel);
+    int cell = (int)((uint32_t)(uint64_t)id - (uint32_t)EX_ID_CELL_BASE);
+    if (cell < 0 || cell >= g_exRightN) return false;
+    bool colChanged = (g_exCol != 1);
+    g_exCol = 1; g_exRow = cell;
+    exSpeakRow(base, nullptr, colChanged);
+    return true;
 }

@@ -345,6 +345,8 @@ bool embSelectedQuestFacts(uintptr_t base, char* dungeon, int dsz, char* lengthS
     return true;
 }
 
+bool embQuestIsSelected(uintptr_t base) { return embSelectedQuest(base) != 0; }
+
 // ---- The list is COLUMNS, one per LOCATION ----
 static const int EMB_MAX_COLS = EMB_MAX_ROWS;
 struct EmbCols {
@@ -1116,4 +1118,25 @@ void checkEmbark(uintptr_t base) {
         g_embActive = false;
         logLine("embark: stood down (qs=%d prov=%d)", qs ? 1 : 0, prov ? 1 : 0);
     }
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool embFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_embActive) return false;
+    int qIdx = (int)((uint32_t)(uint64_t)id - (uint32_t)EMB_MARKER_BASE);
+    if (qIdx < 0 || qIdx >= EMB_MAX_ROWS) return false;
+    EmbRow rows[EMB_MAX_ROWS];
+    EmbCols cols;
+    int n = embCollect(base, rows, EMB_MAX_ROWS);
+    embGroup(rows, n, &cols);
+    for (int c = 0; c < cols.n; c++)
+        for (int i = 0; i < cols.cnt[c]; i++)
+            if (rows[cols.row[c][i]].qIdx == qIdx) {
+                bool colChanged = (g_embCol != c);
+                g_embCol = c; g_embRow = i; g_embTipLine = 0;
+                embSpeakRow(base, nullptr, colChanged);
+                return true;
+            }
+    return false;
 }

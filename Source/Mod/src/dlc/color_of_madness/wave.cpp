@@ -359,21 +359,21 @@ bool comKillMeter(uintptr_t base, char* out, int outsz) {
             }                                                                     \
         } while (0)
 
-    COM_MADD("Kill meter.");
-    if (haveWave)  COM_MADD(" Wave %u.", wavesDone + 1);
-    if (haveFrac)  COM_MADD(" %d of %d kills.", killsDone, killTarget);
+    COM_MADD("%s", axs(AXS_COM_KILL_METER));
+    if (haveWave)  { COM_MADD(" "); COM_MADD(axs(AXS_COM_WAVE_N_FMT), wavesDone + 1); }
+    if (haveFrac)  { COM_MADD(" "); COM_MADD(axs(AXS_COM_KILLS_N_OF_M_FMT), killsDone, killTarget); }
 
     if (havePos) {
         int togo = groupSize - waveDone - 1;
-        if (togo <= 0)      COM_MADD(" The next reward comes after this wave.");
-        else if (togo == 1) COM_MADD(" 1 wave until the next reward.");
-        else                COM_MADD(" %d waves until the next reward.", togo);
+        if (togo <= 0)      { COM_MADD(" "); COM_MADD("%s", axs(AXS_COM_REWARD_AFTER_THIS_WAVE)); }
+        else if (togo == 1) { COM_MADD(" "); COM_MADD("%s", axs(AXS_COM_REWARD_IN_ONE_WAVE)); }
+        else                { COM_MADD(" "); COM_MADD(axs(AXS_COM_REWARD_IN_N_WAVES_FMT), togo); }
     }
     if (haveTier)  COM_MADD(" %s.", tier);
-    if (haveKills) COM_MADD(" %u %s killed.", kills, kills == 1 ? "foe" : "foes");
+    if (haveKills) { COM_MADD(" "); COM_MADD(axs(AXS_COM_FOES_KILLED_FMT), kills); }
     if (haveThresh) {
-        if (reached > 0) COM_MADD(" %d of %d secured.", reached, total);
-        else             COM_MADD(" None secured yet.");
+        if (reached > 0) { COM_MADD(" "); COM_MADD(axs(AXS_COM_SECURED_N_OF_M_FMT), reached, total); }
+        else             { COM_MADD(" "); COM_MADD("%s", axs(AXS_COM_NONE_SECURED)); }
     }
     #undef COM_MADD
 

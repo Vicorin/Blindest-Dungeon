@@ -297,7 +297,10 @@ static bool rbSectionText(uintptr_t base, uintptr_t bld, int section, char* out,
     int n = 0;
     int st = rbListState(bld, section, &n);
     char head[192], tail[128];
-    _snprintf(head, sizeof head, axs(AXS_RB_SECTION_FMT), name, section + 1, RB_SECTIONS);
+    if (axPositionCounts())
+        _snprintf(head, sizeof head, axs(AXS_RB_SECTION_FMT), name, section + 1, RB_SECTIONS);
+    else
+        _snprintf(head, sizeof head, axs(AXS_RB_SECTION_NOPOS_FMT), name);
     head[sizeof head - 1] = 0;
     if (st == 2)      _snprintf(tail, sizeof tail, axs(AXS_RB_MATCHES_FMT), n);
     else if (st == 1) _snprintf(tail, sizeof tail, "%s", axs(AXS_RB_NO_MATCHES));

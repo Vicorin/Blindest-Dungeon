@@ -485,13 +485,28 @@ static uintptr_t teFindInteractElem(uintptr_t base, int64_t* idOut) {
 }
 
 // ---- Recruiting an offered hero ----
+static int teSlotOfHero(uintptr_t panel, uintptr_t hero);
 static bool teStartRecruitDrag(uintptr_t base, int index) {
     if (clickQueued()) {                              // another click is already in flight
         logLine("townevent: recruit drag REFUSED, a click is already queued");
         logInputSnapshot(base, "te-recruit-clickqueued");
         return false;
     }
-    uint32_t elemId = TE_ELEM_SLOT_BASE + (uint32_t)index;
+    // ---- THE ELEMENT IS KEYED ON THE SLOT ORDINAL, NOT THE LIVE INDEX ----
+    uintptr_t hero = teHeroAt(base, index);
+    uintptr_t panel = g_teSelf, vft = 0;
+    bool isPanel = panel && safeReadPtr(panel, &vft) && vft == base + TE_VFTABLE_RVA;
+    int slot = (isPanel && hero) ? teSlotOfHero(panel, hero) : -1;
+    if (slot < 0) {
+        logLine("townevent: recruit drag, no slot ordinal for offer %d (panel=%p isPanel=%d "
+                "hero=%p) -> falling back to the live index", index, (void*)panel, isPanel,
+                (void*)hero);
+        slot = index;
+    } else if (slot != index) {
+        logLine("townevent: recruit drag, offer %d sits in slot ordinal %d (a claimed slot "
+                "before it stays in the vector)", index, slot);
+    }
+    uint32_t elemId = TE_ELEM_SLOT_BASE + (uint32_t)slot;
     uintptr_t src = feGetElementById((int64_t)elemId);
     float sx = 0, sy = 0;
     if (!src || !elemCenter(src, &sx, &sy)) {
@@ -512,8 +527,8 @@ static bool teStartRecruitDrag(uintptr_t base, int index) {
         return false;
     }
     if (!synthDragPoints(sx, sy, tx, ty, "townevent recruit")) return false;
-    logLine("townevent: recruit drag slot %d elem 0x%x (%.0f,%.0f) -> roster 0x%llx (%.0f,%.0f)",
-            index, elemId, sx, sy, (unsigned long long)dropId, tx, ty);
+    logLine("townevent: recruit drag offer %d slot %d elem 0x%x (%.0f,%.0f) -> roster 0x%llx (%.0f,%.0f)",
+            index, slot, elemId, sx, sy, (unsigned long long)dropId, tx, ty);
     return true;
 }
 
@@ -580,6 +595,8 @@ static void teServiceRecruit(uintptr_t base) {
 bool townEventHeroKeysClaim() { return townEventPopupActive() && g_teHeroCount > 0 && !g_csOpen; }
 
 bool axIsTownEvent() { return townEventPopupActive() && !g_csOpen; }
+
+bool teSheetOnTop() { return g_teSheetResume && g_csOpen; }
 
 // ---- C: the offered hero's preview sheet ----
 typedef void (*TEInspectFn)(void* closure, uintptr_t* heroArg, uint32_t* slotOrdinal);
@@ -741,6 +758,25 @@ bool routeTownEventHeroKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t r
         return true;
     }
     return false;
+}
+
+// ---- SHIFT+PERIOD: SHOW THE TOWN EVENT AGAIN ----
+static const uint32_t TE_BAR_ELEM = 0x74657674;   // 'tevt', the estate bar's town-event button
+bool routeTownEventToggle(uintptr_t base, uint8_t repeat) {
+    if (!resTownRoot(base)) return false;         // not in town: the key stays the game's
+    if (repeat) return true;                      // a held key must not flap the panel
+    if (!feGetElementById((int64_t)TE_BAR_ELEM)) {
+        logLine("townevent: toggle -- the 'tevt' button is not on this frame (no event this week?)");
+        postSpeech(axs(AXS_NOT_AVAILABLE));
+        return true;
+    }
+    if (!frontEndClickElementId((int64_t)TE_BAR_ELEM)) {   // hover, then press on later frames
+        logLine("townevent: toggle -- the click on 'tevt' could not be queued");
+        postSpeech(axs(AXS_ACTION_FAILED));
+        return true;
+    }
+    logLine("townevent: toggle -> clicked the estate bar's event button");
+    return true;
 }
 
 bool routeTownEventEnter(uintptr_t base) {

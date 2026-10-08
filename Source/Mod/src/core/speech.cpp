@@ -27,13 +27,14 @@ struct AxDebugLogState {
     volatile int  barks;
     bool barksExplicit;
     volatile bool checkUpdates;
+    volatile bool positionCounts;
     int  speechHandler;
     char prismBackend[64];
     char sapiVoice[128];
     int  sapiRate;
     int  sapiVolume;
     AxDebugLogState() : enabled(false), readSubtitles(true), readSubtitlesExplicit(false),
-                        barks(AX_BARKS_ON), barksExplicit(false), checkUpdates(true),
+                        barks(AX_BARKS_ON), barksExplicit(false), checkUpdates(true), positionCounts(true),
                         speechHandler(AX_SPEECH_AUTO), sapiRate(-1), sapiVolume(-1) {
         InitializeCriticalSection(&g_logCs);
         InitializeCriticalSection(&g_speechCfgCs);
@@ -77,6 +78,7 @@ struct AxDebugLogState {
                         if (!barksExplicit) barks = (p[16] == '1') ? AX_BARKS_ON : AX_BARKS_DUNGEON;
                     }
                     else if (strncmp(p, "check_updates=", 14) == 0)   checkUpdates  = (p[14] != '0');
+                    else if (strncmp(p, "position_counts=", 16) == 0) positionCounts = (p[16] != '0');
                     else if (strncmp(p, "speech_handler=", 15) == 0) {
                         int v = p[15] - '0';
                         if (v >= 0 && v < AX_SPEECH_MODES) speechHandler = v;
@@ -115,6 +117,7 @@ static void axSaveIni() {
         fprintf(f, "read_subtitles=%d\n", s.readSubtitles ? 2 : 0);
     fprintf(f, "barks=%d\n", (int)s.barks);
     fprintf(f, "check_updates=%d\n", s.checkUpdates ? 1 : 0);
+    fprintf(f, "position_counts=%d\n", s.positionCounts ? 1 : 0);
     EnterCriticalSection(&g_speechCfgCs);
     fprintf(f, "speech_handler=%d\n", s.speechHandler);
     fprintf(f, "prism_backend=%s\n", s.prismBackend);
@@ -153,6 +156,12 @@ bool axReadDungeonBarks() { int m = axBarksMode(); return m == AX_BARKS_ON || m 
 bool axCheckUpdates() { return axDebugState().checkUpdates; }
 void axSetCheckUpdates(bool on) {
     axDebugState().checkUpdates = on;
+    axSaveIni();
+}
+
+bool axPositionCounts() { return axDebugState().positionCounts; }
+void axSetPositionCounts(bool on) {
+    axDebugState().positionCounts = on;
     axSaveIni();
 }
 
@@ -622,6 +631,17 @@ void logDump(const char* fmt, ...) {
 
 void postSpeech(const char* text, bool interrupt, SpeechKind kind) {
     if (kind == SPK_AUTO) kind = interrupt ? SPK_NAV : SPK_EVENT;
+    // ---- A STRAY ".." IS COLLAPSED HERE, ONCE FOR EVERY LINE ----
+    char clean[MAILBOX_SZ];
+    {
+        size_t n = 0;
+        for (size_t i = 0; text[i] && n < MAILBOX_SZ - 1; i++) {
+            if (text[i] == '.' && text[i + 1] == '.' && text[i + 2] != '.' && (i == 0 || text[i - 1] != '.')) continue;
+            clean[n++] = text[i];
+        }
+        clean[n] = 0;
+        text = clean;
+    }
     if (kind == SPK_NAV) {
         if (text != g_lastNavLine) {
             strncpy(g_lastNavLine, text, MAILBOX_SZ - 1);

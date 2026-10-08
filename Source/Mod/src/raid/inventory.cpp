@@ -557,6 +557,9 @@ static bool iuBegin(uintptr_t base) {
     g_iuCursor = -1;
     if (g_tsActive) { tsSetActive(false); logLine("targeting: abandoned (item use opened)"); }
     g_iuActive = true;
+    g_rvCursor  = -1;
+    g_rvTipLine = 0;
+    g_rvTipCol  = 0;
 
     char msg[640];
     if (g_iuIsCamp) {
@@ -576,10 +579,16 @@ static bool iuBegin(uintptr_t base) {
 void iuAbandon(const char* why) {
     if (!g_iuActive) return;
     g_iuActive = false;
+    if (!g_rvActive) g_rvCursor = -1;
+    g_rvTipLine = 0;
+    g_rvTipCol  = 0;
     logLine("itemuse: abandoned (%s)", why);
 }
 
 static void iuSpeakRow(uintptr_t base, uintptr_t* heroes, int n, int idx) {
+    g_rvCursor  = rvRoomIndexOfActor(base, heroes[idx]);
+    g_rvTipLine = 0;
+    g_rvTipCol  = 0;
     char out[MAILBOX_SZ]; out[0] = 0;
     char frag[160];
     if (abHeroLabelOf(base, heroes[idx], frag, sizeof frag)) _snprintf(out, sizeof out, "%s", frag);
@@ -730,7 +739,16 @@ void serviceItemTurn(uintptr_t base) {
 }
 
 bool routeItemUseKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
-    if (mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL)) return false;
+    if (mod & (KMOD_LALT | KMOD_RALT)) return false;
+
+    if (mod & (KMOD_LCTRL | KMOD_RCTRL)) {
+        if (sym == SDLK_LEFT || sym == SDLK_RIGHT)
+            return rvTipPanelSwitch(base, sym == SDLK_RIGHT ? 1 : -1, repeat);
+        if (sym != SDLK_UP && sym != SDLK_DOWN) return false;
+        if (repeat) return true;
+        rvSpeakTipLine(base, sym == SDLK_UP ? 1 : -1);
+        return true;
+    }
 
     if (sym == SDLK_ESCAPE) {
         if (repeat) return true;
@@ -856,7 +874,7 @@ void serviceDiscardWatch(uintptr_t base) {
     }
 }
 
-// ---- REARRANGE: Space picks a stack up, drops one on the focused slot; Ctrl+Space drops all ----
+// ---- REARRANGE: Space picks a stack up, Space again drops the WHOLE stack on the focused slot ----
 
 typedef int  (*InvPourFn)(void*, void*, void*, int);
 typedef void (*InvSetIdentFn)(void*, const char*, const char*, int, uint32_t, int, unsigned char, void*, void*);
@@ -933,7 +951,7 @@ static bool ihPickUp(uintptr_t base) {
     return true;
 }
 
-static bool ihDrop(uintptr_t base, bool all) {
+static bool ihDrop(uintptr_t base) {
     uintptr_t beg = 0; int slots = 0;
     uintptr_t root = mapRoot(base);
     if (!root || !invItemVector(base, &beg, &slots)) {
@@ -972,12 +990,6 @@ static bool ihDrop(uintptr_t base, bool all) {
     if (!dstEmpty && !sameKind) {
         char t[64], i2[64], k[192], other[256];
         invItemName(base, dst, t, i2, k, other);
-        if (!all) {
-            _snprintf(msg, sizeof msg, axs(AXS_INV_OTHER_ITEM_FMT), other);
-            msg[sizeof msg - 1] = 0;
-            postSpeech(msg);
-            return true;
-        }
         bool ok = sehInvSwap(src, dst);
         uint32_t nth = 0;
         safeReadU32(dst + ITEM_TYPEHASH_OFF, &nth);   // observe: the held identity moved here
@@ -991,7 +1003,7 @@ static bool ihDrop(uintptr_t base, bool all) {
         return true;
     }
 
-    if (dstEmpty && all) {
+    if (dstEmpty) {
         bool ok = sehInvSwap(src, dst);
         uint32_t moved = 0;
         safeReadU32(dst + ITEM_AMOUNT_OFF, &moved);   // observe: the amount travelled
@@ -1005,15 +1017,7 @@ static bool ihDrop(uintptr_t base, bool all) {
         return true;
     }
 
-    if (dstEmpty) {
-        if (!sehInvSetIdent(base, dst, src)) {
-            logLine("rearrange: set-identity FAULTED (slot %d)", destIdx);
-            postSpeech(axs(AXS_ACTION_FAILED));
-            return true;
-        }
-    }
-
-    int want = all ? (int)srcAmt : 1;
+    int want = (int)srcAmt;
     int poured = 0;
     bool called = sehInvPour(base, root + INV_SYSTEM_OFF, dst, src, want, &poured);
     uint32_t dstAfter = dstBefore, srcAfter = srcAmt;
@@ -1027,14 +1031,14 @@ static bool ihDrop(uintptr_t base, bool all) {
     if (gained <= 0) { postSpeech(axs(AXS_INV_STACK_FULL)); return true; }
 
     if ((int32_t)srcAfter < 1) {
+        // Everything held has landed (the pour cleared the source itself).
         _snprintf(msg, sizeof msg, axs(AXS_INV_DROPPED_ALL_FMT), g_ihName, (int)dstAfter);
         msg[sizeof msg - 1] = 0;
         ihRelease("dropped all");
         postSpeech(msg);
         return true;
     }
-    if (all) _snprintf(msg, sizeof msg, axs(AXS_INV_DROPPED_PART_FMT), gained, (int)srcAfter);
-    else     _snprintf(msg, sizeof msg, axs(AXS_INV_DROPPED_ONE_FMT), (int)dstAfter, (int)srcAfter);
+    _snprintf(msg, sizeof msg, axs(AXS_INV_DROPPED_PART_FMT), gained, (int)srcAfter);   // the rest stays held
     msg[sizeof msg - 1] = 0;
     postSpeech(msg);
     return true;
@@ -1043,12 +1047,8 @@ static bool ihDrop(uintptr_t base, bool all) {
 bool routeInvKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
     if (sym == SDLK_SPACE && !(mod & (KMOD_LALT | KMOD_RALT))) {
         if (repeat) return true;
-        bool ctrl = (mod & (KMOD_LCTRL | KMOD_RCTRL)) != 0;
-        if (!g_ihHeld) {
-            if (ctrl) { postSpeech(axs(AXS_INV_NOTHING_HELD)); return true; }
-            return ihPickUp(base);
-        }
-        return ihDrop(base, ctrl);
+        if (!g_ihHeld) return ihPickUp(base);
+        return ihDrop(base);
     }
     if (!(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL))) {
         if (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) {

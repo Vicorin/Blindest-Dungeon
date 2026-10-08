@@ -24,7 +24,7 @@ static bool restLandActionBar(uintptr_t base) {
     if (g_rvActive) rvSetActive(base, false);
     if (g_qtActive) qtSetActive(base, false);
     abSetActive(base, true);
-    abSpeakLabel(base, &items[g_abCursor], abSlotCount(items, n), "Actions.");
+    abSpeakLabel(base, &items[g_abCursor], abSlotCount(items, n), axs(AXS_AB_HEADER_ACTIONS));
     return true;
 }
 

@@ -1352,3 +1352,25 @@ bool routeRingListKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
 
     return false;
 }
+
+// ---- PAD FOCUS FOLLOWER ----
+bool ringFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_ringActive || g_ringLeaguesOpen) return false;
+    uint32_t cc = (uint32_t)(uint64_t)id;
+    if (g_ringListOpen) {
+        int n = ringCollect(base, false);
+        uint32_t d = cc - (uint32_t)RING_ROW_ELEM_BASE;
+        if (n <= 0 || d >= (uint32_t)n) return false;
+        g_ringRow = (int)d;
+        ringSpeakRow(base, nullptr);
+        return true;
+    }
+    uintptr_t iface[PTY_MAX_SLOTS], hero[PTY_MAX_SLOTS];
+    int n = ptySlotStrip(base, iface, hero, PTY_MAX_SLOTS);
+    uint32_t d = cc - (uint32_t)PTY_SLOT_ELEM_BASE;
+    if (n <= 0 || d >= (uint32_t)n) return false;
+    g_ringSlot = (int)d;
+    ringSpeakSlot(base, nullptr);
+    return true;
+}

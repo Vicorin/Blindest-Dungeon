@@ -49,10 +49,20 @@ static const uint32_t  SLOT_DLC_BTN_FOURCC    = 0x646c6374; // 'tcld' + slot arr
 static const uintptr_t SLOT_DLCVEC_BEGIN_OFF  = 0x790;  // SaveSlot: installed-DLC records begin
 static const uintptr_t SLOT_DLCVEC_END_OFF    = 0x798;  // SaveSlot: end (stride 0xc0)
 
+// ---- The row's BUTTON COLUMNS: Delete, Enable/View DLC, Enable/View Mods ----
+static const uint32_t  SLOT_UGC_BTN_FOURCC    = 0x75676374; // 'tcgu' + slot array index (0..8)
+static const uintptr_t SLOT_UGCVEC_BEGIN_OFF  = 0x350;  // SaveSlot: applied-mod id records begin
+static const uintptr_t SLOT_UGCVEC_END_OFF    = 0x358;  // SaveSlot: end (stride 0xc0)
+static const uintptr_t REG_MODS_BEGIN_OFF     = 0x20;   // registry: installed-mod record ptrs begin
+static const uintptr_t REG_MODS_END_OFF       = 0x28;   // registry: end (8 bytes per entry)
+static const uintptr_t REG_MODS_SCANNED_OFF   = 0x39;   // registry: byte, !=0 once the scan finished
+static const uintptr_t REG_MODS_ALLOWED_OFF   = 0x3a;   // registry: byte, ==1 while mods are allowed
+enum { SLOT_COL_SLOT = 0, SLOT_COL_DELETE = 1, SLOT_COL_DLC = 2, SLOT_COL_MODS = 3 };
+enum { SLOT_COL_MAX = 4 };
+
 // ---- The slot's own NEW GAME / DELETE actions (called, not clicked) ----
 
 static const uint32_t  DELETE_BTN_FOURCC_BASE = 0x6e736274;  // "tbsn" + slotIndex (array index 0..8)
-                                                             // (kept for reference; no longer clicked)
 
 // ---- THE SAVE LIST SCROLLS, AND THE MOD CAN DRIVE IT ----
 static const uintptr_t FE_SCROLL_MIN_OFF     = 0x242c;
@@ -112,6 +122,81 @@ static bool slotDlcStateText(uintptr_t slot, char* out, int outsz) {
     return true;
 }
 
+static bool slotModsStateText(uintptr_t slot, char* out, int outsz) {
+    out[0] = 0;
+    uintptr_t reg = 0, rb = 0, re = 0;
+    uint8_t scanned = 0, allowed = 0;
+    if (!safeReadPtr(g_base + FE_CONTENT_REG_RVA, &reg) || reg <= 0x10000) return false;
+    if (!safeReadU8(reg + REG_MODS_SCANNED_OFF, &scanned) || !scanned) return false;
+    if (!safeReadU8(reg + REG_MODS_ALLOWED_OFF, &allowed) || allowed != 1) return false;
+    if (!safeReadPtr(reg + REG_MODS_BEGIN_OFF, &rb) || !safeReadPtr(reg + REG_MODS_END_OFF, &re) ||
+        rb <= 0x10000 || re <= rb) return false;
+    uintptr_t b = 0, e = 0;
+    if (!safeReadPtr(slot + SLOT_UGCVEC_BEGIN_OFF, &b) ||
+        !safeReadPtr(slot + SLOT_UGCVEC_END_OFF, &e)) return false;
+    if (b <= 0x10000 || e <= b) return false;
+    if (!resolveKey(g_base, "str_mods_installed", out, outsz) || !out[0]) {
+        logLine("saveslot: str_mods_installed did not resolve -> mods state omitted");
+        out[0] = 0;
+        return false;
+    }
+    return true;
+}
+
+static bool slotButtonFromId(int64_t id, int* arrayIdx, int* col) {
+    uint32_t cc = (uint32_t)(uint64_t)id;
+    uint32_t d = cc - SLOT_DLC_BTN_FOURCC, u = cc - SLOT_UGC_BTN_FOURCC, n = cc - DELETE_BTN_FOURCC_BASE;
+    if (n < (uint32_t)SLOT_CAMPAIGN_COUNT) {
+        if (arrayIdx) *arrayIdx = (int)n;
+        if (col) *col = SLOT_COL_DELETE;
+        return true;
+    }
+    if (d < (uint32_t)SLOT_CAMPAIGN_COUNT) {
+        if (arrayIdx) *arrayIdx = (int)d;
+        if (col) *col = SLOT_COL_DLC;
+        return true;
+    }
+    if (u < (uint32_t)SLOT_CAMPAIGN_COUNT) {
+        if (arrayIdx) *arrayIdx = (int)u;
+        if (col) *col = SLOT_COL_MODS;
+        return true;
+    }
+    return false;
+}
+
+static void slotButtonLabel(uintptr_t display, int arrayIdx, int col, char* out, int outsz) {
+    if (col == SLOT_COL_DELETE) {
+        char tip[128];
+        if (!resolveKey(g_base, "str_delete_save_tooltip", tip, sizeof tip) || !tip[0]) {
+            logLine("saveslot: str_delete_save_tooltip did not resolve -> fallback");
+            strncpy(tip, axs(AXS_DELETE_BTN_FALLBACK), sizeof tip - 1);
+            tip[sizeof tip - 1] = 0;
+        }
+        _snprintf(out, outsz, axs(AXS_DELETE_BTN_SLOT_N), tip, arrayIdx + 1);
+        out[outsz - 1] = 0;
+        return;
+    }
+    const bool mods = (col == SLOT_COL_MODS);
+    const char* key = mods ? "str_ugc_show_panel_tooltip" : "str_dlc_show_panel_tooltip";
+    if (!resolveKey(g_base, key, out, outsz) || !out[0]) {
+        logLine("saveslot: %s did not resolve -> fallback", key);
+        strncpy(out, axs(mods ? AXS_UGC_BTN_FALLBACK : AXS_DLC_BTN_FALLBACK), outsz - 1);
+        out[outsz - 1] = 0;
+    }
+    uintptr_t slotBase = 0;
+    if (!safeReadPtr(display + FE_SLOTARR_OFF, &slotBase) || slotBase <= 0x10000) return;
+    uintptr_t slot = slotBase + (uintptr_t)arrayIdx * SLOT_STRIDE;
+    char state[96];
+    if (mods ? slotModsStateText(slot, state, sizeof state)
+             : slotDlcStateText(slot, state, sizeof state)) {
+        size_t len = strlen(out);
+        if ((int)len < outsz - 1) {
+            _snprintf(out + len, outsz - (int)len, ", %s", state);
+            out[outsz - 1] = 0;
+        }
+    }
+}
+
 static void appendField(char* out, int outsz, const char* piece) {
     if (!piece || !piece[0]) return;
     size_t len = strlen(out);
@@ -129,6 +214,11 @@ static void appendSentence(char* out, int outsz, const char* s) {
 }
 
 bool resolveSaveSlot(uintptr_t display, int64_t id, char* out, int outsz) {
+    int btnIdx = 0, btnCol = 0;
+    if (slotButtonFromId(id, &btnIdx, &btnCol)) {
+        slotButtonLabel(display, btnIdx, btnCol, out, outsz);
+        return true;
+    }
     uint32_t cc = (uint32_t)(uint64_t)id;
     uint32_t off = cc - SLOT_FOURCC_BASE;
     if (off >= (uint32_t)SLOT_COUNT) return false;
@@ -207,6 +297,9 @@ bool resolveSaveSlot(uintptr_t display, int64_t id, char* out, int outsz) {
         char dlcState[96];
         if (slotDlcStateText(slot, dlcState, sizeof dlcState))
             appendField(out, outsz, dlcState);
+        char modsState[96];
+        if (slotModsStateText(slot, modsState, sizeof modsState))
+            appendField(out, outsz, modsState);
     }
     if (occ != 0) {
         appendSentence(out, outsz, axs(location[0] ? AXS_SLOT_HINT_LOAD : AXS_NM_SEAL_HELP));
@@ -233,6 +326,17 @@ static bool campaignSlotFromId(int64_t id, int* arrayIdx, int* slotNum) {
     if (off == 0 || off >= (uint32_t)SLOT_COUNT) return false;   // 0 = Circus
     if (arrayIdx) *arrayIdx = (int)off - 1;
     if (slotNum)  *slotNum  = (int)off;
+    return true;
+}
+
+static bool slotRowFromId(int64_t id, int* arrayIdx, int* slotNum, int* col) {
+    int idx = 0, num = 0, c = SLOT_COL_SLOT;
+    if (campaignSlotFromId(id, &idx, &num)) c = SLOT_COL_SLOT;
+    else if (slotButtonFromId(id, &idx, &c)) num = idx + 1;
+    else return false;
+    if (arrayIdx) *arrayIdx = idx;
+    if (slotNum)  *slotNum  = num;
+    if (col)      *col      = c;
     return true;
 }
 
@@ -307,8 +411,11 @@ static FePick feFindCandidate(int dir, bool forceSeed) {
         curId = -1;                                  // seeded off-dialog -> restart on an answer
 
     const bool slotList = (disp != 0 && st == FE_STATE_SAVESLOTS && !dialogModal);
-    if (slotList && !isNoFocus(curId) && !isSaveSlotId(curId))
-        curId = -1;                                  // seeded onto a button -> restart at the top
+    if (slotList && !isNoFocus(curId) && !isSaveSlotId(curId)) {
+        int bIdx = 0, bCol = 0;
+        curId = slotButtonFromId(curId, &bIdx, &bCol)
+                    ? (int64_t)(SLOT_FOURCC_BASE + 1 + (uint32_t)bIdx) : -1;
+    }
 
     const bool optList = (!dialogModal && optPageActive());
     if (optList && !isNoFocus(curId)) {
@@ -480,6 +587,11 @@ static int   g_ngcSlotIdx    = -1;
 static DWORD g_ngcArmedTick  = 0;      // GetTickCount at the New Game press; 0 = disarmed
 static int   g_ngcViewArm    = 0;
 static bool  g_ngcViewMode   = false;
+static bool  g_ngcModsArm    = false;  // the armed open is the mods window
+static bool  g_ngcMods       = false;
+static DWORD g_ngcEscTick    = 0;
+static DWORD g_ngcModsGoneTick = 0;
+static const uintptr_t FE_PANEL_STATE_OFF = 0x20c0;  // display: content panel state, 1..4 = open
 
 // ---- Save-slot return watch ----
 static bool  g_srwArmed    = false;
@@ -501,8 +613,8 @@ static SlotActionResult saveSlotAction(uintptr_t base, bool wantOccupied) {
     if (confirmDialogOpen(base)) return SLOT_ACTION_NA;
 
     int64_t id = feCurrentFocusId();
-    int idx = 0, slotNum = 0;
-    if (!campaignSlotFromId(id, &idx, &slotNum)) {
+    int idx = 0, slotNum = 0, col = SLOT_COL_SLOT;
+    if (!slotRowFromId(id, &idx, &slotNum, &col) || (!wantOccupied && col != SLOT_COL_SLOT)) {
         // The Circus row, or focus not on a slot at all. Neither action exists there.
         logLine("slotaction: focus 0x%llx is not a campaign slot", (unsigned long long)id);
         return SLOT_ACTION_NA;
@@ -537,45 +649,54 @@ static SlotActionResult saveSlotAction(uintptr_t base, bool wantOccupied) {
         logLine("slotaction: %s slot %d (idx=%d) -> %s", inUse ? "begin" : "new game",
                 slotNum, idx, ok ? "called" : "FAULTED");
         if (!ok) postSpeech(axs(AXS_ACTION_FAILED));
-        if (ok && !inUse) { g_ngcArmedTick = GetTickCount(); g_ngcViewArm = 0; }
+        if (ok && !inUse) { g_ngcArmedTick = GetTickCount(); g_ngcViewArm = 0; g_ngcModsArm = false; }
     }
     if (ok) armSlotReturnWatch(slotNum);
     return SLOT_ACTION_DONE;
 }
 
 // ---- Shift+Enter: the focused slot's Enable/View DLC button ----
-static SlotActionResult slotDlcAction(uintptr_t base) {
+static SlotActionResult slotButtonAction(uintptr_t base, int wantCol) {
     uintptr_t disp = saveSlotScreen(base);
     if (!disp) return SLOT_ACTION_NA;              // not the save screen -> not our chord
+    if (wantCol != SLOT_COL_DLC && wantCol != SLOT_COL_MODS) {
+        logLine("slotbtn: column %d is not a clickable button column", wantCol);
+        return SLOT_ACTION_NA;
+    }
     if (confirmDialogOpen(base)) return SLOT_ACTION_NA;   // modal -- same gate as saveSlotAction
     if (g_ngcActive) return SLOT_ACTION_NA;        // the panel is already up -- nothing to open
 
+    const bool mods = (wantCol == SLOT_COL_MODS);
+    const char* tag = mods ? "tcgu" : "tcld";
     int64_t id = feCurrentFocusId();
     int idx = 0, slotNum = 0;
-    if (!campaignSlotFromId(id, &idx, &slotNum)) {
-        logLine("slotdlc: focus 0x%llx is not a campaign slot", (unsigned long long)id);
+    if (!slotRowFromId(id, &idx, &slotNum, nullptr)) {
+        logLine("slotbtn: focus 0x%llx is not a campaign slot", (unsigned long long)id);
         return SLOT_ACTION_NA;
     }
-    int64_t btnId = (int64_t)(SLOT_DLC_BTN_FOURCC + (uint32_t)idx);
+    int64_t btnId = (int64_t)((mods ? SLOT_UGC_BTN_FOURCC : SLOT_DLC_BTN_FOURCC) + (uint32_t)idx);
     if (!feGetElementById(btnId)) {
-        logLine("slotdlc: slot %d has no 'tcld' element on screen", slotNum);
+        logLine("slotbtn: slot %d has no '%s' element on screen", slotNum, tag);
         return SLOT_ACTION_REFUSED;
     }
+    const char* key = mods ? "str_ugc_show_panel_tooltip" : "str_dlc_show_panel_tooltip";
     char label[160];
-    if (!resolveKey(base, "str_dlc_show_panel_tooltip", label, sizeof label) || !label[0]) {
-        logLine("slotdlc: str_dlc_show_panel_tooltip did not resolve -> fallback");
-        strncpy(label, axs(AXS_DLC_BTN_FALLBACK), sizeof label - 1);
+    if (!resolveKey(base, key, label, sizeof label) || !label[0]) {
+        logLine("slotbtn: %s did not resolve -> fallback", key);
+        strncpy(label, axs(mods ? AXS_UGC_BTN_FALLBACK : AXS_DLC_BTN_FALLBACK), sizeof label - 1);
         label[sizeof label - 1] = 0;
     }
     postSpeech(label);
     bool ok = frontEndClickElementId(btnId);
-    logLine("slotdlc: slot %d (idx=%d) 'tcld' 0x%llx -> %s", slotNum, idx,
+    logLine("slotbtn: slot %d (idx=%d) '%s' 0x%llx -> %s", slotNum, idx, tag,
             (unsigned long long)btnId, ok ? "clicked" : "CLICK REFUSED");
     if (!ok) { postSpeech(axs(AXS_ACTION_FAILED)); return SLOT_ACTION_DONE; }
     g_ngcArmedTick = GetTickCount();               // the content-panel watch announces the window
     g_ngcViewArm   = slotNum;                      // ...as the VIEW flavour, for this slot
+    g_ngcModsArm   = mods;                         // ...and which of the two windows it is
     return SLOT_ACTION_DONE;
 }
+static SlotActionResult slotDlcAction(uintptr_t base) { return slotButtonAction(base, SLOT_COL_DLC); }
 
 static void saveSlotDeleteGateCheck(uintptr_t base) {
     static bool done = false;
@@ -682,6 +803,50 @@ static bool saveScrollFollowTo(uintptr_t base, int64_t id, float elemY) {
     moveCursorTo(SSF_PARK_X, SSF_PARK_Y);
     g_ssfArmed = true; g_ssfId = id; g_ssfUntil = GetTickCount() + SSF_TIMEOUT_MS;
     g_ssfSkipPolls = 2;
+    return true;
+}
+
+// ---- Left/Right on the save list: the focused row's columns ----
+static bool slotColumnStep(uintptr_t base, bool right) {
+    uintptr_t disp = saveSlotScreen(base);
+    if (!disp || confirmDialogOpen(base) || g_ngcActive) return false;
+    int64_t id = feCurrentFocusId();
+    if (isNoFocus(id)) return false;
+    if (g_ssfArmed) {
+        logLine("slotcol: row still scrolling -> step ignored");
+        return true;
+    }
+    int64_t cols[SLOT_COL_MAX]; int n = 0, at = 0;
+    int idx = 0, slotNum = 0, col = SLOT_COL_SLOT;
+    if (slotRowFromId(id, &idx, &slotNum, &col)) {
+        const int64_t del  = (int64_t)(DELETE_BTN_FOURCC_BASE + (uint32_t)idx);
+        const int64_t dlc  = (int64_t)(SLOT_DLC_BTN_FOURCC + (uint32_t)idx);
+        const int64_t mods = (int64_t)(SLOT_UGC_BTN_FOURCC + (uint32_t)idx);
+        cols[n++] = (int64_t)(SLOT_FOURCC_BASE + (uint32_t)slotNum);
+        if (feGetElementById(del))  cols[n++] = del;      // drawn for an occupied slot only
+        if (feGetElementById(dlc))  cols[n++] = dlc;
+        if (feGetElementById(mods)) cols[n++] = mods;
+        for (int i = 0; i < n; i++) if (cols[i] == id) at = i;
+    } else if (isSaveSlotId(id)) {
+        cols[n++] = id;                                // the Circus row: one column
+    } else {
+        return false;                                  // not on a row at all
+    }
+    int to = at + (right ? 1 : -1);
+    if (to < 0) to = 0;
+    if (to > n - 1) to = n - 1;
+    uintptr_t elem = feGetElementById(cols[to]);
+    if (!elem) {
+        logLine("slotcol: column %d of slot %d has no element (0x%llx)", to, slotNum,
+                (unsigned long long)cols[to]);
+        return true;
+    }
+    FePick p = { elem, cols[to], id, true, false };
+    feCommitTo(right ? 3 : 2, p, false);
+    feLandingCancel("focus moved");
+    g_feScreenKey = ((int)currentAxContext() << 8) | (FE_STATE_SAVESLOTS & 0xff);
+    logLine("slotcol: slot %d column %d -> %d of %d%s", slotNum, at, to, n,
+            to == at ? " [edge, re-read]" : "");
     return true;
 }
 
@@ -988,7 +1153,144 @@ static bool ngcSwapEntries(uintptr_t disp, int a, int b) {
 static int64_t ngcCheckboxId(uintptr_t disp, int i);
 static void    ngcHoverItem(uintptr_t disp, int cursor);
 
+// ---- MODS FLAVOUR: the Enable/View Mods window's rows ----
+static const uintptr_t FE_UGC_SLOTIDX_OFF   = 0x2420;
+static const uintptr_t FE_PANEL_SCROLL_OFF  = 0x21b0;  // display: the panel list's current scroll (float)
+static const uintptr_t UGC_ENT_ID_OFF       = 0x250;   // UGCEntry: mod id (name) C-string, 0x80
+static const uintptr_t UGC_ENT_SOURCE_OFF   = 0x2d0;   // UGCEntry: source id C-string, 0x40
+static const uintptr_t UGC_ENT_HEIGHT_OFF   = 0x310;   // UGCEntry: row height (float)
+static const uintptr_t MODREC_ID_OFF        = 0x620;   // installed-mod record: id, 0x80
+static const uintptr_t MODREC_SOURCE_OFF    = 0x6a0;   // installed-mod record: source id, 0x40
+static const uintptr_t MODREC_TITLE_OFF     = 0xee0;   // installed-mod record: title, 0x200
+static const uintptr_t MODREC_VER_MAJOR_OFF = 0x16e8;  // installed-mod record: version major (int)
+static const uintptr_t MODREC_VER_MINOR_OFF = 0x16ec;  // installed-mod record: version minor (int)
+static const uint32_t  UGC_CKBX_ID          = 0x636b6278;  // 'ckbx' -- every row's toggle region
+static const uint32_t  NGC_BACK_ID          = 0x6d62636b;  // 'mbck' -- the window's back arrow
+static const float     UGC_LIST_TOP_Y       = 293.0f;  // row 0's unscrolled top: base_pos.y 28 +
+static const float     UGC_ROW_SPACING      = 6.0f;    // ugc_layout entry_spacing
+static const float     UGC_BAND_TOP_Y       = 285.0f;
+
+static uintptr_t ngcModRecord(uintptr_t ent) {
+    char id[0x84] = { 0 }, src[0x44] = { 0 };
+    if (!ent || !safeReadCStr(ent + UGC_ENT_ID_OFF, id, sizeof id) || !id[0]) return 0;
+    safeReadCStr(ent + UGC_ENT_SOURCE_OFF, src, sizeof src);
+    uintptr_t reg = 0, b = 0, e = 0;
+    if (!safeReadPtr(g_base + FE_CONTENT_REG_RVA, &reg) || reg <= 0x10000) return 0;
+    if (!safeReadPtr(reg + REG_MODS_BEGIN_OFF, &b) || !safeReadPtr(reg + REG_MODS_END_OFF, &e)) return 0;
+    if (b <= 0x10000 || e <= b || (e - b) > 0x8000) return 0;
+    for (uintptr_t p = b; p < e; p += 8) {
+        uintptr_t rec = 0;
+        if (!safeReadPtr(p, &rec) || rec <= 0x10000) continue;
+        char rid[0x84] = { 0 }, rsrc[0x44] = { 0 };
+        safeReadCStr(rec + MODREC_ID_OFF, rid, sizeof rid);
+        safeReadCStr(rec + MODREC_SOURCE_OFF, rsrc, sizeof rsrc);
+        if (strncmp(id, rid, 0x80) == 0 && strncmp(src, rsrc, 0x40) == 0) return rec;
+    }
+    return 0;
+}
+
+static void ngcModName(uintptr_t ent, char* out, int outsz) {
+    out[0] = 0;
+    uintptr_t rec = ngcModRecord(ent);
+    char title[0x204] = { 0 };
+    if (rec) safeReadCStr(rec + MODREC_TITLE_OFF, title, sizeof title);
+    if (!title[0] && ent) safeReadCStr(ent + UGC_ENT_ID_OFF, title, 0x84);
+    if (!title[0]) return;
+    uint32_t maj = 0, min = 0;
+    if (rec) { safeReadU32(rec + MODREC_VER_MAJOR_OFF, &maj); safeReadU32(rec + MODREC_VER_MINOR_OFF, &min); }
+    if (maj || min) _snprintf(out, outsz, "%s (%d.%d)", title, (int)maj, (int)min);
+    else            _snprintf(out, outsz, "%s", title);
+    out[outsz - 1] = 0;
+}
+
+static bool ngcModSource(uintptr_t base, uintptr_t ent, char* out, int outsz) {
+    out[0] = 0;
+    char src[0x44] = { 0 };
+    if (!ent || !safeReadCStr(ent + UGC_ENT_SOURCE_OFF, src, sizeof src) || !src[0]) return false;
+    char key[96], name[160];
+    _snprintf(key, sizeof key, "str_%s", src); key[sizeof key - 1] = 0;
+    if (!resolveKey(base, key, name, sizeof name) || !name[0]) {
+        strncpy(name, src, sizeof name - 1); name[sizeof name - 1] = 0;
+    }
+    char fmt[160];
+    if (resolveKey(base, "str_mod_source", fmt, sizeof fmt) && fmt[0]) {
+        int pct = 0;
+        for (const char* q = fmt; *q; q++) if (*q == '%') pct++;
+        if (pct == 1 && strstr(fmt, "%s")) {
+            _snprintf(out, outsz, fmt, name);
+            out[outsz - 1] = 0;
+            return true;
+        }
+        logLine("ngc mods: str_mod_source has an unexpected shape \"%s\" -> bare source", fmt);
+    }
+    strncpy(out, name, outsz - 1); out[outsz - 1] = 0;
+    return true;
+}
+
+static bool ngcModsWindowUp(uintptr_t disp) {
+    uint32_t idx = 0xffffffff;
+    return disp && safeReadU32(disp + FE_UGC_SLOTIDX_OFF, &idx) && idx < (uint32_t)SLOT_CAMPAIGN_COUNT;
+}
+
+static bool ngcModsRowTop(uintptr_t disp, int row, float* outY, float* outH) {
+    if (row < 0 || row >= ngcCount(disp)) return false;
+    uint32_t sb = 0; float scroll = 0.0f;
+    if (safeReadU32(disp + FE_PANEL_SCROLL_OFF, &sb)) {
+        float s = u32AsFloatM(sb);
+        if (s > -4000.0f && s < 100000.0f) scroll = s;
+    }
+    float y = UGC_LIST_TOP_Y - scroll, h = 64.0f;
+    for (int i = 0; i <= row; i++) {
+        uintptr_t ent = ngcEntry(disp, i);
+        uint32_t hb = 0; float hf = 64.0f;
+        if (ent && safeReadU32(ent + UGC_ENT_HEIGHT_OFF, &hb)) {
+            float v = u32AsFloatM(hb);
+            if (v >= 8.0f && v <= 1000.0f) hf = v;
+        }
+        if (i == row) { h = hf; break; }
+        y += hf + UGC_ROW_SPACING;
+    }
+    *outY = y; if (outH) *outH = h;
+    return true;
+}
+
+static uintptr_t ngcModsRowElem(uintptr_t disp, int row) {
+    float ry = 0, rh = 0;
+    if (!ngcModsRowTop(disp, row, &ry, &rh)) return 0;
+    uintptr_t begin = 0, end = 0;
+    if (!safeReadPtr(g_base + VEC_BEGIN_RVA, &begin) || !safeReadPtr(g_base + VEC_END_RVA, &end) ||
+        begin == 0 || end <= begin) return 0;
+    uintptr_t count = (end - begin) / ELEM_STRIDE;
+    if (count > 4096) count = 4096;
+    uintptr_t best = 0; float bestD = rh * 0.5f;
+    for (uintptr_t i = 0; i < count; i++) {
+        uintptr_t e = begin + i * ELEM_STRIDE;
+        int64_t id = 0;
+        if (!safeReadI64(e + ELEM_ID_OFF, &id) || (uint32_t)(uint64_t)id != UGC_CKBX_ID) continue;
+        float ex = 0, ey = 0;
+        if (!elemPos(e, &ex, &ey)) continue;
+        float d = ey - ry; if (d < 0) d = -d;
+        if (d < bestD) { bestD = d; best = e; }
+    }
+    return best;
+}
+
+static bool ngcModsAnyRowDrawn() {
+    uintptr_t begin = 0, end = 0;
+    if (!safeReadPtr(g_base + VEC_BEGIN_RVA, &begin) || !safeReadPtr(g_base + VEC_END_RVA, &end) ||
+        begin == 0 || end <= begin) return false;
+    uintptr_t count = (end - begin) / ELEM_STRIDE;
+    if (count > 4096) count = 4096;
+    for (uintptr_t i = 0; i < count; i++) {
+        int64_t id = 0;
+        if (safeReadI64(begin + i * ELEM_STRIDE + ELEM_ID_OFF, &id) &&
+            (uint32_t)(uint64_t)id == UGC_CKBX_ID) return true;
+    }
+    return false;
+}
+
 static bool ngcRowY(uintptr_t disp, int row, float* outY) {
+    if (g_ngcMods) return ngcModsRowTop(disp, row, outY, nullptr);
     float x = 0;
     uintptr_t elem = feGetElementById(ngcCheckboxId(disp, row));
     return elem != 0 && elemPos(elem, &x, outY);
@@ -1003,6 +1305,10 @@ static int ngcAnchorRow(uintptr_t disp, int n) {
 }
 
 static bool ngcBoxPoint(uintptr_t disp, int row, float* bx, float* by) {
+    if (g_ngcMods) {
+        uintptr_t e = ngcModsRowElem(disp, row);
+        return e != 0 && elemCenter(e, bx, by);
+    }
     float x = 0, y = 0;
     uintptr_t elem = feGetElementById(ngcCheckboxId(disp, row));
     if (!elem || !elemPos(elem, &x, &y)) return false;
@@ -1039,7 +1345,7 @@ static void ngcWheelService(uintptr_t disp) {
         if (++g_ngcWhlStall >= NGC_WHEEL_STALL_PUMPS) { g_ngcWhlActive = false; }
         return;
     }
-    if (ry >= NGC_ROW_VIS_TOP && ry <= NGC_CLICK_MAX_Y) {
+    if (ry >= (g_ngcMods ? UGC_BAND_TOP_Y : NGC_ROW_VIS_TOP) && ry <= NGC_CLICK_MAX_Y) {
         g_ngcWhlActive = false;
         ngcHoverItem(disp, g_ngcWhlRow);           // arrived -- park the game's hover on it
         logLine("ngcwheel: row %d in view at y=%.0f -- hover parked", g_ngcWhlRow, ry);
@@ -1082,6 +1388,11 @@ static bool ngcChecked(uintptr_t disp, int i) {
 static void ngcName(uintptr_t base, uintptr_t disp, int i, char* out, int outsz) {
     out[0] = 0;
     uintptr_t ent = ngcEntry(disp, i);
+    if (g_ngcMods) {                                    // a mod's title is data, not a loc key
+        ngcModName(ent, out, outsz);
+        if (!out[0]) { _snprintf(out, outsz, axs(AXS_OPTION_N), i + 1); out[outsz - 1] = 0; }
+        return;
+    }
     char dlc[96]; dlc[0] = 0;
     if (ent) safeReadCStr(ent + NGC_ENT_DLCID_OFF, dlc, sizeof dlc);
     if (!dlc[0]) { _snprintf(out, outsz, axs(AXS_OPTION_N), i + 1); out[outsz - 1] = 0; return; }
@@ -1094,6 +1405,8 @@ static void ngcName(uintptr_t base, uintptr_t disp, int i, char* out, int outsz)
     if (out[0] >= 'a' && out[0] <= 'z') out[0] = (char)(out[0] - 32);
 }
 static bool ngcPanelDrawn(uintptr_t disp) {
+    if (g_ngcMods || g_ngcModsArm)                      // mods rows register no 'agc ' ids at all
+        return ngcModsWindowUp(disp) && ngcCount(disp) > 0;
     int n = disp ? ngcCount(disp) : 0;
     for (int i = 0; i < n; i++)
         if (feGetElementById(ngcCheckboxId(disp, i))) return true;
@@ -1109,12 +1422,30 @@ static void ngcSpeakItem(uintptr_t base, uintptr_t disp, int cursor) {
         char name[176]; ngcName(base, disp, cursor, name, sizeof name);
         _snprintf(utter, sizeof utter, axs(AXS_NGC_ITEM_STATE), name,
                   axs(ngcChecked(disp, cursor) ? AXS_VALUE_CHECKED : AXS_VALUE_UNCHECKED));
+        utter[sizeof utter - 1] = 0;
+        char src[200];
+        if (g_ngcMods && ngcModSource(base, ngcEntry(disp, cursor), src, sizeof src)) {
+            size_t len = strlen(utter);
+            if (len < sizeof utter - 1)
+                _snprintf(utter + len, sizeof utter - len, " %s", src);
+        }
     }
     utter[sizeof utter - 1] = 0;
     postSpeech(utter);
 }
 static void ngcHoverItem(uintptr_t disp, int cursor) {
     int n = ngcCount(disp);
+    if (g_ngcMods) {
+        // Mods rows have no per-row id to look up; hover the row's own toggle region.
+        float bx = 0, by = 0;
+        if (cursor < n && ngcBoxPoint(disp, cursor, &bx, &by)) {
+            moveCursorTo(bx, by);
+            logLine("ngc hover: mods row %d -> (%.0f,%.0f)", cursor, bx, by);
+        } else {
+            logLine("ngc hover: mods row %d has no live 'ckbx' element", cursor);
+        }
+        return;
+    }
     int64_t id = (cursor >= n) ? (int64_t)NGC_OK_ID : ngcCheckboxId(disp, cursor);
     uintptr_t elem = feGetElementById(id);
     if (!elem) return;
@@ -1139,11 +1470,24 @@ static void ngcDump(uintptr_t base, uintptr_t disp) {
     for (int i = 0; i < n && i < 16; i++) {
         char dlc[96]; dlc[0] = 0;
         uintptr_t ent = ngcEntry(disp, i);
-        if (ent) safeReadCStr(ent + NGC_ENT_DLCID_OFF, dlc, sizeof dlc);
+        if (ent) safeReadCStr(ent + (g_ngcMods ? UGC_ENT_ID_OFF : NGC_ENT_DLCID_OFF), dlc, sizeof dlc);
         char name[176]; ngcName(base, disp, i, name, sizeof name);
         float rx = 0, ry = 0;
         uintptr_t elem = feGetElementById(ngcCheckboxId(disp, i));
         bool haveY = (elem != 0 && elemPos(elem, &rx, &ry));
+        if (g_ngcMods) {
+            float cy = 0, ch = 0, ex = 0, ey = -1.0f;
+            bool haveC = ngcModsRowTop(disp, i, &cy, &ch);
+            uintptr_t ce = ngcModsRowElem(disp, i);
+            if (ce) elemPos(ce, &ex, &ey);
+            char src[0x44] = { 0 };
+            if (ent) safeReadCStr(ent + UGC_ENT_SOURCE_OFF, src, sizeof src);
+            logLine("  ngc[%d] MOD id=\"%s\" source=\"%s\" rec=%s enabled=%d computedY=%.0f h=%.0f "
+                    "ckbx=%s at (%.0f,%.0f) name=\"%s\"", i, dlc, src,
+                    ngcModRecord(ent) ? "found" : "MISSING", (int)ngcChecked(disp, i),
+                    haveC ? cy : -1.0f, ch, ce ? "matched" : "NONE", ex, ey, name);
+            continue;
+        }
         logLine("  ngc[%d] cbId=0x%llx dlc=\"%s\" checked=%d y=%.0f%s name=\"%s\"",
                 i, (unsigned long long)ngcCheckboxId(disp, i), dlc, (int)ngcChecked(disp, i),
                 haveY ? ry : -1.0f,
@@ -1231,35 +1575,67 @@ void checkNewGameContent(uintptr_t base) {
         if (g_ngcActive) { g_ngcActive = false; g_ngcSlotIdx = -1; g_ngcTogIdx = -1; logLine("newgame-content: closed (off screen)"); }
         g_ngcSwapIdx = -1; g_ngcSwapAnchor = -1; g_ngcWhlActive = false;
         g_ngcViewMode = false; g_ngcViewArm = 0;
+        g_ngcMods = false; g_ngcModsArm = false; g_ngcEscTick = 0; g_ngcModsGoneTick = 0;
         g_ngcArmedTick = 0;
         return;
     }
     if (g_ngcArmedTick && GetTickCount() - g_ngcArmedTick >= NGC_SETTLE_MS) {
         g_ngcArmedTick = 0;
+        const bool modsArm = g_ngcModsArm;
         if (!g_ngcActive && !confirmDialogOpen(base) && ngcPanelDrawn(disp)) {
-            uint32_t idx = 0; safeReadU32(disp + FE_NEWGAME_SLOTIDX_OFF, &idx);
+            // The mods builder stamps ITS slot index at +0x2420; the DLC flows use +0x1dd4.
+            uint32_t idx = 0;
+            safeReadU32(disp + (modsArm ? FE_UGC_SLOTIDX_OFF : FE_NEWGAME_SLOTIDX_OFF), &idx);
             g_ngcSlotIdx = (idx < (uint32_t)SLOT_CAMPAIGN_COUNT) ? (int)idx : 0;
             g_ngcViewMode = (g_ngcViewArm != 0); g_ngcViewArm = 0;
+            g_ngcMods = modsArm; g_ngcModsArm = false;
+            g_ngcEscTick = 0; g_ngcModsGoneTick = 0;
             g_ngcActive = true; g_ngcCursor = 0; g_ngcTogIdx = -1;
             g_ngcSwapIdx = -1; g_ngcSwapAnchor = -1; g_ngcWhlActive = false;
             g_ngcPrbHave = false;
-            logLine("newgame-content: content panel up, slot idx %d%s (sub=%d)", g_ngcSlotIdx,
-                    g_ngcViewMode ? " [view/enable]" : "", feNamingSub(disp));
+            logLine("newgame-content: content panel up, slot idx %d%s%s (sub=%d)", g_ngcSlotIdx,
+                    g_ngcViewMode ? " [view/enable]" : "", g_ngcMods ? " [MODS]" : "",
+                    feNamingSub(disp));
             ngcDump(base, disp);
             ngcHoverItem(disp, 0);                     // park the game's hover on the first checkbox
             int nc = ngcCount(disp);
             char name[176]; ngcName(base, disp, 0, name, sizeof name);
-            char row0[224], intro[448];
+            char row0[448], intro[1024];
             _snprintf(row0, sizeof row0, axs(AXS_NGC_ITEM_STATE), name,
                       axs(ngcChecked(disp, 0) ? AXS_VALUE_CHECKED : AXS_VALUE_UNCHECKED));
             row0[sizeof row0 - 1] = 0;
-            char head[288];
-            _snprintf(head, sizeof head,
-                      axs(g_ngcViewMode ? AXS_DLCVIEW_INTRO_N : AXS_NGC_INTRO_N), nc);
+            char head[512];
+            if (g_ngcMods) {
+                char title[160], how[288], src[200];
+                _snprintf(how, sizeof how, axs(AXS_UGC_INTRO_N), nc); how[sizeof how - 1] = 0;
+                if (resolveKey(base, "str_ugc_title", title, sizeof title) && title[0]) {
+                    size_t tl = strlen(title);
+                    _snprintf(head, sizeof head, title[tl - 1] == '.' ? "%s %s" : "%s. %s", title, how);
+                } else {
+                    logLine("newgame-content: str_ugc_title did not resolve -> how-to alone");
+                    _snprintf(head, sizeof head, "%s", how);
+                }
+                if (ngcModSource(base, ngcEntry(disp, 0), src, sizeof src)) {
+                    size_t len = strlen(row0);
+                    if (len < sizeof row0 - 1) _snprintf(row0 + len, sizeof row0 - len, " %s", src);
+                    row0[sizeof row0 - 1] = 0;
+                }
+            } else {
+                _snprintf(head, sizeof head,
+                          axs(g_ngcViewMode ? AXS_DLCVIEW_INTRO_N : AXS_NGC_INTRO_N), nc);
+            }
             head[sizeof head - 1] = 0;
             _snprintf(intro, sizeof intro, "%s %s", head, row0);
             intro[sizeof intro - 1] = 0;
             postSpeech(intro);
+        } else if (modsArm) {
+            uint32_t ix = 0, fl = 0;
+            safeReadU32(disp + FE_UGC_SLOTIDX_OFF, &ix); safeReadU32(disp + FE_CONTENT_FLAG_OFF, &fl);
+            logLine("newgame-content: mods window NOT detected (active=%d dialog=%d +0x2420=%d "
+                    "flag=%u rows=%d)", (int)g_ngcActive, (int)confirmDialogOpen(base), (int)ix,
+                    fl, ngcCount(disp));
+            g_ngcModsArm = false; g_ngcViewArm = 0;
+            if (!g_ngcActive && !confirmDialogOpen(base)) postSpeech(axs(AXS_UGC_WINDOW_UNREAD));
         }
     }
     if (!g_ngcActive) return;
@@ -1277,7 +1653,31 @@ void checkNewGameContent(uintptr_t base) {
     bool haveFlag = safeReadU32(disp + FE_CONTENT_FLAG_OFF, &ngcFlag) != 0;
     bool stillUp  = haveFlag ? (ngcFlag == 1)
                              : (confirmDialogOpen(base) || ngcPanelDrawn(disp));
+    if (g_ngcMods) {
+        stillUp = ngcModsWindowUp(disp);
+        if (stillUp && g_ngcEscTick && GetTickCount() - g_ngcEscTick >= 800) {
+            g_ngcEscTick = 0;
+            if (!confirmDialogOpen(base)) {
+                bool ok = frontEndClickElementId((int64_t)NGC_BACK_ID);
+                logLine("newgame-content: mods window survived Escape -> back arrow %s",
+                        ok ? "clicked" : "NOT FOUND");
+            }
+        }
+        uint32_t pst = 0;
+        if (stillUp && safeReadU32(disp + FE_PANEL_STATE_OFF, &pst) && pst == 0 &&
+            !confirmDialogOpen(base) && !ngcModsAnyRowDrawn()) {
+            if (!g_ngcModsGoneTick) g_ngcModsGoneTick = GetTickCount();
+            else if (GetTickCount() - g_ngcModsGoneTick >= 1000) {
+                logLine("newgame-content: mods panel state 0 for 1 s with +0x2420 still set -> "
+                        "standing down (the commit did not run on this close)");
+                stillUp = false;
+            }
+        } else {
+            g_ngcModsGoneTick = 0;
+        }
+    }
     if (!stillUp) {
+        g_ngcMods = false; g_ngcEscTick = 0; g_ngcModsGoneTick = 0;
 
         bool wasView = g_ngcViewMode;
         int  slotNum = g_ngcSlotIdx + 1;               // array idx 0..8 -> spoken slot 1..9
@@ -1328,6 +1728,9 @@ bool routeFrontEndKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
     (void)base;
     if (mod & (KMOD_LALT | KMOD_RALT)) return false;   // leave Alt+key to the game
 
+    if (g_ngcActive && g_ngcMods && sym == SDLK_ESCAPE && !repeat && !confirmDialogOpen(g_base))
+        g_ngcEscTick = GetTickCount();
+
     if (g_ngcActive && !confirmDialogOpen(g_base)) {
         int jump = 0;
         if (axDecodeJump(sym, mod, repeat, &jump)) {
@@ -1340,7 +1743,7 @@ bool routeFrontEndKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
             g_ngcCursor = nc;
             float ry = 0;
             if (nc < n && ngcRowY(disp, nc, &ry) &&
-                (ry > NGC_CLICK_MAX_Y || ry < NGC_ROW_VIS_TOP)) {
+                (ry > NGC_CLICK_MAX_Y || ry < (g_ngcMods ? UGC_BAND_TOP_Y : NGC_ROW_VIS_TOP))) {
                 ngcWheelStart(nc, ry);
             } else {
                 g_ngcWhlActive = false;                // an in-band stop cancels any servo
@@ -1365,7 +1768,7 @@ bool routeFrontEndKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
                 g_ngcCursor = nc;
                 float ry = 0;
                 if (nc < n && ngcRowY(disp, nc, &ry) &&
-                    (ry > NGC_CLICK_MAX_Y || ry < NGC_ROW_VIS_TOP)) {
+                    (ry > NGC_CLICK_MAX_Y || ry < (g_ngcMods ? UGC_BAND_TOP_Y : NGC_ROW_VIS_TOP))) {
                     ngcWheelStart(nc, ry);
                 } else {
                     g_ngcWhlActive = false;            // an in-band stop cancels any servo
@@ -1392,8 +1795,18 @@ bool routeFrontEndKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
                            safeReadU8(ent + NGC_ENT_CHECKED_OFF, &g_ngcTogB306); }
                 float rowY = 0, bx = 0, by = 0;
                 bool haveY   = ngcRowY(disp, g_ngcCursor, &rowY);
-                bool outside = haveY && (rowY > NGC_CLICK_MAX_Y || rowY < NGC_ROW_VIS_TOP);
-                if (outside) {
+                bool outside = haveY && (rowY > NGC_CLICK_MAX_Y ||
+                                         rowY < (g_ngcMods ? UGC_BAND_TOP_Y : NGC_ROW_VIS_TOP));
+                if (g_ngcMods) {
+                    if (!outside && ngcBoxPoint(disp, g_ngcCursor, &bx, &by)) {
+                        ngcClickAt(bx, by);
+                    } else {
+                        logLine("newgame-content: mods row %d not clickable (y=%.0f haveY=%d outside=%d)",
+                                g_ngcCursor, rowY, (int)haveY, (int)outside);
+                        postSpeech(axs(AXS_ACTION_FAILED));
+                        return true;
+                    }
+                } else if (outside) {
                     int anchor = ngcAnchorRow(disp, n);
                     if (anchor >= 0 && anchor != g_ngcCursor && ngcBoxPoint(disp, anchor, &bx, &by) &&
                         ngcSwapEntries(disp, g_ngcCursor, anchor)) {
@@ -1438,6 +1851,21 @@ bool routeFrontEndKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
     if (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) {
         if (repeat) return false;
         if (!confirmDialogOpen(g_base) && optRowToggle()) return true;
+        {
+            int bIdx = 0, bCol = SLOT_COL_SLOT;
+            if (saveSlotScreen(g_base) && !confirmDialogOpen(g_base) && !g_ngcActive &&
+                slotButtonFromId(feCurrentFocusId(), &bIdx, &bCol)) {
+                if (bCol == SLOT_COL_DELETE) {
+                    saveSlotDeleteGateCheck(g_base);
+                    if (saveSlotAction(g_base, true) == SLOT_ACTION_REFUSED)
+                        postSpeech(axs(AXS_SLOT_EMPTY_NO_DELETE));
+                    return true;
+                }
+                if (slotButtonAction(g_base, bCol) == SLOT_ACTION_REFUSED)
+                    postSpeech(axs(AXS_ACTION_FAILED));   // the button left the screen under us
+                return true;
+            }
+        }
         if (saveSlotAction(g_base, false) == SLOT_ACTION_DONE) return true;
         frontEndClickCursor();                         // click whatever the cursor is on
         return false;
@@ -1454,6 +1882,12 @@ bool routeFrontEndKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
         if (axNavHoldRepeat(repeat)) return true;      // throttled repeat: claimed, no step
         optAdjustRow(sym == SDLK_RIGHT);
         return true;
+    }
+
+    if ((sym == SDLK_LEFT || sym == SDLK_RIGHT) && saveSlotScreen(g_base) &&
+        !confirmDialogOpen(g_base) && !g_ngcActive) {
+        if (repeat) return true;
+        if (slotColumnStep(g_base, sym == SDLK_RIGHT)) return true;
     }
 
     {
@@ -1494,5 +1928,21 @@ bool routeFrontEndKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat
     }
     if (axNavHoldRepeat(repeat)) return true;           // throttled repeat: claimed, no step
     frontEndFocusMove(dir);
+    return true;
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool feFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_ngcActive || g_ngcMods || confirmDialogOpen(base)) return false;
+    uintptr_t disp = saveSlotScreen(base);
+    if (!disp) return false;
+    int n = ngcCount(disp);
+    int cursor = -1;
+    for (int i = 0; i < n; i++) if (ngcCheckboxId(disp, i) == id) { cursor = i; break; }
+    if (cursor < 0 && !g_ngcViewMode && (uint32_t)(uint64_t)id == (uint32_t)NGC_OK_ID) cursor = n;
+    if (cursor < 0) return false;
+    g_ngcCursor = cursor;
+    ngcSpeakItem(base, disp, cursor);
     return true;
 }

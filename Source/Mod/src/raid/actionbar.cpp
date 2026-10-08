@@ -1709,6 +1709,8 @@ void abSetActive(uintptr_t base, bool on) {
 
 static bool tsBegin(uintptr_t base, uintptr_t skill, const char* skillName, int abCursor);
 static void serviceUserSelectedTarget(uintptr_t base);   // the monster-turn aim, with tsBegin
+static bool tsClickPartyPoint(uintptr_t base, int rank, float* tx, float* ty);
+static bool tsIsMoveSkill(uintptr_t skill);
 static const uint32_t MV_WATCH_MS       = 1500;  // the direct call: the swap is immediate
 static const uint32_t MV_CLICK_WATCH_MS = 3000;  // the clicked gesture: queued stamps + animation
 static void mvSnapshot(uintptr_t base, const char* mover, int destSlot,
@@ -1963,6 +1965,53 @@ bool abActivate(uintptr_t base, const ActionItem* it, int slotCount, int abCurso
     }
 }
 
+// ---- THE DUNGEON VIEW'S TWO PARTY-ROW ACTIONS ----
+
+bool abClickHeroRank(uintptr_t base, int rank) {
+    if (clickQueued()) { logLine("select-hero: not attempted, a click is already queued"); return false; }
+    float tx = 0, ty = 0;
+    if (!tsClickPartyPoint(base, rank, &tx, &ty)) return false;
+    moveCursorTo(tx, ty);
+    enqueueSynth(SDL_EVT_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT, 1, 1);
+    enqueueSynth(SDL_EVT_MOUSEBUTTONUP,   SDL_BUTTON_LEFT, 0, 2);
+    logLine("select-hero: clicked rank %d at (%.0f,%.0f)", rank, tx, ty);
+    return true;
+}
+
+bool abBeginMoveSelected(uintptr_t base) {
+    ActionItem items[AB_MAX_ITEMS];
+    int n = abBuildBar(base, items, AB_MAX_ITEMS);
+    int slots = abSlotCount(items, n);
+    int idx = -1;
+    for (int i = 0; i < n; i++) {
+        if (items[i].kind != AB_SKILL) continue;
+        if (tsIsMoveSkill(abSkillAt(base, items[i].skillIdx, slots))) { idx = i; break; }
+    }
+    if (idx < 0) {
+        logLine("move: no move slot on the bar (%d items) -- refusing", n);
+        postSpeech(axs(AXS_AB_CANT_USE_NOW));
+        return true;
+    }
+    if (g_rvActive) { g_abRoomReturn = g_rvCursor; rvSetActive(base, false); }   // Up returns here
+    abSetActive(base, true);
+    g_abCursor = idx;
+    logLine("move: bar entered on the move slot (item %d of %d), opening its target list", idx, n);
+    return abActivate(base, &items[idx], slots, idx);
+}
+
+bool abReorderPartyNow(uintptr_t base) {
+    ActionItem items[AB_MAX_ITEMS];
+    int n = abBuildBar(base, items, AB_MAX_ITEMS);
+    for (int i = 0; i < n; i++) {
+        if (items[i].kind != AB_REORDER) continue;
+        logLine("reorder: pressed from a party row");
+        return abReorderParty(base, &items[i]);
+    }
+    logLine("reorder: no default-order button on the bar (%d items) -- refusing", n);
+    postSpeech(axs(AXS_AB_CANT_REORDER));
+    return true;
+}
+
 bool routeActionKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
     if (mod & (KMOD_LALT | KMOD_RALT)) return false;
     bool ctrl = (mod & (KMOD_LCTRL | KMOD_RCTRL)) != 0;
@@ -2121,7 +2170,7 @@ bool routeActionToggle(uintptr_t base, uint32_t sym, uint8_t repeat) {
     } else {
         g_abRoomReturn = rvRow;
     }
-    abSpeakLabel(base, &items[g_abCursor], abSlotCount(items, n), "Actions.");
+    abSpeakLabel(base, &items[g_abCursor], abSlotCount(items, n), axs(AXS_AB_HEADER_ACTIONS));
     return true;
 }
 // ---- Selected hero: announce the swap ----
@@ -2421,16 +2470,21 @@ static bool sehDoSkill(uintptr_t base, uintptr_t battle, uintptr_t perf, uintptr
 
 static int tsBuildTargets(uintptr_t base, RvEntry* out, int maxOut) {
     if (!g_tsSkill || !g_tsPerformer) return 0;
-    uint8_t nonAttack = 0, selfOnly = 0, perfIsMonster = 0;
+    uint8_t nonAttack = 0, selfOnly = 0;
     if (!safeReadU8(g_tsSkill + SKILL_NONATTACK_OFF, &nonAttack))
         logLine("targeting: class byte unreadable on skill %p — side gate assumes attack",
                 (void*)g_tsSkill);
     safeReadU8(g_tsSkill + SKILL_SELFONLY_OFF, &selfOnly);
-    safeReadU8(g_tsPerformer + ACTOR_IS_MONSTER_OFF, &perfIsMonster);
     const bool farSideOnly = (nonAttack == 0) && (selfOnly == 0);
-    const bool farIsEnemy  = (perfIsMonster == 0);   // a hero's far side is the enemies
     RvEntry all[RV_MAX_ROWS];
     int n = rvBuildRoom(base, all, RV_MAX_ROWS);
+    bool perfOnEnemySide = false, perfFound = false;
+    for (int i = 0; i < n; i++)
+        if (all[i].actor == g_tsPerformer) { perfOnEnemySide = all[i].enemy; perfFound = true; break; }
+    if (!perfFound)
+        logLine("targeting: performer %p is in neither line of the room -- side gate assumes a hero",
+                (void*)g_tsPerformer);
+    const bool farIsEnemy = !perfOnEnemySide;        // a hero's far side is the enemies
     int got = 0;
     for (int i = 0; i < n && got < maxOut; i++) {
         if (!all[i].actor) continue;
@@ -2960,6 +3014,8 @@ static bool tsMoveRowText(uintptr_t base, const RvEntry& e, char* out, int outsz
     if (!abHeroLabelOf(base, e.actor, who, sizeof who) || !who[0]) return false;
     _snprintf(out, outsz, axs(AXS_TS_ROW_POSITION_FMT), e.slot, who);
     out[outsz - 1] = 0;
+    char mark[200];
+    if (rvRankMarkClause(base, e.slot, e.slotEnd, mark, sizeof mark)) abAppendFrag(out, outsz, mark);
     return true;
 }
 
@@ -3002,6 +3058,10 @@ static bool tsTargetRowText(uintptr_t base, const RvEntry& e, char* out, int out
 
     rvPosPhrase(e.slot, e.slotEnd, e.enemy, frag, sizeof frag);
     abAppendFrag(out, outsz, frag);
+    if (!e.enemy) {
+        char mark[200];
+        if (rvRankMarkClause(base, e.slot, e.slotEnd, mark, sizeof mark)) abAppendFrag(out, outsz, mark);
+    }
     return true;
 }
 
@@ -3057,11 +3117,7 @@ static void tsSpeakRow(uintptr_t base, const RvEntry* rows, int n, int cur) {
 }
 
 static int tsRoomIndexOf(uintptr_t base, const RvEntry& e) {
-    RvEntry all[RV_MAX_ROWS];
-    int n = rvBuildRoom(base, all, RV_MAX_ROWS);
-    if (!e.actor) return -1;
-    for (int i = 0; i < n; i++) if (all[i].actor && all[i].actor == e.actor) return i;
-    return -1;
+    return rvRoomIndexOfActor(base, e.actor);
 }
 
 void tsSetActive(bool on) {
@@ -3184,7 +3240,8 @@ static bool tsBegin(uintptr_t base, uintptr_t skill, const char* skillName, int 
     }
     if (skillOutOfPosition(skill, perf)) {
         uint32_t launch = 0;
-        char where[80] = "another position";
+        char where[80];
+        strncpy(where, axs(AXS_AB_ANOTHER_POSITION), sizeof where - 1); where[sizeof where - 1] = 0;
         if (safeReadU32(skill + SKILL_LAUNCH_MASK_OFF, &launch) && launch)
             skillLaunchPositions(launch, where, sizeof where);
         char msg[160];
@@ -3282,9 +3339,9 @@ static bool tsUserSelPending(uintptr_t base, uintptr_t* monster, uintptr_t* skil
     if (!stateOk && (!safeReadU8(root + RAID_BATTLE_OVERRIDE_OFF, &over) || over == 0)) return false;
 
     uintptr_t turn = 0, held = 0;
-    uint8_t isMonster = 0, friendly = 0, userSel = 0;
+    uint8_t friendly = 0, userSel = 0;
     if (!safeReadPtr(root + RAID_TURN_ACTOR_OFF, &turn) || !turn) return false;
-    if (!safeReadU8(turn + ACTOR_IS_MONSTER_OFF, &isMonster) || !isMonster) return false;
+    if (spActorIsHero(base, turn)) return false;
     if (!safeReadPtr(turn + ACTOR_CUR_SKILL_OFF, &held) || !held) return false;
     if (!safeReadU8(held + SKILL_NONATTACK_OFF, &friendly) || friendly) return false;
     if (!safeReadU8(held + SKILL_USER_SELECTED_OFF, &userSel) || !userSel) return false;
@@ -3292,6 +3349,12 @@ static bool tsUserSelPending(uintptr_t base, uintptr_t* monster, uintptr_t* skil
     uintptr_t tBegin = 0, tEnd = 0;
     if (!safeReadPtr(turn + ACTOR_TARGETS_OFF, &tBegin) ||
         !safeReadPtr(turn + ACTOR_TARGETS_OFF + 8, &tEnd) || tBegin != tEnd) return false;
+
+    uintptr_t foes[RV_MAX_ENEMIES];
+    const int nf = rvEnemyList(base, foes, RV_MAX_ENEMIES);
+    bool onEnemySide = false;
+    for (int i = 0; i < nf; i++) if (foes[i] == turn) { onEnemySide = true; break; }
+    if (!onEnemySide) return false;
 
     *monster = turn;
     *skill   = held;
@@ -3717,4 +3780,20 @@ void serviceMoveWatch(uintptr_t base) {
         logLine("move-watch: no reposition within %ums — reporting the failure", g_mvWaited);
         postSpeech(axs(AXS_MOVE_DIDNT_HAPPEN));
     }
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool abFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!mapRoot(base)) return false;
+    ActionItem items[AB_MAX_ITEMS];
+    int n = abBuildBar(base, items, AB_MAX_ITEMS);
+    for (int i = 0; i < n; i++) {
+        if (items[i].id != id) continue;
+        if (!g_abActive) abSetActive(base, true);
+        g_abCursor = i;
+        abSpeakLabel(base, &items[i], abSlotCount(items, n));
+        return true;
+    }
+    return false;
 }

@@ -963,3 +963,29 @@ void checkProvision(uintptr_t base) {
         logLine("provision: stood down");
     }
 }
+
+// ---- PAD FOCUS FOLLOWER ----
+bool provFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    int section;
+    if (owner == PROV_OWNER_STORE)    section = 0;
+    else if (owner == PROV_OWNER_BAG) section = 1;
+    else return false;
+    int64_t firstId = 0;
+    int family = provSlotElemCount(base, owner, &firstId);
+    if (family <= 0) return false;
+    int64_t slot = id - firstId;
+    if (slot < 0 || slot >= family) return false;
+    uintptr_t sys = provSystem(base, section);
+    uintptr_t beg = 0; int slots = 0;
+    if (!sys || !invItemVectorAt(sys, &beg, &slots) || slot >= slots) return false;
+    bool sectionChanged = (g_provSection != section);
+    g_provSection = section;
+    g_provSlot[section] = (int)slot;
+    char prefix[96]; prefix[0] = 0;
+    if (sectionChanged) {
+        _snprintf(prefix, sizeof prefix, "%s. ", provSectionSpoken(section));
+        prefix[sizeof prefix - 1] = 0;
+    }
+    provSpeakSlot(base, prefix[0] ? prefix : nullptr);
+    return true;
+}

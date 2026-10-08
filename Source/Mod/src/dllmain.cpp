@@ -1,4 +1,4 @@
-﻿// Darkest Dungeon accessibility — focus announcer (MAIN-THREAD HOOK build "A").
+// Darkest Dungeon accessibility — focus announcer (MAIN-THREAD HOOK build "A").
 
 #include <windows.h>
 #include <cstdint>
@@ -70,6 +70,7 @@ bool                 g_reopenBlocked    = false; // set on Enter/Escape close; b
 // ------------------------------------------------------------
 
 static bool routeInputEvent(uintptr_t base, void* ev);
+static bool routeInputEventInner(uintptr_t base, void* ev);
 
 // ---- Shared list-navigation helpers ----
 
@@ -222,7 +223,7 @@ void resolveLabel(uintptr_t base, uintptr_t tbwVtbl, int64_t id,
                     (unsigned long long)id, idasc, feState, e->key, text);
         }
     } else {
-        strncpy(text, "unlabeled button", textsz - 1); text[textsz - 1] = 0;
+        strncpy(text, axs(AXS_FE_UNLABELED_BUTTON), textsz - 1); text[textsz - 1] = 0;
         logLine("frontend id=0x%llx ascii=\"%s\" state=%d UNKNOWN",
                 (unsigned long long)id, idasc, feState);
     }
@@ -236,6 +237,9 @@ static bool isUserActionEvent(uint32_t t) {
 int64_t g_axSpokenId = 0x7fffffffffffffffLL;
 char    g_axLastSpoken[512] = { 0 };
 
+static void axPadFocusSync();
+static bool axPadFocusFollow(int64_t id);
+
 // ---- Per-frame focus check (runs on the game's MAIN thread) ----
 static void frameCheck() {
     // Debounce state — single-threaded (only the main thread ever runs this).
@@ -243,7 +247,7 @@ static void frameCheck() {
     static int64_t pendingId = 0x7fffffffffffffffLL;
     static int     stable    = 0;
 
-    if (axOwnsAnnouncer(currentAxContext())) return;
+    if (axOwnsAnnouncer(currentAxContext())) { axPadFocusSync(); return; }
 
     if (g_preambleHold) {
         if ((long)(GetTickCount() - g_preambleHoldUntil) >= 0) g_preambleHold = false;
@@ -273,6 +277,12 @@ static void frameCheck() {
                 g_axLastSpoken[sizeof g_axLastSpoken - 1] = 0;
             }
         }
+        return;
+    }
+
+    if (padIsDriving() && axPadFocusFollow(id)) {
+        g_axSpokenId = id;
+        g_axLastSpoken[0] = 0;
         return;
     }
 
@@ -424,6 +434,7 @@ static bool axIsQuestDone() { return g_qcOpen; }
 static bool axIsTarget()  { return g_tsActive && mapRoot(g_base); }
 static bool axIsItemUse() { return g_iuActive && g_invActive; }
 static bool axIsCharSheet() { return g_csOpen && !g_ruEquipHero; }
+static bool axIsTownEventSheet() { return teSheetOnTop(); }
 static bool axIsMap()     { return g_mapReview; }
 static bool axIsInv()     { return g_invActive; }
 static bool axIsLog()     { return g_clogOpen && mapRoot(g_base) != 0; }
@@ -444,6 +455,8 @@ struct AxContextDef {
     const char* name;           // for the log
     AxReannounceFn reannounce;
     bool isMessage;
+    // ---- PAD FOCUS SYNC ----
+    bool (*focusSync)(uintptr_t base, int64_t id, uint32_t owner);
 };
 
 static const AxContextDef kAxContexts[] = {
@@ -455,43 +468,44 @@ static const AxContextDef kAxContexts[] = {
     { AX_GLOSSARY, axIsGlossary, routeGlossaryKey, true, "glossary", glReannounce },
     { AX_HELP, axIsHelp, routeHelpKey, true, "help", hpReannounce, true },
     { AX_CONTROLS, axIsControls, routeControlsKey, true, "controls", cpReannounce, true },
-    { AX_PAUSE,   axIsPause,   routeFrontEndKey, false, "pause",    feReannounce },
+    { AX_PAUSE,   axIsPause,   routeFrontEndKey, false, "pause",    feReannounce, false, feFocusSync },
     { AX_DIALOG,  axIsDialog,  routeDialogKey,   false, "dialog",   cdReannounce, true },
     { AX_JOURNAL, axIsJournal, routeJournalKey,  true,  "journal",  jpReannounce, true },
     { AX_TOWNEVENT, axIsTownEvent, nullptr, true, "townevent", teReannounce, true },
+    { AX_CHARSHEET, axIsTownEventSheet, routeCharSheetKey, true, "charsheet", nullptr, false, csFocusSync },
     { AX_RESULTS, axIsResults, routeResultsKey,  true,  "results",  rrReannounce },
     { AX_TOWNLOG, axIsTownLog, routeTownLogKey,  true,  "townlog",  tlReannounce },
-    { AX_EXCHANGE, axIsExchange, routeExchangeKey, true, "exchange", exReannounce },
+    { AX_EXCHANGE, axIsExchange, routeExchangeKey, true, "exchange", exReannounce, false, exFocusSync },
     { AX_TRKPICK,  axIsTrkPick,  routeTrkPickKey,  true, "trinketpick", trkReannounce },
-    { AX_REALMINV, axIsRealmInv, routeRealmInvKey, true, "realminv", riReannounce },
-    { AX_RINGLIST, axIsRingList, routeRingListKey, true, "ringlist", ringReannounce },
-    { AX_RING,     axIsRing,     routeRingKey,     true, "ring",     ringReannounce },
+    { AX_REALMINV, axIsRealmInv, routeRealmInvKey, true, "realminv", riReannounce, false, riFocusSync },
+    { AX_RINGLIST, axIsRingList, routeRingListKey, true, "ringlist", ringReannounce, false, ringFocusSync },
+    { AX_RING,     axIsRing,     routeRingKey,     true, "ring",     ringReannounce, false, ringFocusSync },
     { AX_ROSTER, axIsRoster, routeRosterKey, true, "roster", rosReannounce },
-    { AX_PARTY, axIsParty, routePartyKey, true, "party", ptyReannounce },
-    { AX_PROVISION, axIsProvision, routeProvisionKey, true, "provision", provReannounce },
-    { AX_EMBARK, axIsEmbark, routeEmbarkKey, true, "embark", embReannounce },
+    { AX_PARTY, axIsParty, routePartyKey, true, "party", ptyReannounce, false, ptyFocusSync },
+    { AX_PROVISION, axIsProvision, routeProvisionKey, true, "provision", provReannounce, false, provFocusSync },
+    { AX_EMBARK, axIsEmbark, routeEmbarkKey, true, "embark", embReannounce, false, embFocusSync },
     { AX_RESOURCES, axIsResources, routeResourcesKey, true, "resources", resReannounce },
-    { AX_BLDG, axIsBld, routeBldKey, true, "building", bldReannounce },
-    { AX_DISTRICT, axIsDistrict, routeDistrictKey, true, "districts", dstReannounce },
-    { AX_TOWNMAP, axIsTownMap, routeTownMapKey, true, "townmap", tmReannounce },
+    { AX_BLDG, axIsBld, routeBldKey, true, "building", bldReannounce, false, bldFocusSync },
+    { AX_DISTRICT, axIsDistrict, routeDistrictKey, true, "districts", dstReannounce, false, dstFocusSync },
+    { AX_TOWNMAP, axIsTownMap, routeTownMapKey, true, "townmap", tmReannounce, false, tmFocusSync },
     { AX_RAIDFINISH, axIsRaidFinish, routeRaidFinishKey, true, "raidfinish" },
     { AX_LOOT,    axIsLoot,    routeLootKey,     true,  "loot",     lootReannounce },
-    { AX_EVENT,   axIsEvent,   routeEventKey,    true,  "event",    evReannounce, true },
-    { AX_MEAL,    axIsMeal,    routeMealKey,     true,  "meal",     mealReannounce },
-    { AX_CAMPTARGET, axIsCampTarget, routeCampTargetKey, true, "camptarget" },
-    { AX_CHARSHEET, axIsCharSheet, routeCharSheetKey, true, "charsheet" },
+    { AX_EVENT,   axIsEvent,   routeEventKey,    true,  "event",    evReannounce, true, evFocusSync },
+    { AX_MEAL,    axIsMeal,    routeMealKey,     true,  "meal",     mealReannounce, false, mealFocusSync },
+    { AX_CAMPTARGET, axIsCampTarget, routeCampTargetKey, true, "camptarget", nullptr, false, ctFocusSync },
+    { AX_CHARSHEET, axIsCharSheet, routeCharSheetKey, true, "charsheet", nullptr, false, csFocusSync },
     { AX_LOG,     axIsLog,     routeLogKey,      true,  "combatlog" },
     { AX_ITEMUSE, axIsItemUse, routeItemUseKey,  false, "itemuse"   },
     { AX_TARGET,  axIsTarget,  routeTargetKey,   false, "target"    },
-    { AX_QUESTDONE, axIsQuestDone, routeQuestDoneKey, true, "questdone", qcReannounce, true },
+    { AX_QUESTDONE, axIsQuestDone, routeQuestDoneKey, true, "questdone", qcReannounce, true, qcFocusSync },
     { AX_QUEST,   axIsQuest,   routeQuestKey,    false, "quest"     },
-    { AX_ROOM,    axIsRoom,    routeRoomKey,     false, "room"      },
-    { AX_ACTIONS, axIsActions, routeActionKey,   false, "actions"   },
+    { AX_ROOM,    axIsRoom,    routeRoomKey,     false, "room",     nullptr, false, abFocusSync },
+    { AX_ACTIONS, axIsActions, routeActionKey,   false, "actions",  nullptr, false, abFocusSync },
     { AX_MAP,     axIsMap,     routeMapKey,      true,  "map"       },
-    { AX_INV,     axIsInv,     routeInvKey,      false, "inventory" },
-    { AX_INGAME,  axIsInGame,  nullptr,          false, "ingame"    },
+    { AX_INV,     axIsInv,     routeInvKey,      false, "inventory", nullptr, false, abFocusSync },
+    { AX_INGAME,  axIsInGame,  nullptr,          false, "ingame",   nullptr, false, abFocusSync },
     // front-end, and the catch-all
-    { AX_TITLE,   axIsTitle,   routeFrontEndKey, false, "title",    feReannounce },
+    { AX_TITLE,   axIsTitle,   routeFrontEndKey, false, "title",    feReannounce, false, feFocusSync },
 };
 static const int kAxContextCount = (int)(sizeof kAxContexts / sizeof kAxContexts[0]);
 
@@ -500,6 +514,51 @@ static const AxContextDef* currentAxDef() {
     for (int i = 0; i < kAxContextCount; i++)
         if (kAxContexts[i].active()) return &kAxContexts[i];
     return nullptr;
+}
+
+bool axContextIs(AxContext c) {
+    const AxContextDef* d = currentAxDef();
+    return d && d->ctx == c;
+}
+
+// ---- PAD FOCUS SYNC: the game's focus moves under a mod-owned surface (controller step 2) ----
+static void axPadFocusSync() {
+    static int64_t   lastId  = 0x7fffffffffffffffLL;
+    static AxContext lastCtx = (AxContext)-1;
+    const AxContextDef* d = currentAxDef();
+    AxContext ctx = d ? d->ctx : AX_NONE;
+    if (ctx != lastCtx) { lastCtx = ctx; lastId = 0x7fffffffffffffffLL; }   // a new surface: any id is news
+    if (!padIsDriving()) { return; }
+    if (padMapActive()) { return; }
+    int64_t id = 0;
+    if (!safeReadI64(g_base + FOCUS_ID_RVA, &id)) return;
+    if (id == lastId) return;
+    lastId = id;
+    if (isNoFocus(id)) return;
+    if (clickQueued()) return;
+    if (id == g_axSpokenId) return;                     // the surface itself just spoke this element
+    if (axPadFocusFollow(id)) { g_axSpokenId = id; g_axLastSpoken[0] = 0; }
+}
+
+static bool axPadFocusFollow(int64_t id) {
+    if (clickQueued()) return false;
+    const AxContextDef* d = currentAxDef();
+    uint32_t owner = 0;
+    { int64_t o = 0; if (safeReadI64(g_base + FOCUSED_WIDGET_RVA, &o)) owner = (uint32_t)(uint64_t)o; }
+    char idasc[9]; idToAscii(id, idasc);
+    if (!d || !d->focusSync) {
+        logLine("padsync: \"%s\" has no focus follower; id=0x%llx \"%s\" owner=0x%x",
+                d ? d->name : "none", (unsigned long long)id, idasc, owner);
+        return false;
+    }
+    if (d->focusSync(g_base, id, owner)) {
+        logLine("padsync: \"%s\" followed id=0x%llx \"%s\" owner=0x%x", d->name,
+                (unsigned long long)id, idasc, owner);
+        return true;
+    }
+    logLine("padsync: \"%s\" has no row for id=0x%llx \"%s\" owner=0x%x", d->name,
+            (unsigned long long)id, idasc, owner);
+    return false;
 }
 
 // ---- A MODAL THE PLAYER WAS READING HAS GONE AWAY ----
@@ -544,7 +603,22 @@ static bool g_ctrlDown[2] = { false, false };
 
 static void axSayAgain(uintptr_t base);
 
+// ---- THE ROUTER'S WRAPPER: a remapped GAME key is forwarded when nobody claimed it ----
 static bool routeInputEvent(uintptr_t base, void* ev) {
+    kmForwardNote(-1, -1, 0);
+    uint32_t type = 0;
+    if (!safeReadU32((uintptr_t)ev, &type)) return false;
+    if (type == SDL_EVT_KEYUP) {
+        uint32_t uscan = 0; safeReadU32((uintptr_t)ev + SDL_KEY_SCAN_OFF, &uscan);
+        if (kmForwardKeyUp(uscan)) return true;
+    }
+    bool claimed = routeInputEventInner(base, ev);
+    if (claimed || type != SDL_EVT_KEYDOWN) return claimed;
+    uint8_t rep = 0; safeReadU8((uintptr_t)ev + SDL_KEY_REPEAT_OFF, &rep);
+    return kmForwardUnclaimed(base, rep != 0);
+}
+
+static bool routeInputEventInner(uintptr_t base, void* ev) {
     uint32_t type = 0;
     if (!safeReadU32((uintptr_t)ev, &type)) return false;
 
@@ -605,6 +679,12 @@ static bool routeInputEvent(uintptr_t base, void* ev) {
 
     // ---- The mod settings menu (F10), and the key-remap translation ----
     if (ctx == AX_SETTINGS) return routeSettingsKey(base, sym, mod, rep);
+    {
+        int kfn = -1, kslot = -1;
+        int kr = kmRoute(base, ctx, &sym, &mod, &kfn, &kslot);
+        if (kr == 2) return false;
+        if (kr == 1) kmForwardNote(kfn, kslot, scan);
+    }
     if (sym == SDLK_F10 && !g_textInputActive &&
         !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL |
                  KMOD_LSHIFT | KMOD_RSHIFT)) &&
@@ -615,7 +695,6 @@ static bool routeInputEvent(uintptr_t base, void* ev) {
         }
         return true;
     }
-    if (kmRoute(base, ctx, &sym, &mod) == 2) return false;
 
     if ((sym == SDLK_a || sym == SDLK_d) && (mod & (KMOD_LSHIFT | KMOD_RSHIFT)) &&
         !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL)) && !g_textInputActive) {
@@ -744,6 +823,14 @@ static bool routeInputEvent(uintptr_t base, void* ev) {
             return routeEmbarkForward(base, rep);
     }
 
+    if (sym == SDLK_PERIOD && (mod & (KMOD_LSHIFT | KMOD_RSHIFT)) &&
+        !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL))) {
+        if (ctx == AX_TOWNEVENT || ctx == AX_TOWNLOG || ctx == AX_TOWNMAP || ctx == AX_PARTY ||
+            ctx == AX_ROSTER || ctx == AX_RESOURCES || ctx == AX_BLDG || ctx == AX_DISTRICT ||
+            ctx == AX_EMBARK || ctx == AX_NONE)
+            return routeTownEventToggle(base, rep);
+    }
+
     if (sym == SDLK_PERIOD && !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL))) {
         if (ctx == AX_LOG || ctx == AX_ROOM || ctx == AX_ACTIONS || ctx == AX_MAP ||
             ctx == AX_INV || ctx == AX_INGAME || ctx == AX_ITEMUSE)
@@ -758,6 +845,19 @@ static bool routeInputEvent(uintptr_t base, void* ev) {
             ctx == AX_ROOM || ctx == AX_QUEST || ctx == AX_LOG || ctx == AX_ITEMUSE) {
             if (!rep) speakMeter(base);
             return true;                              // claimed: one readout per press
+        }
+    }
+
+    if (sym >= SDLK_1 && sym <= SDLK_1 + 7 && (mod & (KMOD_LALT | KMOD_RALT)) &&
+        !(mod & (KMOD_LCTRL | KMOD_RCTRL | KMOD_LSHIFT | KMOD_RSHIFT)) && !g_textInputActive) {
+        if (ctx == AX_ACTIONS || ctx == AX_MAP || ctx == AX_INV || ctx == AX_INGAME ||
+            ctx == AX_ROOM || ctx == AX_QUEST || ctx == AX_LOG || ctx == AX_ITEMUSE ||
+            ctx == AX_TARGET || ctx == AX_CAMPTARGET) {
+            if (!rep) {
+                int digit = (int)(sym - SDLK_1) + 1;             // 1..8
+                rvSpeakRank(base, digit > 4, digit > 4 ? digit - 4 : digit);
+            }
+            return true;                              // claimed: one readout per press, never a stutter
         }
     }
 
@@ -798,7 +898,45 @@ static bool routeInputEvent(uintptr_t base, void* ev) {
             return routeQuestToggle(base, sym, rep);
     }
 
+    if (sym == SDLK_ESCAPE && (mod & (KMOD_LSHIFT | KMOD_RSHIFT)) &&
+        !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL))) {
+        if (ctx == AX_ROOM || ctx == AX_ACTIONS || ctx == AX_MAP || ctx == AX_INV ||
+            ctx == AX_INGAME || ctx == AX_QUEST || ctx == AX_LOG) {
+            if (rep) return true;                      // one press, one button
+            logLine("quest: Shift+Escape -> the zone's button");
+            qtActivateButton(base);
+            return true;
+        }
+    }
+
     if (d && d->keys) return d->keys(base, sym, mod, rep);
+    return false;
+}
+
+// ---- A SYNTHESISED KEY THROUGH THE ROUTER ----
+bool axRoutePadKey(uintptr_t base, uint32_t type, uint32_t sym, uint16_t mod, uint8_t repeat,
+                   bool passToGame) {
+    uint8_t ev[SDL_EVENT_SIZE];
+    memset(ev, 0, sizeof ev);
+    uint32_t scan = klScancodeForKey(sym);
+    memcpy(ev + 0, &type, 4);
+    ev[SDL_KEY_STATE_OFF]  = (type == SDL_EVT_KEYDOWN) ? 1 : 0;
+    ev[SDL_KEY_REPEAT_OFF] = repeat;
+    memcpy(ev + SDL_KEY_SCAN_OFF, &scan, 4);
+    memcpy(ev + SDL_KEY_SYM_OFF,  &sym,  4);
+    uint32_t m32 = mod;
+    memcpy(ev + SDL_KEY_MOD_OFF,  &m32,  4);
+    kmSetBypass(true);
+    bool claimed = routeInputEvent(base, ev);
+    kmSetBypass(false);
+    if (claimed) {
+        if (type == SDL_EVT_KEYDOWN) axReleaseReadHold("claimed pad key");
+        return true;
+    }
+    if (passToGame && type == SDL_EVT_KEYDOWN) {
+        enqueueSynthKey(SDL_EVT_KEYDOWN, scan, sym, mod);
+        enqueueSynthKey(SDL_EVT_KEYUP,   scan, sym, mod);
+    }
     return false;
 }
 
@@ -824,6 +962,9 @@ int OurPoll(void* ev) {
         DWORD now = GetTickCount();
         traceAxContext();
         serviceInputProbe(g_base);
+        servicePad(g_base);
+        servicePadMap(g_base);
+        kmForwardService(g_base);
 
         serviceSubtitles(g_base);
 
@@ -843,6 +984,7 @@ int OurPoll(void* ev) {
         serviceMapMove(g_base);
         serviceTileStep(g_base);
         serviceMoveWatch(g_base);
+        serviceRvMovePend(g_base);
         serviceAdvanceWatch(g_base);
         serviceAdvanceOffer(g_base);
         serviceSkipTurn(g_base);
@@ -965,6 +1107,7 @@ static void axSayAgain(uintptr_t base) {
 
     if (tutPopupActive())     { tutReannounce(base); return; }
     if (axIsTownEvent())      { teReannounce(base); return; }   // not under C's preview sheet
+    if (clogClearAskActive()) { clogReannounceClearAsk(base); return; }
 
     for (int i = 0; i < kAxContextCount; i++) {
         const AxContextDef* d = &kAxContexts[i];

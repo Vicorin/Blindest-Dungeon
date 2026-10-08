@@ -133,14 +133,37 @@ static uintptr_t campBarSkillClass(uintptr_t base, int barIdx) {
     return csCampSkillClass(base, roster);
 }
 
-static const char* campBarRefusal(uintptr_t base, uintptr_t hero, uintptr_t cls, int cost) {
+static void campStripStop(char* s) {
+    size_t n = strlen(s);
+    while (n && (s[n - 1] == ' ')) s[--n] = 0;
+    if (n && (s[n - 1] == '.' || s[n - 1] == '!')) { s[n - 1] = 0; return; }
+    if (n >= 3 && (unsigned char)s[n - 3] == 0xE3 && (unsigned char)s[n - 2] == 0x80 && (unsigned char)s[n - 1] == 0x82) { s[n - 3] = 0; return; }  // U+3002
+    if (n >= 3 && (unsigned char)s[n - 3] == 0xEF && (unsigned char)s[n - 2] == 0xBC && (unsigned char)s[n - 1] == 0x81) { s[n - 3] = 0; return; }  // U+FF01
+}
+
+static bool campBarRefusal(uintptr_t base, uintptr_t hero, uintptr_t cls, int cost,
+                           char* out, int outsz) {
+    out[0] = 0;
     uint32_t limit = 0;
     if (safeReadU32(cls + CAMP_SKILL_USE_LIMIT_OFF, &limit) && limit > 0 &&
-        campSkillUsedCount(base, hero, cls) >= limit)
-        return "Already used";
+        campSkillUsedCount(base, hero, cls) >= limit) {
+        if (!(resolveKey(base, "already_used_camping_skill_confirm", out, outsz) && out[0])) {
+            logLine("camp: already_used_camping_skill_confirm did not resolve -- mod fallback");
+            strncpy(out, axs(AXS_CAMP_ALREADY_USED), outsz - 1); out[outsz - 1] = 0;
+        }
+        campStripStop(out);
+        return true;
+    }
     int have = campPoints(base);
-    if (have >= 0 && cost > 0 && cost > have) return "Not enough time";
-    return nullptr;
+    if (have >= 0 && cost > 0 && cost > have) {
+        if (!(resolveKey(base, "not_enough_camping_points", out, outsz) && out[0])) {
+            logLine("camp: not_enough_camping_points did not resolve -- mod fallback");
+            strncpy(out, axs(AXS_CAMP_NOT_ENOUGH_TIME), outsz - 1); out[outsz - 1] = 0;
+        }
+        campStripStop(out);
+        return true;
+    }
+    return false;
 }
 
 bool campBarLabel(uintptr_t base, int barIdx, char* out, int outsz) {
@@ -154,8 +177,8 @@ bool campBarLabel(uintptr_t base, int barIdx, char* out, int outsz) {
     else          _snprintf(out, outsz, "%s.", name);
     out[outsz - 1] = 0;
 
-    const char* no = campBarRefusal(base, abSelectedHero(base), cls, cost);
-    if (no) {
+    char no[160];
+    if (campBarRefusal(base, abSelectedHero(base), cls, cost, no, sizeof no)) {
         size_t len = strlen(out);
         _snprintf(out + len, outsz - len, " %s.", no);
         out[outsz - 1] = 0;
@@ -247,6 +270,9 @@ static void ctAbandon(const char* why) {
     if (!g_ctActive) return;
     g_ctActive = false;
     g_ctCursor = -1;
+    if (!g_rvActive) g_rvCursor = -1;
+    g_rvTipLine = 0;
+    g_rvTipCol  = 0;
     logLine("camp target: abandoned (%s)", why ? why : "");
 }
 
@@ -294,6 +320,9 @@ static int ctTargetList(uintptr_t base, uintptr_t* heroes, int* vecIdx, int maxO
 }
 
 static void ctSpeakRow(uintptr_t base, uintptr_t* heroes, int n, int idx, const char* head) {
+    g_rvCursor  = rvRoomIndexOfActor(base, heroes[idx]);
+    g_rvTipLine = 0;
+    g_rvTipCol  = 0;
     char out[MAILBOX_SZ]; out[0] = 0;
     char frag[160];
     if (head && head[0]) _snprintf(out, sizeof out, "%s ", head);
@@ -429,7 +458,16 @@ static bool ctBegin(uintptr_t base, uintptr_t cls, int skillIdx, int64_t skillEl
 }
 
 bool routeCampTargetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
-    if (mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL)) return false;
+    if (mod & (KMOD_LALT | KMOD_RALT)) return false;
+
+    if (mod & (KMOD_LCTRL | KMOD_RCTRL)) {
+        if (sym == SDLK_LEFT || sym == SDLK_RIGHT)
+            return rvTipPanelSwitch(base, sym == SDLK_RIGHT ? 1 : -1, repeat);
+        if (sym != SDLK_UP && sym != SDLK_DOWN) return false;
+        if (repeat) return true;
+        rvSpeakTipLine(base, sym == SDLK_UP ? 1 : -1);
+        return true;
+    }
 
     if (sym == SDLK_ESCAPE) {
         if (repeat) return true;
@@ -442,7 +480,7 @@ bool routeCampTargetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repe
             for (int i = 0; i < n; i++)
                 if (items[i].kind == AB_SKILL && items[i].skillIdx == back) { g_abCursor = i; break; }
             if (g_abCursor < 0 || g_abCursor >= n) g_abCursor = 0;   // the bar may have changed shape
-            abSpeakLabel(base, &items[g_abCursor], abSlotCount(items, n), "Cancelled.");
+            abSpeakLabel(base, &items[g_abCursor], abSlotCount(items, n), axs(AXS_CANCELLED));
         } else {
             postSpeech(axs(AXS_CANCELLED));
         }
@@ -508,8 +546,8 @@ bool campUseSkill(uintptr_t base, const ActionItem* it) {
     name[sizeof name - 1] = 0;
 
     if (cls) {
-        const char* no = campBarRefusal(base, hero, cls, csCampSkillCost(cls));
-        if (no) {
+        char no[160];
+        if (campBarRefusal(base, hero, cls, csCampSkillCost(cls), no, sizeof no)) {
             logLine("camp: \"%s\" refused — %s", name, no);
             char msg[320];
             _snprintf(msg, sizeof msg, "%s. %s.", name, no);
@@ -643,7 +681,7 @@ static bool mealRowText(uintptr_t base, int i, char* out, int outsz) {
     int need = mealFoodNeeded(base, node);
     int have = mealFoodOwned(base);
     if (need == 0) {
-        abAppend(out, outsz, "No food");
+        abAppend(out, outsz, axs(AXS_CAMP_NO_FOOD));
     } else if (need > 0) {
         char frag[96];
         _snprintf(frag, sizeof frag, axs(AXS_CAMP_FOOD_FMT), need);
@@ -655,7 +693,11 @@ static bool mealRowText(uintptr_t base, int i, char* out, int outsz) {
                 csTrimLabel(no);                     // it ships wrapped in brackets
                 abAppend(out, outsz, no);
             } else {
-                abAppend(out, outsz, "Not enough food");
+                char no[160];
+                _snprintf(no, sizeof no, axs(AXS_CAMP_NOT_ENOUGH_FOOD_FMT), need, have);
+                no[sizeof no - 1] = 0;
+                campStripStop(no);
+                abAppend(out, outsz, no);
             }
         }
     }
@@ -836,7 +878,7 @@ void serviceCamp(uintptr_t base) {
                         g_campUseName, campPoints(base));
                 char msg[MAILBOX_SZ];
                 _snprintf(msg, sizeof msg, axs(AXS_CAMP_NOTHING_YET_FMT),
-                          g_campUseName[0] ? g_campUseName : "That camping skill");
+                          g_campUseName[0] ? g_campUseName : axs(AXS_CAMP_SKILL_FALLBACK));
                 msg[sizeof msg - 1] = 0;
                 g_campUseDeadline = 0;
                 g_campUseName[0]  = 0;
@@ -887,4 +929,30 @@ void serviceCamp(uintptr_t base) {
     }
 
     if (phase == 7 && prev == CAMP_PHASE_RESPITE) postSpeech(axs(AXS_CAMP_RESTING));
+}
+
+// ---- PAD FOCUS FOLLOWERS ----
+bool mealFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_mealActive) return false;
+    int i = (int)((uint32_t)(uint64_t)id - (uint32_t)MEAL_FOURCC_BASE);
+    if (i < 0 || i >= mealCount(base)) return false;
+    g_mealCursor = i;
+    mealSpeakRow(base, i);
+    return true;
+}
+bool ctFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_ctActive) return false;
+    int rank = (int)((uint32_t)(uint64_t)id - CAMP_HERO_ELEM_BASE);
+    if (rank < 0 || rank >= RV_MAX_MEMBERS) return false;
+    uintptr_t heroes[RV_MAX_MEMBERS]; int vecIdx[RV_MAX_MEMBERS];
+    int n = ctTargetList(base, heroes, vecIdx, RV_MAX_MEMBERS);
+    for (int i = 0; i < n; i++) {
+        if (campHeroRank(heroes[i]) != rank) continue;
+        g_ctCursor = i;
+        ctSpeakRow(base, heroes, n, i, nullptr);
+        return true;
+    }
+    return false;
 }

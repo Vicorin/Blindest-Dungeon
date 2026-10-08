@@ -1,18 +1,19 @@
-## About the Mod
+        ## About the Mod
 Blindest Dungeon adds screen-reader support and enhanced keyboard navigation to Darkest Dungeon, making it fully accessible to blind and low-vision players.
 
 ## Current Status & Limitations
 
 Currently, the entire base game is accessible, as well as much of the DLC. It is in public beta so that I can begin to gather player feedback while I polish the mod and support the last of the DLC items.
 
-* Base game: fully accessible.
+* Base game: fully accessible. Some specific areas may still need refinement, but it is 100% completable.
 * DLC Characters and Districts: Fully accessible.
-* The Color of  Madness: Mostly accessible. I have completed the first quest using the mod and have most of the endless mode features working, but have not yet tested the full endless mode.
+* The Color of  Madness: Fully accessible. Endless mode needs more testing.
 * Crimson Court: Fully Accessible
 * Fire's Edge: Fully Accessible
 (* Butcher's Circus: Fully Accessible
-(* Operating System: Windows. The mod has switched to the Prism speech library, but more work is needed to achieve full compatability on Mac and Linux.
+(* Operating System: Windows. The mod uses the Prism speech library, but more work is needed to achieve full compatability on Mac and Linux.
 * Localization: Supports all 12 languages the game does (Brazilian Portuguese, Czech, English, French, German, Italian, Japanese, Korean, Polish, Russian, Simplified Chinese, and Spanish. Most were translated using AI, so user-feedback or contributions are appreciated. You can find the translations inside the "lang" folder in the mod's source code.
+* Mod Support: In-game mod manager is accessible, mileage with indiviedual mods may vary.
 
 ## Installation and Updates
 
@@ -262,6 +263,82 @@ Under speech, you'll find toggles for reading subtitles and toggling hero barks 
 
 The mod settings also features a debugg logging mode, which will write a log of live game data to a text file, stored in the same folder as the mod install. It is off by default, but you can turn it on to record bugs and send me the log to fix bugs faster.
 
+## Controls Overview
+### General Controls
+| Action | Keyboard | Controller |
+| ------ | -------- | ---------- |
+| Move mod focus | Arrow keys | LS or D-pad |
+| Activate focused item | Enter | A |
+| Back/Cancel/Close, pause | Escape | B |
+| Next region | Tab | RT |
+| Previous Container | Shift+Tab | LT |
+| Read Tooltips | Ctrl+arrow keys | LT+LS |
+| Read popup | , | LT+X
+| Open Character Sheet | C | X |
+| Quick Assign skills on character sheet | 1-4 | N/A |
+| Open Mod Settings | F10 | Select |
+
+### Hamlet Controls
+| Action | Keyboard | Controller |
+| ------ | -------- | ---------- |
+| Open Activity Log | . | RB |
+| Open Town Event | shift+, | LB |
+| Open Trinket Inventory | I | Y |
+Open building upgrades | U | LT |
+| Previous/next building | Page up/down | LT+LB/RB |
+jump to resource bar | R | move regions with LT/RT |
+| Reorder heroes in party/roster | Spacebar | LS click |
+| Embark/Provision/Set off | E | RS click |
+| Sell Trinket | Shift+enter | X |
+| Buy/Sell full stack of provisions | Shift+Enter | X |
+
+Building Shortcuts: From within the list of Hamlet locations or an open building screen, you can use the following keys to open a location directly.
+
+* A: Abbey
+ B: Blacksmith
+* C: Stagecoach
+* D: Districts
+* L: Guild
+* M: Ancestor's Memoirs
+* S: Sanitarium
+* T: Tavern
+* V: Survivalist
+* W: Nomad Wagon
+* Y: Graveyard
+* Z: Butcher's Circus
+
+### Dungeon/Combat Controls
+| Action | Keyboard | Controller |
+| ------- | -------- | ---------- |
+| Switch to map/inventory | Tab | Lt/RT |
+| Select previous/Next hero | Q/E | LB/RB |
+| Walk manually | A/D | RS |
+| Walk tile-by-tile | shift+A/D | LT+RS |
+| Dungeon interact/enter door/disarm trap | W | LT+A |
+| light torch | T | LT+Y |
+| Dim torch | shift+T | LT+B |
+| Snuff torch | ctrl+shift+T | LT+B repeatedly |
+| Read Light Meter | L | LT+LB |
+| Default party order | shift+enter on any hero | hold A on any hero |
+| Retreat/abandon quest/complete quest | Shift+escape | RS Click |
+| Open Combat Log | . | LT+RB |
+| Drop item from inventory | delete | Y |
+| rearrange items in inventory | spacebar | LS click |
+| Preview hallway tiles on map | Ctrl+arrows | LT+LS |
+| Return to party location on map | Home | LS click |
+| Action Bar Skills | 1-4 | N/A |
+| Action Bar Move | 5 | N/A |
+
+### Miscellaneous/DLC Controls
+| Action | Keyboard | Controller |
+| ------ | -------- | ---------- |
+| Swap to jeweler in Nomad Wagon (Color of Madness DLC) | left/right arrow keys | left/right d-pad |
+| Swap to shard mercenaries in Stagecoach (Color of Madness DLC) | left/right arrow keys | left/right D-pad |
+| Open Circus Trinkets | I | Y |
+| Ready/Start Match | E | RS Click |
+| Practice Match in the ring | P | RB |
+| Preview league ranks  in the ring | L | LB |
+
 ## Help & Feedback
 Join [My Discord](https://discord.gg/avQTPGy2FA) to get help, report bugs, or offer your suggestions.
 
@@ -272,3 +349,5 @@ Donations are not expected. I do this because I like games and am passionate abo
 ---
 
 Disclaimer: Blindest Dungeon is not an official Red Hook Studios product or product modification, and Red Hook Studios Inc. is not responsible in any way for changes or damages that may result from using the mod. Furthermore, “Darkest Dungeon” and the Darkest Dungeon logo are trademarks of Red Hook Studios Inc. All content in the game is Copyright Red Hook Studios Inc. All rights reserved.
+
+Note: AI coding agents were used in the development of this mod.

@@ -43,7 +43,7 @@ static const uintptr_t OE_ANIM_OFF            = 0xdb0;
 static const uintptr_t OE_PREVSTATE_OFF       = 0xd8c;
 static const uintptr_t PROP_CLEAR_ITEM_VOFF   = 0x30;     // DoorProp vftable[6]: clear-with-item virtual
 
-static const int OE_MAX_ROWS = 4;
+static const int OE_MAX_ROWS = 5;
 
 // ---- The EVENT overlay: reader, cursor and appearance watch ----
 enum EvSkin { EV_NONE = 0, EV_CURIO, EV_OBSTACLE, EV_ANCESTOR, EV_HUNGER };
@@ -54,6 +54,7 @@ struct EvRow {
     uintptr_t actionRva;
     int64_t   focusId;
     bool      isItemSlot;
+    bool      isHead;
     float     capFloat;       // extra capture value; only hunger's Eat uses it
     bool      enabled;        // false = the game draws this row greyed out
 };
@@ -215,6 +216,16 @@ static int evBuildRows(uintptr_t base, EvRow* rows, int* skinOut,
     evHeadFor(base, skin, prop, pt, title, titlesz, flavour, flavoursz);
 
     int n = 0;
+    {
+        EvRow* h = evAddRow(base, rows, &n, nullptr, nullptr, 0, 0, 0.0f);
+        if (h) {
+            h->isHead = true;
+            _snprintf(h->name, sizeof h->name, "%s", title[0] ? title : axs(AXS_EV_TITLE_FALLBACK));
+            h->name[sizeof h->name - 1] = 0;
+            _snprintf(h->desc, sizeof h->desc, "%s", flavour);
+            h->desc[sizeof h->desc - 1] = 0;
+        }
+    }
     if (skin == EV_CURIO) {
         char cat[64] = { 0 }, ui[96] = { 0 };
         evPropString(pt, PT_CATEGORY_OFF, cat, sizeof cat);
@@ -296,11 +307,16 @@ static int evBuildRows(uintptr_t base, EvRow* rows, int* skinOut,
     return n;
 }
 
-// "Investigate. Search the tent..." — one row, with its position in the list.
 static void evRowLine(const EvRow* r, int idx, int total, char* out, int outsz) {
+    if (r->isHead) {
+        if (r->desc[0]) _snprintf(out, outsz, "%s. %s.", r->name, r->desc);
+        else            _snprintf(out, outsz, "%s.", r->name);
+        out[outsz - 1] = 0;
+        return;
+    }
     const char* name = r->name[0] ? r->name : axs(AXS_EV_CHOICE_FALLBACK);
     char pos[48];
-    _snprintf(pos, sizeof pos, axs(AXS_POS_N_OF_M), idx + 1, total);
+    _snprintf(pos, sizeof pos, axs(AXS_POS_N_OF_M), idx, total - 1);
     pos[sizeof pos - 1] = 0;
     const char* dead = r->enabled ? "" : axs(AXS_EV_UNAVAILABLE);
     if (r->desc[0] && !r->enabled)
@@ -321,9 +337,11 @@ static bool evOpeningLine(uintptr_t base, char* out, int outsz) {
     int n = evBuildRows(base, rows, &skin, title, sizeof title, flavour, sizeof flavour);
     if (n <= 0) return false;
 
-    int at = (g_evRow >= 0 && g_evRow < n) ? g_evRow : 0;
+    int at = (g_evRow >= 0 && g_evRow < n) ? g_evRow : (n > 1 ? 1 : 0);
     char row[MAILBOX_SZ];
     evRowLine(&rows[at], at, n, row, sizeof row);
+
+    if (rows[at].isHead) { _snprintf(out, outsz, "%s", row); out[outsz - 1] = 0; return true; }
 
     if (flavour[0])
         _snprintf(out, outsz, "%s. %s. %s", title[0] ? title : axs(AXS_EV_TITLE_FALLBACK),
@@ -345,7 +363,7 @@ void checkEventOverlay(uintptr_t base) {
 
     if (up && g_evActive && skin != g_evSkin) {
         g_evSkin = skin;
-        g_evRow  = 0;
+        g_evRow  = 1;
         g_evPickItem = false;           // a different scroll: the old pick is meaningless
         char utter[MAILBOX_SZ];
         if (evOpeningLine(base, utter, sizeof utter)) postSpeech(utter);
@@ -364,7 +382,7 @@ void checkEventOverlay(uintptr_t base) {
     }
 
     g_evSkin = skin;
-    g_evRow  = 0;
+    g_evRow  = 1;
     g_evPickItem = false;
 
     EvRow rows[OE_MAX_ROWS];
@@ -857,6 +875,13 @@ bool routeEventKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
         if (repeat) return true;
         const EvRow* r = &rows[g_evRow];
 
+        if (r->isHead) {
+            char buf[MAILBOX_SZ];
+            evRowLine(r, g_evRow, n, buf, sizeof buf);
+            postSpeech(buf);
+            return true;
+        }
+
         if (r->isItemSlot) {
             int slots = invSlotCount(base);
             if (slots <= 0) {
@@ -939,4 +964,23 @@ bool routeEventKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
     logLine("eventnav dir=%+d row %d -> %d (of %d)", dir, from, g_evRow, n);
     postSpeech(buf);
     return true;
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool evFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_evActive || g_evPickItem) return false;
+    EvRow rows[OE_MAX_ROWS];
+    int skin = EV_NONE;
+    char title[256], flavour[1024];
+    int n = evBuildRows(base, rows, &skin, title, sizeof title, flavour, sizeof flavour);
+    for (int i = 0; i < n; i++) {
+        if (!rows[i].focusId || rows[i].focusId != id) continue;
+        g_evRow = i;
+        char out[MAILBOX_SZ];
+        evRowLine(&rows[i], i, n, out, sizeof out);
+        postSpeech(out);
+        return true;
+    }
+    return false;
 }

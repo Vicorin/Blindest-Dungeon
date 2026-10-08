@@ -43,6 +43,8 @@ static char      g_rosHoldName[80];      // ... its name, read once at pick-up t
 
 static void rosEnterFromParty(uintptr_t base, uintptr_t hero, int pickSlot);
 static void rosResumeFromSheet(uintptr_t base);
+static void rosHoverRetarget(uintptr_t base, int row, uintptr_t entry);
+static void rosServiceHover(uintptr_t base);
 static bool rosSehSetState(uintptr_t base, uintptr_t system, uintptr_t entry, int state);
 void ptyLeave(uintptr_t base, const char* why);
 // The trinket pick's own resume (from = 3), defined with that flow further down.
@@ -693,6 +695,7 @@ void checkParty(uintptr_t base) {
                                                  //  which cannot outlive the town either)
         g_rosOnBar = false;
         g_rosBarCol = 0;
+        rosHoverRetarget(0, -1, 0);              // the follower's target died with the town
         g_ptySheetWatchUntil = 0;
         g_ptyResume = false;
         g_ptySheetHero = 0;
@@ -750,6 +753,8 @@ void checkParty(uintptr_t base) {
             ptySpeakRow(base, ptyHeader(base, hdr, sizeof hdr));
         }
     }
+
+    if (g_rosActive) rosServiceHover(base);      // keep the game's hover (and scroll) on the row
 }
 
 void checkPartyStrip(uintptr_t base) {
@@ -909,6 +914,7 @@ static RosRow g_rosRows[ROS_MAX_ROWS];
 static int    g_rosCount  = 0;
 static int    g_rosRow    = 0;
 static bool   g_rosDumped = false;
+static const uint32_t ROS_PORTRAIT_ID_BASE = 0x72736272u;
 
 bool axIsRoster() { return g_rosActive; }
 
@@ -939,8 +945,31 @@ static int rosCollect(uintptr_t base, bool probe) {
             safeReadU32(entry + ROS_ENTRY_MISSING_OFF, &missing);
             logLine("roster probe: row %d entry=%p \"%s\" state=%u building=\"%s\" missing=%u",
                     g_rosCount, (void*)entry, name, state, bld, missing);
+            if (axDebugLogEnabled()) {
+                uint32_t guid = 0;
+                safeReadU32(entry, &guid);
+                int64_t pid = (int64_t)(uint64_t)(ROS_PORTRAIT_ID_BASE + guid);
+                uintptr_t el = feGetElementById(pid);
+                float cx = 0, cy = 0;
+                if (el && elemCenter(el, &cx, &cy))
+                    logLine("roster probe:   guid=%u portrait id=0x%llx registered centre=(%.0f,%.0f)",
+                            guid, (unsigned long long)pid, cx, cy);
+                else
+                    logLine("roster probe:   guid=%u portrait id=0x%llx NOT registered (off screen)",
+                            guid, (unsigned long long)pid);
+            }
         }
         g_rosCount++;
+    }
+    if (probe && axDebugLogEnabled()) {
+        uint32_t offBits = 0, cur = 0, clamp = 0, applied = 0;
+        safeReadU32(rl + 0x1d8, &offBits);
+        safeReadU32(rl + 0x3e0, &cur);
+        safeReadU32(rl + 0x3e4, &clamp);
+        safeReadU32(rl + 0x3e8, &applied);
+        logLine("roster probe: %d rows; list scroll (unverified offsets) +0x1d8=%.1f +0x3e0=%d "
+                "+0x3e4=%d +0x3e8=%d", g_rosCount, u32AsFloatM(offBits), (int)cur, (int)clamp,
+                (int)applied);
     }
     return g_rosCount;
 }
@@ -1042,12 +1071,104 @@ static void rosSpeakBar(uintptr_t base, const char* prefix) {
     postSpeech(utter);
 }
 
+// ---- ROSTER FOCUS FOLLOWER ----
+static const uintptr_t ROS_CURSOR_OFF   = 0x3e0;
+static const uintptr_t ROS_ROWCOUNT_OFF = 0x3e4;
+static const uintptr_t ROS_APPLIED_OFF  = 0x3e8;
+static const uintptr_t ROS_SCROLL_OFF   = 0x1d8;
+static const float ROS_DESIGN_H = 1080.0f;
+static uintptr_t g_rosHoverEntry  = 0;
+static float     g_rosHoverRefY   = -1.0e6f; // last frame's portrait centre Y (stillness check)
+static int       g_rosHoverStable = 0;       // consecutive still frames
+static bool      g_rosHoverWarped = false;   // cursor delivered onto the settled portrait
+static bool      g_rosHoverWaitLogged = false;
+
+static int64_t rosPortraitIdOf(uintptr_t entry) {
+    uint32_t guid = 0;
+    if (!entry || !safeReadU32(entry, &guid) || !guid) return 0;
+    return (int64_t)(uint64_t)(ROS_PORTRAIT_ID_BASE + guid);
+}
+
+static void rosHoverRetarget(uintptr_t base, int row, uintptr_t entry) {
+    g_rosHoverEntry  = entry;
+    g_rosHoverRefY   = -1.0e6f;
+    g_rosHoverStable = 0;
+    g_rosHoverWarped = false;
+    g_rosHoverWaitLogged = false;
+    if (row < 0 || !entry) return;
+    uintptr_t list = rosPanel(base);
+    if (!list) return;
+    uint32_t before = 0xffffffff, count = 0;
+    safeReadU32(list + ROS_CURSOR_OFF, &before);
+    safeReadU32(list + ROS_ROWCOUNT_OFF, &count);
+    if (count && (uint32_t)row >= count) {         // never hand the update an index it must clamp
+        logLine("roster focus: row %d >= the list's row count %u -- cursor NOT written", row + 1, count);
+        return;
+    }
+    if (!safeWriteU32(list + ROS_CURSOR_OFF, (uint32_t)row)) {
+        logLine("roster focus: writing the selection cursor FAULTED (list=%p)", (void*)list);
+        return;
+    }
+    if (axDebugLogEnabled()) {
+        int64_t id = rosPortraitIdOf(entry);
+        uintptr_t el = id ? feGetElementById(id) : 0;
+        float cx = 0, cy = 0;
+        bool on = el && elemCenter(el, &cx, &cy);
+        logLine("roster focus: cursor %d -> %d of %u (entry=%p portrait 0x%llx %s%s)",
+                (int)before, row, count, (void*)entry, (unsigned long long)id,
+                on ? "on screen at " : "not registered: off screen, the game's update scrolls it in",
+                on ? "" : "");
+        if (on) logLine("roster focus:   portrait centre (%.0f,%.0f)", cx, cy);
+    }
+}
+
+static void rosServiceHover(uintptr_t base) {
+    if (!g_rosActive || !g_rosHoverEntry) return;
+    if (g_rosHoverWarped) return;                      // delivered; the next landing re-arms
+    if (clickQueued()) return;                         // a click or drag owns the cursor
+    if (g_rosPickAct && bldActPickBusy()) return;      // the pick's outcome (dialog) is in flight
+    if (!axContextIs(AX_ROSTER)) return;               // a modal is on top of the roster
+
+    int64_t id = rosPortraitIdOf(g_rosHoverEntry);
+    if (!id) return;
+    uintptr_t el = feGetElementById(id);
+    float tx = 0, ty = 0;
+    if (!el || !elemCenter(el, &tx, &ty) || ty < 0.0f || ty > ROS_DESIGN_H) {
+        if (!g_rosHoverWaitLogged && axDebugLogEnabled()) {
+            g_rosHoverWaitLogged = true;
+            uintptr_t list = rosPanel(base);
+            uint32_t cur = 0, app = 0, offBits = 0;
+            if (list) { safeReadU32(list + ROS_CURSOR_OFF, &cur); safeReadU32(list + ROS_APPLIED_OFF, &app);
+                        safeReadU32(list + ROS_SCROLL_OFF, &offBits); }
+            logLine("roster focus: row off screen, waiting for the game's scroll (cursor=%d applied=%d "
+                    "offset=%.1f)", (int)cur, (int)app, u32AsFloatM(offBits));
+        }
+        g_rosHoverStable = 0;
+        return;
+    }
+    bool moved = (ty < g_rosHoverRefY - 1.0f) || (ty > g_rosHoverRefY + 1.0f);
+    g_rosHoverRefY = ty;
+    if (moved) { g_rosHoverStable = 0; return; }       // the scroll's ease is still running
+    if (++g_rosHoverStable < 2) return;
+    g_rosHoverWarped = true;
+    moveCursorTo(tx, ty);                              // the game's mouse focus lands on the row too
+    if (axDebugLogEnabled()) {
+        uintptr_t list = rosPanel(base);
+        uint32_t cur = 0, app = 0, offBits = 0;
+        if (list) { safeReadU32(list + ROS_CURSOR_OFF, &cur); safeReadU32(list + ROS_APPLIED_OFF, &app);
+                    safeReadU32(list + ROS_SCROLL_OFF, &offBits); }
+        logLine("roster focus: hover on row %d's portrait at (%.0f,%.0f); list cursor=%d applied=%d "
+                "offset=%.1f", g_rosRow + 1, tx, ty, (int)cur, (int)app, u32AsFloatM(offBits));
+    }
+}
+
 static void rosSpeakRow(uintptr_t base, const char* prefix) {
-    if (g_rosOnBar) { rosSpeakBar(base, prefix); return; }
+    if (g_rosOnBar) { rosHoverRetarget(base, -1, 0); rosSpeakBar(base, prefix); return; }
     int n = rosCollect(base, false);
     if (n <= 0) { postSpeech(axs(AXS_ROS_NO_ROSTER)); return; }
     axStepCursor(&g_rosRow, n, 0);           // re-clamp against the live roster
     const RosRow* r = &g_rosRows[g_rosRow];
+    rosHoverRetarget(base, g_rosRow, r->entry);  // the game's own roster cursor follows ours
     char card[512], status[160], posln[64];
     ptyHeroFragEx(base, r->hero, card, sizeof card, true, false);
     rosStatusFrag(base, r->entry, status, sizeof status);
@@ -1077,8 +1198,10 @@ void rosReannounce(uintptr_t base) {
 }
 
 static void rosEnterFromParty(uintptr_t base, uintptr_t hero, int pickSlot) {
-    int n = rosCollect(base, !g_rosDumped);
+    bool firstEntry = !g_rosDumped;
+    int n = rosCollect(base, firstEntry);
     g_rosDumped = true;
+    if (firstEntry) feDumpFocusVector("roster entry");
     if (n <= 0) { postSpeech(axs(AXS_ROS_NO_ROSTER)); return; }
     g_rosActive = true;
     g_ptyActive = false;
@@ -1118,6 +1241,7 @@ void rosLeave(uintptr_t base, const char* why) {
     g_rosPickSlot = -1;
     g_rosPickAct = false;
     g_rosHoldEntry = 0;                          // a held hero never survives leaving the surface
+    rosHoverRetarget(base, -1, 0);
     logLine("roster: %s -> stood down to the surface underneath", why);
 }
 
@@ -1203,8 +1327,8 @@ static void rosApplySort(uintptr_t base, int idx) {
         postSpeech(axs(AXS_ROS_SORT_DIDNT_HAPPEN));
         return;
     }
-    // Keep the cursor on the hero it was on; the list moved underneath it.
     if (focus) for (int i = 0; i < n2; i++) if (g_rosRows[i].entry == focus) { g_rosRow = i; break; }
+    if (focus) rosHoverRetarget(base, g_rosRow, focus);
 
     char label[128] = {0};
     if (!resolveKey(base, s->locKey, label, sizeof label) || !label[0])
@@ -1315,7 +1439,13 @@ static bool rosAssignToSlot(uintptr_t base, int row, int slot) {
     logLine("roster: pick adds %s call=%d state %u -> %u (slot %d = position %d)",
             who, called ? 1 : 0, before, now, slot, g_ptyCount - slot);
     if (now != 1) {
-        _snprintf(utter, sizeof utter, axs(AXS_ROS_CANT_JOIN_FMT), who);
+        char line[192];
+        _snprintf(line, sizeof line, axs(AXS_ROS_CANT_JOIN_FMT), who);
+        line[sizeof line - 1] = 0;
+        bool noQuest = !embQuestIsSelected(base);
+        if (noQuest) logLine("roster: ... and no quest is selected -- naming it");
+        _snprintf(utter, sizeof utter, "%s%s%s", line, noQuest ? " " : "",
+                  noQuest ? axs(AXS_ROS_CANT_JOIN_NO_QUEST) : "");
         utter[sizeof utter - 1] = 0;
         postSpeech(utter);
         return true;
@@ -1466,6 +1596,7 @@ static void rosCommitMove(uintptr_t base, int targetRow) {
 
     if (nowRow < 0) { postSpeech(axs(AXS_MOVE_DIDNT_HAPPEN)); return; }
     g_rosRow = nowRow;
+    rosHoverRetarget(base, nowRow, entry);
     char utter[MAILBOX_SZ];
     _snprintf(utter, sizeof utter, axs(AXS_ROS_MOVED_TO_FMT), g_rosHoldName, nowRow + 1, n2);
     utter[sizeof utter - 1] = 0;
@@ -1641,6 +1772,11 @@ bool routeTownTab(uintptr_t base, uint32_t sym, uint8_t repeat) {
     if (!resTownRoot(base)) return false;        // not in town: Tab stays the game's
 
     if (g_ptyActive) { ptyLeave(base, "Tab"); return true; }
+    if (g_resActive && tmbBareMap(resTownRoot(base))) {
+        g_resActive = false;
+        logLine("resources: Tab -> stand down to the locations list");
+        return true;
+    }
     if (g_rosActive) {
         if (g_rosPickAct) {                      // mid-ACTIVITY-pick: Tab cancels, like Escape
             if (bldActPickBusy()) { postSpeech(axs(AXS_STILL_WORKING)); return true; }
@@ -1658,6 +1794,7 @@ bool routeTownTab(uintptr_t base, uint32_t sym, uint8_t repeat) {
             return true;
         }
         rosLeave(base, "Tab");
+        if (tmbBareMap(resTownRoot(base))) return routeResourcesToggle(base, SDLK_r, 0);
         return true;
     }
     if (axIsProvision() && provTabToInfo(base)) return true;
@@ -1668,6 +1805,19 @@ bool routeTownTab(uintptr_t base, uint32_t sym, uint8_t repeat) {
 bool routeTownShiftTab(uintptr_t base, uint8_t repeat) {
     uintptr_t root = resTownRoot(base);
     if (!root) return false;                     // not in town: Shift+Tab stays the game's
+    if (!embProvIsOpen(root) && tmbBareMap(root)) {
+        if (repeat) return true;
+        if (g_resActive) {
+            g_resActive = false;
+            logLine("resources: Shift+Tab -> the roster");
+            return rosEnterFromTown(base);
+        }
+        if (g_rosActive && g_rosPickSlot < 0 && !g_rosPickAct) {
+            rosLeave(base, "Shift+Tab");         // checkTownMap's edge re-enters the list
+            return true;
+        }
+        if (!g_rosActive && !g_ptyActive) return routeResourcesToggle(base, SDLK_r, 0);
+    }
     if (!embProvIsOpen(root)) return routeTownTab(base, SDLK_TAB, repeat);
     if (repeat) return true;                     // held key must not flap the context
     if (g_ptyActive) {
@@ -2045,4 +2195,16 @@ void serviceTrkPick(uintptr_t base) {
     } else {
         postSpeech(prefix);
     }
+}
+
+// ---- PAD FOCUS FOLLOWER ----
+bool ptyFocusSync(uintptr_t base, int64_t id, uint32_t owner) {
+    (void)owner;
+    if (!g_ptyActive) return false;
+    uint32_t d = (uint32_t)(uint64_t)id - (uint32_t)PTY_SLOT_ELEM_BASE;
+    int n = ptyCollect(base, false);
+    if (n <= 0 || d >= (uint32_t)n) return false;
+    g_ptyRow = (int)d;
+    ptySpeakRow(base, nullptr);
+    return true;
 }

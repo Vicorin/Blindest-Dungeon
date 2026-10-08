@@ -74,6 +74,8 @@ bool axReadTownBarks();                // mode is On or Only in town
 bool axReadDungeonBarks();             // mode is On or Only in dungeons
 bool axCheckUpdates();
 void axSetCheckUpdates(bool on);
+bool axPositionCounts();
+void axSetPositionCounts(bool on);
 // ---- Speech OUTPUT settings ----
 enum { AX_SPEECH_AUTO = 0, AX_SPEECH_PRISM = 1, AX_SPEECH_SAPI = 2, AX_SPEECH_MODES = 3 };
 enum { AX_SPCFG_SAPI = 1, AX_SPCFG_BACKEND = 2 };   // request kinds; a pending heavier one wins
@@ -246,7 +248,9 @@ bool synthDragElements(int64_t srcId, int64_t dstId, const char* what);  // ...b
 bool emitSynth(void* ev);                       // OurPoll: hand the game a due synthetic event
 void advanceSynthFrame();                       // OurPoll: pump ended -> release next frame's
 bool clickQueued();                             // a press is already pending -> don't re-arm
-void enqueueSynthKey(uint32_t type, uint32_t scancode, uint32_t sym, uint16_t mod);
+bool enqueueSynthKey(uint32_t type, uint32_t scancode, uint32_t sym, uint16_t mod);   // false = queue full, DROPPED
+bool enqueueSynthKeyAt(uint32_t type, uint32_t scancode, uint32_t sym, uint16_t mod, int frameDelay);
+void synthHoldShift(int frames);
 bool emitSynthKey(void* ev);                    // OurPoll: same, for the key queue
 // ---- Input module (input/layout.cpp): the KEYBOARD LAYOUT FOLD, 2026-08-16 ----
 bool klFold(uintptr_t base, uint32_t* sym, uint32_t scan);  // true = *sym rewritten to a canonical
@@ -273,6 +277,54 @@ void logJoyDeviceEvent(void* ev);
 void logInputSnapshot(uintptr_t base, const char* why);
 void diagDumpFocusElements(uintptr_t base, const char* why);
 bool readInputEnableStack(uintptr_t base, int* gateOut, int* sizeOut);
+
+// ---- Input module (input/pad.cpp): the GAMEPAD READER, 2026-10-02 ----
+enum PadAction {
+    PAD_A = 0, PAD_B = 1, PAD_X = 2, PAD_Y = 3, PAD_START = 4, PAD_BACK = 5, PAD_LB = 6, PAD_RB = 7,
+    PAD_LS_CLICK = 8, PAD_RS_CLICK = 9, PAD_DPAD_LEFT = 10, PAD_DPAD_RIGHT = 11, PAD_DPAD_UP = 12,
+    PAD_DPAD_DOWN = 13, PAD_LT = 14, PAD_RT = 15,
+    PAD_ACTION_COUNT = 25
+};
+void servicePad(uintptr_t base);
+bool padPressed(int action);                   // press edge current (any attached pad)
+bool padReleased(int action);                  // release edge current
+bool padDown(int action);                      // pressed or held on the last read
+bool padIsDriving();                           // the game's own "a controller is in charge" test
+int  padCount();                               // pads the poll serviced on the last read
+void padStick(int stick, float* x, float* y);  // 0 = left, 1 = right; -1..1 with the detours in,
+                                               //   the poll's scaled units without them
+const char* padActionName(int action);         // log name ("A", "dpad up", ...)
+// ---- THE PAD DETOURS -- pad.cpp's header says why ----
+uint8_t OurPadGetButton(void* ctrl, int button);   // SDL_GameControllerGetButton detour
+int16_t OurPadGetAxis(void* ctrl, int axis);       // SDL_GameControllerGetAxis detour
+void padSetOriginals(void* origGetButton, void* origGetAxis);   // hooks.cpp, once; both or neither
+bool padHooksInstalled();                      // both detours live -> the translator may claim
+uint32_t padSampleSeq();                       // changes once per new pad sample (frame)
+void padSetClaim(uint32_t actionBits, bool leftStick, bool triggers, bool rightStick);   // the policy, per pass
+bool padClaimActive();                         // the detours are hiding something from the game
+void padMuteGame(DWORD ms);
+// ---- Input module (input/padmap.cpp): the PAD -> KEY TRANSLATOR, 2026-10-02 ----
+void servicePadMap(uintptr_t base);
+bool padMapActive();                           // the translator is claiming the pad this frame
+bool axRoutePadKey(uintptr_t base, uint32_t type, uint32_t sym, uint16_t mod, uint8_t repeat,
+                   bool passToGame);
+// ---- PAD FOCUS FOLLOWERS ----
+bool tmFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // town/map.cpp
+bool ptyFocusSync(uintptr_t base, int64_t id, uint32_t owner);    // town/party.cpp (lineup)
+bool bldFocusSync(uintptr_t base, int64_t id, uint32_t owner);    // town/buildings.cpp
+bool provFocusSync(uintptr_t base, int64_t id, uint32_t owner);   // town/provision.cpp
+bool embFocusSync(uintptr_t base, int64_t id, uint32_t owner);    // town/embark.cpp
+bool dstFocusSync(uintptr_t base, int64_t id, uint32_t owner);    // town/districts.cpp
+bool riFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // town/trinkets.cpp
+bool exFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // town/exchange.cpp
+bool evFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // raid/eventscroll.cpp
+bool mealFocusSync(uintptr_t base, int64_t id, uint32_t owner);   // raid/camp.cpp
+bool ctFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // raid/camp.cpp
+bool qcFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // raid/quest.cpp
+bool ringFocusSync(uintptr_t base, int64_t id, uint32_t owner);   // dlc/butchers_circus/ring.cpp
+bool csFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // sheet/charsheet.cpp
+bool abFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // raid/actionbar.cpp
+bool feFocusSync(uintptr_t base, int64_t id, uint32_t owner);     // frontend/display.cpp (content rows)
 
 // ---- Frontend module (frontend/display.cpp): FRONTENDDISPLAY + the NAVIGATOR ----
 struct FourCcLabel { uint32_t code; const char* key; AxStrId fallback; };
@@ -343,6 +395,7 @@ enum AxContext {
 };
 AxContext currentAxContext();                   // the active context (defined with the table)
 bool axModalClosed(uintptr_t base, const char* who);
+bool axContextIs(AxContext c);
 
 // ---- Helpers still DEFINED in dllmain.cpp that surface modules call ----
 bool axDecodeArrow(uint32_t sym, uint16_t mod, uint8_t repeat, bool wantCols,
@@ -451,7 +504,8 @@ static const char* const INV_DESC_PREFIX     = "str_inventory_description_";
 static const char* const PROV_SHARD_NAME_KEY = "str_inventory_title_shard";
 
 static const int       TL_WALK_KIDS_MAX    = 96;        // sanity cap on any children vector
-static const int       TL_WALK_NODES_MAX   = 1024;      // total node budget per collect
+static const int       TL_WALK_NODES_MAX   = 1024;
+static const int       TL_LIST_CELLS_MAX   = 16384;     // cap on a top-level list's cell vector
 static const int       TL_ROW_MAX          = 384;       // bytes per collected row / fragment
 static const int       TL_FRAGS_MAX        = 16;        // fragments gathered per entry
 
@@ -555,6 +609,7 @@ static const int EMB_NAME_MAX = 128;
 bool embPartyName(uintptr_t base, char* out, int outsz);  // the party-combo name, if on screen
 bool embSelectedQuestFacts(uintptr_t base, char* dungeon, int dsz, char* lengthS, int lsz,
                            char* diffS, int dfsz);
+bool embQuestIsSelected(uintptr_t base);
 
 // ---- Town module (town/provision.cpp): the PROVISIONING screen ----
 void checkProvision(uintptr_t base);
@@ -575,6 +630,7 @@ bool axIsBld();
 void bldReannounce(uintptr_t base);
 bool routeTownJumpKey(uintptr_t base, const char* id, bool fromBuilding, uint8_t repeat);
 uintptr_t bldOpenPanel(uintptr_t root);         // the OPEN building's interior panel (0 = none)
+bool bldColumnsLiveFor(uintptr_t base, const char* id);
 extern int  g_bldRecDrag;
 extern bool g_qtOpen;                      // a sanitarium dropdown is open
 // ---- The ACTIVITY PICK, roster edition ----
@@ -715,8 +771,11 @@ void announceTownEventPopup(uintptr_t base, uintptr_t self);  // the slot-23 det
 void checkTownEventDismissed(uintptr_t base); // OurPoll: popup left -> release hold, hand back
 bool townEventPopupActive();
 bool axIsTownEvent();
+bool teSheetOnTop();
+                                        // AX_CHARSHEET row directly under AX_TOWNEVENT)
 bool townEventEnterClaims();            // popup up AND the event has an interaction
 bool routeTownEventEnter(uintptr_t base);     // pre-dispatch: click the interaction button
+bool routeTownEventToggle(uintptr_t base, uint8_t repeat);   // Shift+Period: the estate bar's event button
 bool townEventHeroKeysClaim();
 bool routeTownEventHeroKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
 void teReannounce(uintptr_t base);
@@ -745,6 +804,7 @@ void openMapReview(uintptr_t base, uintptr_t root);  // announce the layer + res
                                            //   the party (the M key's re-orientation press)
 void armPanelHandoff(const char* why);
 bool twBeginStep(uintptr_t base, uint32_t sym, uint32_t scan);  // Shift+D / Shift+A
+bool twBeginStepToProp(uintptr_t base, uintptr_t prop);  // the dungeon view's Enter on an
 bool rvPropReach(uintptr_t base, uintptr_t prop, bool* inReachOut, int* dirOut, float* dxOut);
 int  rvRoomProps(uintptr_t base, uintptr_t* out, int max);
 bool rvPropIsTrap(uintptr_t prop);
@@ -813,12 +873,22 @@ int  rvSkillCount(uintptr_t mon, uintptr_t* begOut);            // the MonsterCl
 int  rvRankFromGame(uintptr_t actor, uint32_t* rawOut = nullptr, int* endOut = nullptr);
 void rvPosPhrase(int slot, int slotEnd, bool enemy, char* out, int outsz);  // "position 2" / a span
 void rvPosForEntry(const RvEntry& e, char* out, int outsz);     // ...the same, for a built row
+const char* rvShapeFormWord(uintptr_t mon);
+uint32_t rvCaptorPrisonerGuid(uintptr_t mon);
+bool     rvCaptiveHeroName(uintptr_t base, uintptr_t mon, char* out, int outsz);
+bool     rvMonsterClassName(uintptr_t base, uintptr_t mon, char* out, int outsz);
+bool rvRankMarksOf(uintptr_t mon, uint32_t* maskOut);                       // false = unreadable
+bool rvRankMarkName(uintptr_t base, uintptr_t mon, char* out, int outsz);   // the marking skill's name
+void rvRankMarkRanks(uint32_t mask, char* out, int outsz);                  // "rank 2" / "ranks 2, 4"
+bool rvRankMarkClause(uintptr_t base, int slot, int slotEnd, char* out, int outsz);  // a marked rank's row clause
 void rvAppendComma(char* out, int outsz, const char* frag);     // ", frag" with the sentence stop
 void rvTrapDisarmSuffix(uintptr_t base, uintptr_t hero, char* out, int outsz);
 void rvSpeakTipLine(uintptr_t base, int tipDir);                // THE shared Ctrl+Up/Down reader
 extern int g_rvTipLine;
 bool rvTipPanelSwitch(uintptr_t base, int dir, bool repeat);
 extern int g_rvTipCol;
+int  rvRoomIndexOfActor(uintptr_t base, uintptr_t actor);
+void rvSpeakRank(uintptr_t base, bool enemy, int rank);
 int  spHeroTipLines(uintptr_t base, uintptr_t hero, int slot, int slotEnd, bool withTitle,
                     bool enemy, char lines[][AB_TIP_LINE_SZ], int n, int maxLines);
 void propPrettyName(const char* id, char* out, int outsz);
@@ -886,6 +956,7 @@ int  campPoints(uintptr_t base);
 bool campPointsText(uintptr_t base, char* out, int outsz);
 // Up out of the dungeon view: the quest zone's own entry.
 bool qtEnterFromRoom(uintptr_t base);
+void qtActivateButton(uintptr_t base);
 bool routeQuestToggle(uintptr_t base, uint32_t sym, uint8_t repeat);
 void tsSetActive(bool on);
 void iuAbandon(const char* why);
@@ -903,6 +974,12 @@ bool routeActionKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
 bool routeActionToggle(uintptr_t base, uint32_t sym, uint8_t repeat);   // ` : open / close
 bool routeTargetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
 bool abActivate(uintptr_t base, const ActionItem* it, int slotCount, int abCursor);  // Enter
+bool abClickHeroRank(uintptr_t base, int rank);
+bool abBeginMoveSelected(uintptr_t base);
+bool abReorderPartyNow(uintptr_t base);          // press the "Default Party order" button
+bool rvCursorOnParty(uintptr_t base);
+bool rvCursorOnDoor(uintptr_t base);
+void serviceRvMovePend(uintptr_t base);
 uintptr_t abCurrentTurnActor(uintptr_t root);   // whose turn the battle says it is
 bool abBattleLive(uintptr_t root);               // is a battle actually running (raid root's
 bool abMoveWatchArmed();
@@ -1000,8 +1077,11 @@ void serviceCombatText(uintptr_t base);       // the popup prop map -> speak + r
 void serviceAnnouncement(uintptr_t base);     // the banner vector the game's timeline publishes
 void serviceBark(uintptr_t base);             // the front of the raid event ring
 void clogSetOpen(bool on);                    // the raid teardown drops the log's hold
+void clogAdd(const char* line);               // record one line in the scrollback (no speech;
 bool routeLogKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);   // AX_COMBATLOG
 bool routeLogToggle(uintptr_t base, uint32_t sym, uint8_t repeat);              // the '\' key
+bool clogClearAskActive();
+void clogReannounceClearAsk(uintptr_t base);  // axSayAgain re-reads it ahead of the table, since
 
 // ---- Raid module (raid/quest.cpp): THE QUEST ZONE, RETREAT, AND THE DONE POPUP ----
 void serviceQuestRetreatWatch();
@@ -1138,7 +1218,7 @@ static const uint32_t  SDLK_r               = 0x72;   // 'r' — toggles the in-
 static const uint32_t  SDLK_t               = 0x74;   // 't' — the GAME's torch key; only echoed
 static const uint32_t  SDLK_i               = 0x69;
 static const uint32_t  SDLK_m               = 0x6d;   // 'm' — in a raid: jump to the map panel
-static const uint32_t  SDLK_1               = 0x31;   // '1'..'5' — the game's own skill shortcuts,
+static const uint32_t  SDLK_1               = 0x31;
 static const uint32_t  SDLK_4               = 0x34;   //   rewired into the accessible targeting flow;
 static const uint32_t  SDLK_5               = 0x35;   //   1..4 also assign a slot on the char sheet
 static const uint32_t  SDLK_p               = 0x70;   // 'p' — no longer claimed (the town party
@@ -1146,6 +1226,8 @@ static const uint32_t  SDLK_c               = 0x63;   // 'c' — in the party ar
 static const uint32_t  SDLK_u               = 0x75;   // 'u' — in a building: the upgrade button
 static const uint32_t  SDLK_j               = 0x6a;   // 'j' — no longer claimed (the Jeweler it
 static const uint32_t  SDLK_e               = 0x65;
+static const uint32_t  SDLK_q               = 0x71;   // 'q' — in a raid: the game's PREVIOUS-hero select
+                                                      //   (never claimed; the pad's LB in the bag sends it)
 static const uint32_t  SDLK_g               = 0x67;   // 'g' — in a raid: jump to the quest goals zone
 static const uint32_t  SDLK_PERIOD          = 0x2e;   // '.' — toggles the combat log (raid) / activity
 static const uint32_t  SDLK_BACKSLASH       = 0x5c;   // '\' — no longer claimed (was the log toggle
@@ -1190,9 +1272,11 @@ int  spHeroItemLines(uintptr_t base, uintptr_t hero, int slot, int slotEnd, bool
 bool csItemsPanelRow(uintptr_t base, uintptr_t hero, int i, char* out, int outsz);
 bool csEquipRowFor(uintptr_t base, uintptr_t hero, int i, char* out, int outsz);
 bool spIncomingModsFrag(uintptr_t base, uintptr_t hero, const char* typeName, char* out, int outsz);
-int  csQuirkSectionCount(uintptr_t base);       // quirks (diseases filtered OUT)
-bool csQuirkRowText(uintptr_t base, int i, char* out, int outsz);
-int  csDiseaseSectionCount(uintptr_t base);     // diseases (the same list, filter reversed)
+int  csQuirkPosSectionCount(uintptr_t base);    // positive quirks
+bool csQuirkPosRowText(uintptr_t base, int i, char* out, int outsz);
+int  csQuirkNegSectionCount(uintptr_t base);    // negative quirks
+bool csQuirkNegRowText(uintptr_t base, int i, char* out, int outsz);
+int  csDiseaseSectionCount(uintptr_t base);     // diseases
 bool csDiseaseRowText(uintptr_t base, int i, char* out, int outsz);
 bool csHeroIsCursed(uintptr_t hero);
 bool      csHeroIsNeverAgain(uintptr_t hero);
@@ -1226,6 +1310,7 @@ static const uint32_t  SDLK_w               = 0x77;   // 'w' — town jump: the 
 static const uint32_t  SDLK_y               = 0x79;   // 'y' — town jump: the Graveyard
 static const uint32_t  SDLK_z               = 0x7a;   // 'z' — town jump: the Butcher's Circus
 static const uint32_t  SDLK_LCTRL           = 0x400000E0;
+static const uint32_t  SDLK_LSHIFT          = 0x400000E1;   // the pad's synthesised Shift (synthHoldShift)
 static const uint32_t  SDLK_RCTRL           = 0x400000E4;
 static const uint32_t  SDLK_RGUI            = 0x400000E7;   // top of the modifier range: the
 
@@ -1252,31 +1337,83 @@ static const uint8_t KM_SHIFT = 1;
 static const uint8_t KM_CTRL  = 2;
 static const uint8_t KM_ALT   = 4;
 struct KmChord { uint32_t sym; uint8_t mods; };
-struct KmEntry {
-    const char* id;        // stable save-file slug ("dungeon.step_forward")
-    KmRegion    region;    // whose bindings this belongs to
-    KmChord     def;
-    AxStrId     desc;
+struct PadBind { uint8_t in; uint8_t mod; uint8_t hold; };
+enum PmInput : uint8_t {
+    PI_A = 0, PI_B, PI_X, PI_Y, PI_START, PI_BACK, PI_LB, PI_RB, PI_LS_CLICK, PI_RS_CLICK,
+    PI_DPAD_LEFT, PI_DPAD_RIGHT, PI_DPAD_UP, PI_DPAD_DOWN, PI_LT, PI_RT,
+    PI_RS_LEFT, PI_RS_RIGHT, PI_RS_UP, PI_RS_DOWN,
+    PI_COUNT,
+    PI_NONE = 0xff
+};
+enum KmGroup : uint8_t {
+    KMG_GENERAL = 0, KMG_GENERAL_SHEET, KMG_HAMLET, KMG_HAMLET_BLDG, KMG_DUNGEON,
+    KMG_DUNGEON_SKILLS, KMG_DLC, KMG__COUNT
+};
+static const uint8_t KMS_TOWN    = 1;
+static const uint8_t KMS_DUNGEON = 2;
+static const uint8_t KMS_BOTH    = 3;
+enum KmTag : uint8_t {
+    KMX_ANY = 0, KMX_PARTYROW, KMX_DOORROW, KMX_BAG, KMX_LOOT, KMX_MAP, KMX_SHEET,
+    KMX_REALMINV, KMX_PROVISION, KMX_RING, KMX_BLDG, KMX_WAGON, KMX_COACH
+};
+// FLAGS.
+static const uint8_t KMF_FWD    = 1;
+static const uint8_t KMF_HELD   = 2;
+static const uint8_t KMF_REPEAT = 4;
+static const uint8_t KMF_GLOBAL = 8;
+static const int KM_SLOTS_MAX = 4;
+struct KmFunc {
+    const char* id;                 // stable save-file slug ("dungeon.walk")
+    KmGroup     group;
+    uint8_t     scope;              // KMS_*
+    KmTag       tag;
+    uint8_t     flags;              // KMF_*
+    AxStrId     name;               // the row's spoken name
+    int         slots;
+    const char* slotTok[KM_SLOTS_MAX];
+    AxStrId     slotName[KM_SLOTS_MAX];  // spoken slot name, AXS__COUNT = none
+    KmChord     defKey[KM_SLOTS_MAX];
+    PadBind     defPad[KM_SLOTS_MAX];
 };
 // keymap.cpp -- the table, the translation, the persistence:
 int  kmCount();
-const KmEntry* kmAt(int i);
-bool kmIsBlank(int i);
-KmChord kmCurrent(int i);
-int  kmAssign(int i, KmChord c);
-int  kmFirstBlank(KmRegion r);
+const KmFunc* kmAt(int i);
+int  kmFind(const char* id);             // function index by id, -1 if none
+bool kmKeyIsBlank(int f, int s);
+bool kmPadIsBlank(int f, int s);
+KmChord kmKeyCurrent(int f, int s);
+PadBind kmPadCurrent(int f, int s);
+int  kmAssignKey(int f, int s, KmChord c, int* victimSlot);   // returns the function cleared by conflict, or -1
+int  kmAssignPad(int f, int s, PadBind b, int* victimSlot);
+void kmClearKey(int f, int s);
+void kmClearPad(int f, int s);
+void kmRestoreKey(int f, int s);         // one slot back to its default (keyboard)
+void kmRestorePad(int f, int s);
+bool kmFirstBlankKey(int* f, int* s);
 bool kmDirty();                          // current differs from the open-time snapshot?
 void kmSnapshot();                       // menu open: remember the last-saved state
 void kmRevert();                         // "No" at the save question: back to the snapshot
 void kmSaveFile();
+void kmResetDefaults();
 void kmEnsureLoaded();                   // lazy one-time load of that file (main thread)
 KmRegion kmRegionNow(uintptr_t base, AxContext ctx);
+bool kmTagActive(uintptr_t base, AxContext ctx, KmTag tag);
 uint8_t kmChordModsFromKmod(uint16_t mod);
-int  kmRoute(uintptr_t base, AxContext ctx, uint32_t* sym, uint16_t* mod);  // 0 pass / 1 translated / 2 freed
+int  kmRoute(uintptr_t base, AxContext ctx, uint32_t* sym, uint16_t* mod, int* fnOut, int* slotOut);
+void kmForwardNote(int fn, int slot, uint32_t scan);
+bool kmForwardUnclaimed(uintptr_t base, bool repeat);   // repeat = swallow only, never a second synth
+bool kmForwardKeyUp(uint32_t scan);
+void kmForwardService(uintptr_t base);
+void kmSetBypass(bool on);
+bool kmIsCurrentKey(int f, uint32_t sym, uint16_t mod);
 void kmChordName(KmChord c, char* out, int outsz);   // the spoken chord ("Control Shift T")
+void kmPadName(PadBind b, char* out, int outsz);
+bool kmPadEq(PadBind a, PadBind b);
 // modmenu.cpp -- the surface:
 extern bool g_smActive;                  // the menu is up (= the AX_SETTINGS predicate)
 bool axIsSettings();
 bool routeSettingsKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
 void smOpen(uintptr_t base);
 void smReannounce(uintptr_t base);
+bool smPadCaptureActive();
+void smPadCaptureFeed(const bool* down, const bool* pressed, const bool* released);   // PI_COUNT each

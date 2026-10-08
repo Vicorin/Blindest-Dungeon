@@ -20,7 +20,8 @@ static const char* const TL_GOAL_HEAD_KEYS[] = {
 };
 static const int TL_GOAL_HEADS = 3;
 static const int       TL_CLOSE_ACTIVITYLOG= 2;         // the ClosePanel enum for this panel
-static const int       TL_MAX_ROWSN        = 96;        // cap on collected text rows
+static const int       TL_MAX_ROWSN        = 4096;      // cap on collected text rows
+static const int       TL_PROBE_CELLS_MAX  = 96;
 static const int       TL_WALK_DEPTH_MAX   = 10;        // tree depth cap
 
 static bool g_tlActive = false;   // mirror of the open gate, for edge detection
@@ -195,7 +196,7 @@ static uintptr_t tlFindListNode(uintptr_t base, uintptr_t root, bool probe) {
         int kids = 0;
         if (safeReadPtr(node + TL_KIDS_BEG_OFF, &beg) &&
             safeReadPtr(node + TL_KIDS_END_OFF, &end) &&
-            end > beg && ((end - beg) >> 3) <= (uintptr_t)TL_WALK_KIDS_MAX) {
+            end > beg && ((end - beg) >> 3) <= (uintptr_t)TL_LIST_CELLS_MAX) {
             kids = (int)((end - beg) >> 3);
             shaped = true;
             for (int i = 0; i < kids && shaped; i++) {
@@ -326,18 +327,25 @@ static int tlCollectColumn(uintptr_t base, uintptr_t panel, int whichCol, bool p
     if (!safeReadPtr(list + TL_KIDS_BEG_OFF, &beg) || !safeReadPtr(list + TL_KIDS_END_OFF, &end) ||
         end < beg) return 0;
     int cells = (int)((end - beg) >> 3);
-    if (cells > TL_WALK_KIDS_MAX) cells = TL_WALK_KIDS_MAX;
+    if (probe) logLine("townlog probe: col %d list holds %d cells (cap %d)",
+                       whichCol, cells, TL_LIST_CELLS_MAX);
+    if (cells > TL_LIST_CELLS_MAX) {
+        logLine("townlog: col %d has %d cells, reading the first %d",
+                whichCol, cells, TL_LIST_CELLS_MAX);
+        cells = TL_LIST_CELLS_MAX;
+    }
 
     static char frags[TL_FRAGS_MAX][TL_ROW_MAX];
     char lbl[96] = { 0 };
-    int count = 0, budget = TL_WALK_NODES_MAX;
+    int count = 0;
     for (int c = 0; c < cells && count < TL_MAX_ROWSN; c++) {
         uintptr_t cell = 0;
         if (!safeReadPtr(beg + (uintptr_t)c * 8, &cell) || !tlLooksLikeWidget(base, cell))
             continue;
-        int nf = 0;
-        if (probe) logLine("townlog probe: -- col %d cell %d --", whichCol, c);
-        tlGather(base, cell, 1, &budget, frags, &nf, probe);
+        int nf = 0, budget = TL_WALK_NODES_MAX;
+        bool dump = probe && c < TL_PROBE_CELLS_MAX;      // per-node dump: the first cells only
+        if (dump) logLine("townlog probe: -- col %d cell %d --", whichCol, c);
+        tlGather(base, cell, 1, &budget, frags, &nf, dump);
         if (nf == 0) continue;                        // separator / pure image cell
 
         // drop any fragment contained in a longer one of the same entry
@@ -384,6 +392,9 @@ static int tlCollectColumn(uintptr_t base, uintptr_t panel, int whichCol, bool p
                            whichCol, count, lbl, g_tlRowDone[count] ? 1 : 0, row);
         count++;
     }
+    if (count >= TL_MAX_ROWSN)
+        logLine("townlog: col %d hit the %d-row cap; older entries are not read",
+                whichCol, TL_MAX_ROWSN);
     return count;
 }
 
