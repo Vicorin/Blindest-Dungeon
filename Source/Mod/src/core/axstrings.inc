@@ -1246,6 +1246,7 @@ AXS(TS_COULDNT_USE_FMT,    "Couldn't use %s on %s.")
 AXS(TS_ROW_POSITION_FMT,   "Rank %d, %s.")
 AXS(TS_HITS_FMT,           "Hits %d: %s")
 AXS(TS_CANT_MOVE_THERE,    "Can't move there.")
+AXS(TS_CANT_MOVE_FROM_FMT, "Can't move from rank %d. Moves %s.")
 
 // ---- raid/camp.cpp: THE CAMP ----
 AXS(CAMP_COSTS_FMT,        "%s, costs %d time.")

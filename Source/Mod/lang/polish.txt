@@ -1610,3 +1610,6 @@ CLOG_CLEARQ_FMT=Usunąć cały dziennik walki? Wpisy: %d.
 CLOG_CLEAR_DELETE=Usuń.
 CLOG_CLEAR_CANCEL=Anuluj.
 CLOG_CLEARED=Dziennik walki wyczyszczony.
+
+# ---- Added 2026-10-09: a move that cannot leave its rank (the Musketeer's back-2 / forward-0 from rank 4): the Enter refusal; %s is the game's own Back / Forward tooltip lines ----
+TS_CANT_MOVE_FROM_FMT=Nie można się przenieść z pozycji %d. Ruch: %s.

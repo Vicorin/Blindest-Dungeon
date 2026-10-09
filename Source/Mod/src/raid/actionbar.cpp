@@ -735,9 +735,18 @@ static bool skillUsedUp(uintptr_t skill, uintptr_t hero) {
     return left == 0;
 }
 
+// ---- A MOVE THAT CANNOT LEAVE ITS RANK ----
+static bool sehHasAnyTarget(uintptr_t base, uintptr_t skill, uintptr_t perf);   // defined with the layer
+static bool skillMoveStuck(uintptr_t skill, uintptr_t perf) {
+    if (!skill || !perf) return false;
+    uint8_t isMove = 0;
+    if (!safeReadU8(skill + SKILL_ISMOVE_OFF, &isMove) || !isMove) return false;
+    return !sehHasAnyTarget(g_base, skill, perf);
+}
+
 static bool skillUnavailable(uintptr_t skill, uintptr_t perf) {
     return skillOutOfPosition(skill, perf) || skillUsedUp(skill, perf) ||
-           skillHpGateUnmet(skill, perf);
+           skillHpGateUnmet(skill, perf) || skillMoveStuck(skill, perf);
 }
 
 static void abSkillLimitsText(uintptr_t base, uintptr_t skill, uintptr_t hero, char* out, int outsz) {
@@ -3265,6 +3274,33 @@ static bool tsBegin(uintptr_t base, uintptr_t skill, const char* skillName, int 
         return true;
     }
     if (!sehHasAnyTarget(base, skill, perf)) {
+        if (isMove) {
+            uint32_t rankMask = 0;
+            int rank = 0;
+            if (safeReadU32(perf + ACTOR_RANK_MASK_OFF, &rankMask))
+                for (int i = 0; i < 4; i++) if (rankMask & (1u << i)) { rank = i + 1; break; }
+            char reach[200] = { 0 }, piece[96];
+            int32_t mv = 0;
+            if (safeReadU32(skill + SKILL_MOVE_BACK_OFF, (uint32_t*)&mv) && mv >= 0 &&
+                abTipInt(base, "str_skill_tooltip_back", mv, piece, sizeof piece))
+                strncat(reach, piece, sizeof reach - strlen(reach) - 1);
+            if (safeReadU32(skill + SKILL_MOVE_FWD_OFF, (uint32_t*)&mv) && mv >= 0 &&
+                abTipInt(base, "str_skill_tooltip_forward", mv, piece, sizeof piece)) {
+                if (reach[0]) strncat(reach, ", ", sizeof reach - strlen(reach) - 1);
+                strncat(reach, piece, sizeof reach - strlen(reach) - 1);
+            }
+            if (reach[0]) {
+                char msg[320];
+                _snprintf(msg, sizeof msg, axs(AXS_TS_CANT_MOVE_FROM_FMT), rank, reach);
+                msg[sizeof msg - 1] = 0;
+                logLine("targeting: move has nowhere to go from rank %d (mask=0x%x) -> \"%s\"",
+                        rank, rankMask, reach);
+                postSpeech(msg);
+                return true;
+            }
+            logLine("targeting: move has nowhere to go from rank %d (mask=0x%x) but neither "
+                    "reach line resolved -- generic refusal", rank, rankMask);
+        }
         logLine("targeting: game reports no legal target for \"%s\"", skillName ? skillName : "?");
         postSpeech(axs(AXS_TS_NO_VALID_TARGETS));
         return true;

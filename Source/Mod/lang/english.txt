@@ -1242,6 +1242,7 @@ TS_COULDNT_USE_FMT=Couldn't use %s on %s.
 TS_ROW_POSITION_FMT=Rank %d, %s.
 TS_HITS_FMT=Hits %d: %s
 TS_CANT_MOVE_THERE=Can't move there.
+TS_CANT_MOVE_FROM_FMT=Can't move from rank %d. Moves %s.
 
 # ---- raid/camp.cpp: THE CAMP (string round, 2026-08-09) ----
 CAMP_COSTS_FMT=%s, costs %d time.

@@ -1605,3 +1605,6 @@ CLOG_CLEARQ_FMT=删除战斗日志的全部 %d 行？
 CLOG_CLEAR_DELETE=删除。
 CLOG_CLEAR_CANCEL=取消。
 CLOG_CLEARED=战斗日志已清空。
+
+# ---- Added 2026-10-09: a move that cannot leave its rank (the Musketeer's back-2 / forward-0 from rank 4): the Enter refusal; %s is the game's own Back / Forward tooltip lines ----
+TS_CANT_MOVE_FROM_FMT=无法从第%d位移动。移动：%s。

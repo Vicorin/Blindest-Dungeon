@@ -1593,3 +1593,6 @@ CLOG_CLEARQ_FMT=¿Borrar las %d líneas del registro de combate?
 CLOG_CLEAR_DELETE=Borrar.
 CLOG_CLEAR_CANCEL=Cancelar.
 CLOG_CLEARED=Registro de combate vaciado.
+
+# ---- Added 2026-10-09: a move that cannot leave its rank (the Musketeer's back-2 / forward-0 from rank 4): the Enter refusal; %s is the game's own Back / Forward tooltip lines ----
+TS_CANT_MOVE_FROM_FMT=No se puede mover desde la posición %d. Movimiento: %s.

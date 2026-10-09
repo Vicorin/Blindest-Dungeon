@@ -1613,3 +1613,6 @@ CLOG_CLEARQ_FMT=Smazat celý záznam boje? Řádků: %d.
 CLOG_CLEAR_DELETE=Smazat.
 CLOG_CLEAR_CANCEL=Zrušit.
 CLOG_CLEARED=Záznam boje vymazán.
+
+# ---- Added 2026-10-09: a move that cannot leave its rank (the Musketeer's back-2 / forward-0 from rank 4): the Enter refusal; %s is the game's own Back / Forward tooltip lines ----
+TS_CANT_MOVE_FROM_FMT=Z pozice %d se nelze přesunout. Pohyb: %s.

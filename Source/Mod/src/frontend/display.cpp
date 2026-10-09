@@ -1254,25 +1254,14 @@ static bool ngcModsRowTop(uintptr_t disp, int row, float* outY, float* outH) {
     return true;
 }
 
+static int64_t ngcModsCkbxId(uintptr_t disp, int row) {
+    int64_t agc = ngcCheckboxId(disp, row);           // 'agc '+i from the entry (fallback: base+row)
+    return (int64_t)UGC_CKBX_ID + (agc - (int64_t)NGC_AGC_BASE);
+}
+
 static uintptr_t ngcModsRowElem(uintptr_t disp, int row) {
-    float ry = 0, rh = 0;
-    if (!ngcModsRowTop(disp, row, &ry, &rh)) return 0;
-    uintptr_t begin = 0, end = 0;
-    if (!safeReadPtr(g_base + VEC_BEGIN_RVA, &begin) || !safeReadPtr(g_base + VEC_END_RVA, &end) ||
-        begin == 0 || end <= begin) return 0;
-    uintptr_t count = (end - begin) / ELEM_STRIDE;
-    if (count > 4096) count = 4096;
-    uintptr_t best = 0; float bestD = rh * 0.5f;
-    for (uintptr_t i = 0; i < count; i++) {
-        uintptr_t e = begin + i * ELEM_STRIDE;
-        int64_t id = 0;
-        if (!safeReadI64(e + ELEM_ID_OFF, &id) || (uint32_t)(uint64_t)id != UGC_CKBX_ID) continue;
-        float ex = 0, ey = 0;
-        if (!elemPos(e, &ex, &ey)) continue;
-        float d = ey - ry; if (d < 0) d = -d;
-        if (d < bestD) { bestD = d; best = e; }
-    }
-    return best;
+    if (row < 0 || row >= ngcCount(disp)) return 0;
+    return feGetElementById(ngcModsCkbxId(disp, row));
 }
 
 static bool ngcModsAnyRowDrawn() {
@@ -1284,13 +1273,18 @@ static bool ngcModsAnyRowDrawn() {
     for (uintptr_t i = 0; i < count; i++) {
         int64_t id = 0;
         if (safeReadI64(begin + i * ELEM_STRIDE + ELEM_ID_OFF, &id) &&
-            (uint32_t)(uint64_t)id == UGC_CKBX_ID) return true;
+            (uint32_t)(uint64_t)id - UGC_CKBX_ID < 64u) return true;
     }
     return false;
 }
 
 static bool ngcRowY(uintptr_t disp, int row, float* outY) {
-    if (g_ngcMods) return ngcModsRowTop(disp, row, outY, nullptr);
+    if (g_ngcMods) {
+        float x = 0;
+        uintptr_t e = ngcModsRowElem(disp, row);
+        if (e && elemPos(e, &x, outY)) return true;
+        return ngcModsRowTop(disp, row, outY, nullptr);
+    }
     float x = 0;
     uintptr_t elem = feGetElementById(ngcCheckboxId(disp, row));
     return elem != 0 && elemPos(elem, &x, outY);
