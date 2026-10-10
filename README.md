@@ -1,4 +1,4 @@
-        ## About the Mod
+## About the Mod
 Blindest Dungeon adds screen-reader support and enhanced keyboard navigation to Darkest Dungeon, making it fully accessible to blind and low-vision players.
 
 ## Current Status & Limitations
