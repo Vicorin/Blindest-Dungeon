@@ -234,6 +234,13 @@ bool routeLootKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
         if (after >= slots) {
             logLine("loot: take item %d left the list at %d items — nothing moved",
                     g_lootSlot + 1, after);
+            char raw[256], full[256];                    // the game's own words for a full bag
+            if (resolveKey(base, "str_discard_items_from_your_inventory", raw, sizeof raw) && raw[0])
+                stripMarkup(raw, full, sizeof full);
+            else
+                _snprintf(full, sizeof full, "%s", axs(AXS_LOOT_CANT_TAKE));
+            full[sizeof full - 1] = 0;
+            postSpeech(full);
             return true;
         }
 

@@ -380,7 +380,10 @@ static bool evOpeningLine(uintptr_t base, char* out, int outsz) {
     int at = (g_evRow >= g_evHeads && g_evRow < n) ? g_evRow : (n > g_evHeads ? g_evHeads : 0);
     char row[MAILBOX_SZ];
     if (rows[at].isHead) row[0] = 0;                      // a scroll with no choice at all
-    else evRowLine(&rows[at], at, n, row, sizeof row);
+    else {
+        evRowLine(&rows[at], at, n, row, sizeof row);
+        g_evRow = at;                                     // the cursor sits on the choice just read,
+    }                                                     // so the first Enter runs it
 
     if (flavour[0])
         _snprintf(out, outsz, "%s. %s. %s", title[0] ? title : axs(AXS_EV_TITLE_FALLBACK),
@@ -443,13 +446,13 @@ static const uintptr_t OE_RESULTS_END_OFF = 0xa0;    // Overlay_Event+: end
 static const uintptr_t OE_RESULT_STRIDE   = 0x170;   // from the apply's push cursor (+0x2e qwords)
 static const uintptr_t OE_RESULT_TEXT_OFF = 0x000;   // record+: char[0x100], the sentence
 static const uintptr_t OE_RESULT_TAG_OFF  = 0x100;   // record+: char[0x40], short; logged only
-static const int       OE_MAX_RESULTS     = 8;
+static const int       OE_MAX_RESULTS     = 16;
 static const uintptr_t OE_APPLIED_FLAG    = 0xe56;
 
 static bool evResultTextOk(const char* s) {
     if (!s || !s[0]) return false;
     int n = (int)strlen(s);
-    if (n < 2 || n > 250) return false;
+    if (n < 2) return false;                                     // the record holds 255 at most
     int letters = 0;
     for (int i = 0; i < n; i++) {
         unsigned char c = (unsigned char)s[i];
@@ -544,9 +547,11 @@ void checkCurioResult(uintptr_t base) {
         return;
     }
     int n = (int)(span / OE_RESULT_STRIDE);
-    if (n <= 0 || n > OE_MAX_RESULTS) {
-        logLine("curiores: %d records is out of range — refused", n);
-        return;
+    if (n <= 0) return;
+    if (n > OE_MAX_RESULTS) {                         // read the first ones rather than none
+        static int s_loggedN = 0;
+        if (s_loggedN != n) { s_loggedN = n; logLine("curiores: %d records, reading the first %d", n, OE_MAX_RESULTS); }
+        n = OE_MAX_RESULTS;
     }
 
     if (!g_evResultDumped) {

@@ -1798,6 +1798,16 @@ static void abItemText(uintptr_t base, const ActionItem* it, int slotCount, char
             if (!isCorpse) {
                 if (abHeroStressCur(base, hero, frag, sizeof frag)) rvAppendComma(what, sizeof what, frag);
                 else logLine("actionbar portrait: stress unreadable for hero=%p", (void*)hero);
+                // No tooltip will follow (a turn start, or tooltips off): bleed, blight, stun,
+                // marks, guard and the like ride on the label, or the hero's turn hides them.
+                char cond[AB_TIP_LINE_SZ];
+                if (!axTipWanted() &&
+                    spConditionsInto(base, hero, SP_COND_ALL & ~(SP_COND_HEALTH | SP_COND_STRESS),
+                                     cond, sizeof cond) && cond[0]) {
+                    size_t cl = strlen(cond);
+                    if (cl && cond[cl - 1] == '.') cond[cl - 1] = 0;
+                    rvAppendComma(what, sizeof what, cond);
+                }
             }
             break;
         }
@@ -2096,6 +2106,28 @@ bool abActivate(uintptr_t base, const ActionItem* it, int slotCount, int abCurso
             postSpeech(axs(AXS_AB_NO_ACTION));
             return true;
     }
+}
+
+// ---- 1-4: THE SKILL IN THAT SLOT, THROUGH THE SAME PATH AS ENTER ON THE BAR ----
+// Passed to the game, the key failed silently whenever the game refused it (a skill used from
+// the wrong rank, not this hero's turn) and changed nothing on the skill the game re-selects at
+// turn start. Through abActivate the player hears the reason, or the target list opens.
+bool abSkillHotkey(uintptr_t base, int skillIdx) {
+    if (g_tsActive || campInSkillPhase(base)) return false;   // camp keeps the game's own keys
+    ActionItem items[AB_MAX_ITEMS];
+    const int n = abBuildBar(base, items, AB_MAX_ITEMS);
+    const int slots = abSlotCount(items, n);
+    for (int i = 0; i < n; i++) {
+        if (items[i].kind != AB_SKILL || items[i].skillIdx != skillIdx) continue;
+        uintptr_t hero = abSelectedHero(base), held = 0;
+        if (hero && safeReadPtr(hero + ACTOR_CUR_SKILL_OFF, &held) && held &&
+            abSkillAt(base, skillIdx, slots) == held)
+            g_tsAdoptArmed = true;                    // the game already holds it: adopt, no click
+        logLine("skill key %d -> the bar's skill item %d%s", skillIdx + 1, i,
+                g_tsAdoptArmed ? " (already held by the game)" : "");
+        return abActivate(base, &items[i], slots, i);
+    }
+    return false;                                     // no skill in that slot: the game decides
 }
 
 // ---- THE DUNGEON VIEW'S TWO PARTY-ROW ACTIONS ----
@@ -3728,7 +3760,9 @@ static bool tsBegin(uintptr_t base, uintptr_t skill, const char* skillName, int 
             if (rows[i].enemy != attack) continue;
             if (start < 0 || rows[i].slot < rows[start].slot) start = i;
         }
-    }
+    } else if (n > 0) {
+        start = 0;                                   // a move lands on its first rank too, so the
+    }                                                // opening line names where it would go
 
     logLine("targeting: begin \"%s\"%s perf=%p targets=%d start=%d", g_tsSkillName,
             isMove ? " (MOVE)" : "", (void*)perf, n, start);

@@ -955,6 +955,13 @@ static bool routeInputEventInner(uintptr_t base, void* ev) {
         }
     }
 
+    if (sym >= SDLK_1 && sym <= SDLK_4 && !g_textInputActive &&
+        !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL | KMOD_LSHIFT | KMOD_RSHIFT)) &&
+        (ctx == AX_ACTIONS || ctx == AX_ROOM || ctx == AX_MAP || ctx == AX_INV || ctx == AX_INGAME)) {
+        if (rep) return false;                        // held: the game's own repeat rule
+        if (abSkillHotkey(base, (int)(sym - SDLK_1))) return true;
+    }
+
     if (sym >= SDLK_1 && sym <= SDLK_1 + 7 && (mod & (KMOD_LALT | KMOD_RALT)) &&
         !(mod & (KMOD_LCTRL | KMOD_RCTRL | KMOD_LSHIFT | KMOD_RSHIFT)) && !g_textInputActive) {
         if (ctx == AX_ACTIONS || ctx == AX_MAP || ctx == AX_INV || ctx == AX_INGAME ||

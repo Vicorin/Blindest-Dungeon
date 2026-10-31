@@ -982,6 +982,7 @@ static bool annTextEq(const char* a, const char* b) {
 
 static bool annActorOwnsSkill(uintptr_t base, uintptr_t actor, const char* text) {
     if (!actor || !text || !text[0]) return false;
+    if (spActorIsHero(base, actor)) return false;      // the monster skill list is a monster's
 
     uintptr_t beg = 0;
     int n = rvSkillCount(actor, &beg);

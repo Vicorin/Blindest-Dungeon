@@ -1078,6 +1078,7 @@ bool routeActionKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
 bool routeActionToggle(uintptr_t base, uint32_t sym, uint8_t repeat);   // ` : open / close
 bool routeTargetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
 bool abActivate(uintptr_t base, const ActionItem* it, int slotCount, int abCursor);  // Enter
+bool abSkillHotkey(uintptr_t base, int skillIdx);  // 1-4: the bar's skill, as Enter on it
 bool abClickHeroRank(uintptr_t base, int rank);
 bool abBeginMoveSelected(uintptr_t base);
 bool abReorderPartyNow(uintptr_t base);          // press the "Default Party order" button
