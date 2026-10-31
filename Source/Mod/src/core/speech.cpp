@@ -177,7 +177,7 @@ void axSetReadSubtitles(bool on) {
 void axSubtitlesLangDefault(const char* lang) {
     AxDebugLogState& s = axDebugState();
     if (s.readSubtitlesExplicit) return;
-    s.readSubtitles = (strcmp(lang, "english") != 0);
+    s.readSubtitles = true;   // the narrator's lines are wanted in every language, English included
     logLine("subtitles: no explicit setting saved; language \"%s\" defaults reading %s",
             lang, s.readSubtitles ? "on" : "off");
 }
