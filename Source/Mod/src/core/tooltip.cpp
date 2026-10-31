@@ -69,9 +69,8 @@ bool axTipStep(int* cursor, int dir, const char* lines, int stride, int n) {
     int total = n + kw;
     if (total <= 1) { *cursor = 0; postSpeech(axs(AXS_NO_MORE_INFO)); return true; }
     if (*cursor < 0 || *cursor >= total) *cursor = 0;
-    int from = *cursor;
-    *cursor = (*cursor + (dir < 0 ? -1 : 1) + total) % total;   // wraps, so neither direction dead-ends
-    const char* note = axWrapNote(from, *cursor, dir);
+    const char* note = nullptr;
+    *cursor = axTipWrapStep(*cursor, dir, total, &note);
     if (*cursor < n) {
         const char* l = lines + (size_t)*cursor * (size_t)stride;
         logLine("tooltip: line %d/%d -> \"%s\"", *cursor, total, l);
@@ -95,6 +94,23 @@ const char* axWrapNote(int from, int to, int dir) {
     if (dir > 0 && to < from) return axs(AXS_WRAP_TOP);
     if (dir < 0 && to > from) return axs(AXS_WRAP_BOTTOM);
     return nullptr;
+}
+
+int axTipWrapStep(int from, int dir, int total, const char** note) {
+    if (note) *note = nullptr;
+    if (total <= 0) return 0;
+    if (from < 0 || from >= total) return 0;              // a first placement, never a wrap
+    int step = dir < 0 ? -1 : 1;
+    int to   = from + step;
+    int mode = axTipWrapMode();
+    if (mode == AX_TIPWRAP_OFF) {
+        if (to < 0) to = 0;
+        if (to >= total) to = total - 1;
+        return to;
+    }
+    to = (to + total) % total;
+    if (note && mode == AX_TIPWRAP_SPOKEN) *note = axWrapNote(from, to, step);
+    return to;
 }
 
 void axPostWrapped(const char* note, const char* text) {

@@ -2832,8 +2832,8 @@ void rvSpeakTipLine(uintptr_t base, int tipDir) {
         int nr = rvPanelLines(base, e, g_rvTipCol, rl, RV_TIP_MAX_LINES);
         if (nr > 0) {
             int total = nr + axTipKeywordCount(&rl[0][0], AB_TIP_LINE_SZ, nr, 1, nullptr);   // 1: the identity line
-            int line = (g_rvTipLine + tipDir + total) % total;   // wraps, like the main buffer
-            const char* note = axWrapNote(g_rvTipLine, line, tipDir);
+            const char* note = nullptr;
+            int line = axTipWrapStep(g_rvTipLine, tipDir, total, &note);   // wraps or stops, like the main buffer
             g_rvTipLine = line;
             char def[AB_TIP_LINE_SZ];
             const char* text = rl[0];
@@ -2852,8 +2852,8 @@ void rvSpeakTipLine(uintptr_t base, int tipDir) {
     int total = nl + ((nl > 0) ? axTipKeywordCount(&lines[0][0], AB_TIP_LINE_SZ, nl, 1, nullptr) : 0);   // 1: line 0 is the row
     if (total <= 1) { postSpeech(axs(AXS_NO_MORE_INFO)); return; }
 
-    int line = (g_rvTipLine + tipDir + total) % total;   // wraps, so neither direction dead-ends
-    const char* note = axWrapNote(g_rvTipLine, line, tipDir);
+    const char* note = nullptr;
+    int line = axTipWrapStep(g_rvTipLine, tipDir, total, &note);
     g_rvTipLine = line;
     char def[AB_TIP_LINE_SZ];
     const char* text = lines[0];

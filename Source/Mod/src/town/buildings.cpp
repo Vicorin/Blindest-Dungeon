@@ -5382,13 +5382,8 @@ bool routeBldKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
                 if (n <= 0) { postSpeech(axs(AXS_NO_MORE_INFO)); return true; }
                 int total = n + axTipKeywordCount(&g_haTip[g_haTipCol][0][0], AB_TIP_LINE_SZ, n, 0, nullptr);
                 const int dir = (sym == SDLK_DOWN) ? 1 : -1;
-                const int from = g_haTipLine;
-                if (g_haTipLine < 0) g_haTipLine = 0;              // the first press lands on line 1
-                else {
-                    g_haTipLine += dir;
-                    if (g_haTipLine < 0)      g_haTipLine = total - 1;   // wraps, like the action bar's
-                    if (g_haTipLine >= total) g_haTipLine = 0;
-                }
+                const char* note = nullptr;
+                g_haTipLine = axTipWrapStep(g_haTipLine, dir, total, &note);
                 if (g_haTipLine < n)
                     _snprintf(utter, sizeof utter, "%s", g_haTip[g_haTipCol][g_haTipLine]);
                 else if (!axTipKeywordLine(&g_haTip[g_haTipCol][0][0], AB_TIP_LINE_SZ, n, 0, nullptr,
@@ -5397,7 +5392,7 @@ bool routeBldKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
                     _snprintf(utter, sizeof utter, "%s", g_haTip[g_haTipCol][0]);
                 }
                 utter[sizeof utter - 1] = 0;
-                axPostWrapped(axWrapNote(from, g_haTipLine, dir), utter);
+                axPostWrapped(note, utter);
                 return true;
             }
             utter[sizeof utter - 1] = 0;

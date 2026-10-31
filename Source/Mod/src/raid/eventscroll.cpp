@@ -43,8 +43,7 @@ static const uintptr_t OE_ANIM_OFF            = 0xdb0;
 static const uintptr_t OE_PREVSTATE_OFF       = 0xd8c;
 static const uintptr_t PROP_CLEAR_ITEM_VOFF   = 0x30;     // DoorProp vftable[6]: clear-with-item virtual
 
-static const int OE_MAX_ROWS = 16;
-static const int OE_MAX_HEADS = OE_MAX_ROWS - 4;
+static const int OE_MAX_ROWS = 5;
 static int g_evHeads = 1;
 
 // ---- The EVENT overlay: reader, cursor and appearance watch ----
@@ -115,28 +114,21 @@ static bool evPropString(uintptr_t propType, uintptr_t off, char* out, int outsz
 }
 
 static void evHeadFor(uintptr_t base, int skin, uintptr_t prop, uintptr_t propType,
-                      char* title, int titlesz, char* flavour, int flavoursz,
-                      char* rawFl = nullptr, int rawFlSz = 0) {
+                      char* title, int titlesz, char* flavour, int flavoursz) {
     title[0] = 0; flavour[0] = 0;
-    if (rawFl && rawFlSz > 0) rawFl[0] = 0;
     char raw[600];
-    // The flavour's two outputs from one raw read.
-    auto keepFlavour = [&](const char* r) {
-        stripMarkup(r, flavour, flavoursz);
-        if (rawFl && rawFlSz > 0) { _snprintf(rawFl, rawFlSz, "%s", r); rawFl[rawFlSz - 1] = 0; }
-    };
 
     if (skin == EV_CURIO) {
         uintptr_t oe = evOverlay();
         if (!oe) return;
         if (safeReadCStr(oe + OE_TITLE_OFF, raw, sizeof raw))   stripMarkup(raw, title, titlesz);
-        if (safeReadCStr(oe + OE_CONTENT_OFF, raw, sizeof raw)) keepFlavour(raw);
+        if (safeReadCStr(oe + OE_CONTENT_OFF, raw, sizeof raw)) stripMarkup(raw, flavour, flavoursz);
         return;
     }
 
     if (skin == EV_HUNGER) {
         if (resolveKey(base, "str_ui_hunger_title", raw, sizeof raw))   stripMarkup(raw, title, titlesz);
-        if (resolveKey(base, "str_ui_hunger_content", raw, sizeof raw)) keepFlavour(raw);
+        if (resolveKey(base, "str_ui_hunger_content", raw, sizeof raw)) stripMarkup(raw, flavour, flavoursz);
         return;
     }
 
@@ -146,7 +138,7 @@ static void evHeadFor(uintptr_t base, int skin, uintptr_t prop, uintptr_t propTy
     _snprintf(key, sizeof key, "str_obstacle_%s_title", id);       key[sizeof key - 1] = 0;
     if (resolveKey(base, key, raw, sizeof raw)) stripMarkup(raw, title, titlesz);
     _snprintf(key, sizeof key, "str_obstacle_%s_description", id); key[sizeof key - 1] = 0;
-    if (resolveKey(base, key, raw, sizeof raw)) keepFlavour(raw);
+    if (resolveKey(base, key, raw, sizeof raw)) stripMarkup(raw, flavour, flavoursz);
 
     if (!title[0]) {
         propPrettyName(id, title, titlesz);
@@ -222,8 +214,7 @@ static int evBuildRows(uintptr_t base, EvRow* rows, int* skinOut,
     if (skinOut) *skinOut = skin;
     if (skin == EV_NONE) return 0;
 
-    char rawFl[600];
-    evHeadFor(base, skin, prop, pt, title, titlesz, flavour, flavoursz, rawFl, sizeof rawFl);
+    evHeadFor(base, skin, prop, pt, title, titlesz, flavour, flavoursz);
 
     int n = 0;
     {
@@ -232,19 +223,8 @@ static int evBuildRows(uintptr_t base, EvRow* rows, int* skinOut,
             h->isHead = true;
             _snprintf(h->name, sizeof h->name, "%s", title[0] ? title : axs(AXS_EV_TITLE_FALLBACK));
             h->name[sizeof h->name - 1] = 0;
-        }
-        const char* p = rawFl[0] ? rawFl : flavour;
-        while (*p && n < OE_MAX_HEADS) {
-            char clean[512];
-            p = mvSplitLine(p, clean, sizeof clean);   // the popup reader's split (core/msgview.cpp)
-            if (clean[0]) {
-                EvRow* f = evAddRow(base, rows, &n, nullptr, nullptr, 0, 0, 0.0f);
-                if (f) {
-                    f->isHead = true;
-                    _snprintf(f->desc, sizeof f->desc, "%s", clean);
-                    f->desc[sizeof f->desc - 1] = 0;
-                }
-            }
+            _snprintf(h->desc, sizeof h->desc, "%s", flavour);
+            h->desc[sizeof h->desc - 1] = 0;
         }
         g_evHeads = n;
     }
@@ -331,8 +311,8 @@ static int evBuildRows(uintptr_t base, EvRow* rows, int* skinOut,
 
 static void evRowLabel(const EvRow* r, char* out, int outsz) {
     if (r->isHead) {
-        if (r->name[0]) _snprintf(out, outsz, "%s.", r->name);
-        else            _snprintf(out, outsz, "%s", r->desc);
+        if (r->desc[0]) _snprintf(out, outsz, "%s. %s.", r->name, r->desc);
+        else            _snprintf(out, outsz, "%s.", r->name);
         out[outsz - 1] = 0;
         return;
     }

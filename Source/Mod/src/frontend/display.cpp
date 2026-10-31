@@ -1169,6 +1169,7 @@ static void    ngcHoverItem(uintptr_t disp, int cursor);
 // ---- MODS FLAVOUR: the Enable/View Mods window's rows ----
 static const uintptr_t FE_UGC_SLOTIDX_OFF   = 0x2420;
 static const uintptr_t FE_PANEL_SCROLL_OFF  = 0x21b0;  // display: the panel list's current scroll (float)
+static const uintptr_t FE_PANEL_SCROLL_TGT_OFF = 0x21b8; // display: ... its target (float; read only --
 static const uintptr_t UGC_ENT_ID_OFF       = 0x250;   // UGCEntry: mod id (name) C-string, 0x80
 static const uintptr_t UGC_ENT_SOURCE_OFF   = 0x2d0;   // UGCEntry: source id C-string, 0x40
 static const uintptr_t UGC_ENT_HEIGHT_OFF   = 0x310;   // UGCEntry: row height (float)
@@ -1267,14 +1268,40 @@ static bool ngcModsRowTop(uintptr_t disp, int row, float* outY, float* outH) {
     return true;
 }
 
-static int64_t ngcModsCkbxId(uintptr_t disp, int row) {
-    int64_t agc = ngcCheckboxId(disp, row);           // 'agc '+i from the entry (fallback: base+row)
-    return (int64_t)UGC_CKBX_ID + (agc - (int64_t)NGC_AGC_BASE);
+// ---- WHICH DRAWN 'ckbx' IS THIS ROW'S: matched by POSITION, never by id ----
+static bool ngcModsIdInFamily(int64_t id) {
+    return (uint64_t)id >= UGC_CKBX_ID && (uint64_t)id - UGC_CKBX_ID < 64u;
 }
 
 static uintptr_t ngcModsRowElem(uintptr_t disp, int row) {
-    if (row < 0 || row >= ngcCount(disp)) return 0;
-    return feGetElementById(ngcModsCkbxId(disp, row));
+    float top = 0, h = 0;
+    if (!ngcModsRowTop(disp, row, &top, &h)) return 0;
+    uintptr_t begin = 0, end = 0;
+    if (!safeReadPtr(g_base + VEC_BEGIN_RVA, &begin) || !safeReadPtr(g_base + VEC_END_RVA, &end) ||
+        begin == 0 || end <= begin) return 0;
+    uintptr_t count = (end - begin) / ELEM_STRIDE;
+    if (count > 4096) count = 4096;
+    const float tol = (h + UGC_ROW_SPACING) * 0.5f;     // half the row pitch (41 px on 76-px rows)
+    uintptr_t best = 0; float bestD = tol;
+    for (uintptr_t i = 0; i < count; i++) {
+        uintptr_t e = begin + i * ELEM_STRIDE;
+        int64_t id = 0; float x = 0, y = 0;
+        if (!safeReadI64(e + ELEM_ID_OFF, &id) || !ngcModsIdInFamily(id) || !elemPos(e, &x, &y))
+            continue;
+        float dd = y - top; if (dd < 0) dd = -dd;
+        if (dd < bestD) { bestD = dd; best = e; }
+    }
+    return best;
+}
+
+static bool ngcScrollSettled(uintptr_t disp) {
+    uint32_t cb = 0, tb = 0;
+    if (!safeReadU32(disp + FE_PANEL_SCROLL_OFF, &cb) || !safeReadU32(disp + FE_PANEL_SCROLL_TGT_OFF, &tb))
+        return true;
+    float c = u32AsFloatM(cb), t = u32AsFloatM(tb);
+    if (!(c > -4000.0f && c < 100000.0f) || !(t > -4000.0f && t < 100000.0f)) return true;
+    float d = c - t; if (d < 0) d = -d;
+    return d < 1.0f;
 }
 
 static bool ngcModsAnyRowDrawn() {
@@ -1285,8 +1312,8 @@ static bool ngcModsAnyRowDrawn() {
     if (count > 4096) count = 4096;
     for (uintptr_t i = 0; i < count; i++) {
         int64_t id = 0;
-        if (safeReadI64(begin + i * ELEM_STRIDE + ELEM_ID_OFF, &id) &&
-            (uint32_t)(uint64_t)id - UGC_CKBX_ID < 64u) return true;
+        if (safeReadI64(begin + i * ELEM_STRIDE + ELEM_ID_OFF, &id) && ngcModsIdInFamily(id))
+            return true;
     }
     return false;
 }
@@ -1353,8 +1380,13 @@ static void ngcWheelService(uintptr_t disp) {
         return;
     }
     if (ry >= (g_ngcMods ? UGC_BAND_TOP_Y : NGC_ROW_VIS_TOP) && ry <= NGC_CLICK_MAX_Y) {
+        if (!ngcScrollSettled(disp) && (int32_t)(GetTickCount() - g_ngcWhlDeadline) < 0) {
+            g_ngcWhlStall = 0;
+            g_ngcWhlLastY = ry;
+            return;                                // no wheel this pump: just let it settle
+        }
         g_ngcWhlActive = false;
-        ngcHoverItem(disp, g_ngcWhlRow);           // arrived -- park the game's hover on it
+        ngcHoverItem(disp, g_ngcWhlRow);
         logLine("ngcwheel: row %d in view at y=%.0f -- hover parked", g_ngcWhlRow, ry);
         return;
     }

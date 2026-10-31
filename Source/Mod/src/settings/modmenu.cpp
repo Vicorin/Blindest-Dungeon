@@ -115,6 +115,9 @@ static const SmValRow kSmAnn[] = {
     { AXS_SM_ANN_KEYWORDS, AX_KEYWORDS_MODES, nullptr, axKeywordsMode, axSetKeywordsMode, 0,
       { AXS_SM_ANN_KW_V_SPOKEN, AXS_SM_ANN_KW_V_BUFFER, AXS_VALUE_OFF }, nullptr,
       { AXS_SM_ANN_KW_SPOKEN, AXS_SM_ANN_KW_BUFFER, AXS_SM_ANN_KW_OFF }, nullptr },
+    { AXS_SM_ANN_TIPWRAP, AX_TIPWRAP_MODES, nullptr, axTipWrapMode, axSetTipWrapMode, 0,
+      { AXS_VALUE_OFF, AXS_SM_ANN_TW_V_SPOKEN, AXS_SM_ANN_TW_V_SILENT }, nullptr,
+      { AXS_SM_ANN_TW_OFF, AXS_SM_ANN_TW_SPOKEN, AXS_SM_ANN_TW_SILENT }, nullptr },
 };
 static const int SM_ANN_N = (int)(sizeof kSmAnn / sizeof kSmAnn[0]);
 

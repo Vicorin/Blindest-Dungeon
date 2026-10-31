@@ -19,6 +19,7 @@ const char* axsKeyName(AxStrId id);
 
 void axAppendHint(char* buf, int bufsz, AxStrId hint);
 void axAppendHintText(char* buf, int bufsz, const char* hint);
+bool axEndsSentence(const char* s, size_t n);
 void axAppendHintToLast(AxStrId hint);
 
 void axLangService(uintptr_t base);

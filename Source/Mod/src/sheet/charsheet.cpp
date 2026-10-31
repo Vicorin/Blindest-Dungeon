@@ -903,20 +903,140 @@ bool csItemsPanelRow(uintptr_t base, uintptr_t hero, int i, char* out, int outsz
 // ------------------------------------------------------------
 static const int64_t CS_MANAGE_RENAME_ID  = 0x686e6562;   // 'hneb' — the rename pencil
 static const int64_t CS_MANAGE_DISMISS_ID = 0x68646d62;   // 'hdmb' — the dismiss button
+static const int64_t CS_MANAGE_OUTFIT_ID  = 0x70616c65;   // 'pale' — the outfit (palette) icon
 uintptr_t feGetElementById(int64_t id);
 
-static int64_t g_csManageIds[2];
-static char    g_csManageNames[2][96];
+// ---- THE OUTFIT BUTTON ----
+static const uintptr_t CS_HERO_OUTFIT_OFF         = 0xb68;  // Hero+: int colour_variation
+static const uintptr_t CS_CLASS_OUTFITS_BEGIN_OFF = 0x5e0;  // HeroClass+: char[0x200]* begin
+static const uintptr_t CS_CLASS_OUTFITS_END_OFF   = 0x5e8;  // HeroClass+: end
+static const uintptr_t CS_CLASS_OUTFIT_STRIDE     = 0x200;
+
+struct CsOutfitDescs { const char* classId; AxStrId desc[4]; };   // desc[k] = folder letter 'A'+k
+static const CsOutfitDescs kCsOutfits[] = {
+    { "abomination",   { AXS_OUTFIT_ABOMINATION_A,   AXS_OUTFIT_ABOMINATION_B,   AXS_OUTFIT_ABOMINATION_C,   AXS_OUTFIT_ABOMINATION_D   } },
+    { "antiquarian",   { AXS_OUTFIT_ANTIQUARIAN_A,   AXS_OUTFIT_ANTIQUARIAN_B,   AXS_OUTFIT_ANTIQUARIAN_C,   AXS_OUTFIT_ANTIQUARIAN_D   } },
+    { "arbalest",      { AXS_OUTFIT_ARBALEST_A,      AXS_OUTFIT_ARBALEST_B,      AXS_OUTFIT_ARBALEST_C,      AXS_OUTFIT_ARBALEST_D      } },
+    { "bounty_hunter", { AXS_OUTFIT_BOUNTY_HUNTER_A, AXS_OUTFIT_BOUNTY_HUNTER_B, AXS_OUTFIT_BOUNTY_HUNTER_C, AXS_OUTFIT_BOUNTY_HUNTER_D } },
+    { "crusader",      { AXS_OUTFIT_CRUSADER_A,      AXS_OUTFIT_CRUSADER_B,      AXS_OUTFIT_CRUSADER_C,      AXS_OUTFIT_CRUSADER_D      } },
+    { "flagellant",    { AXS_OUTFIT_FLAGELLANT_A,    AXS_OUTFIT_FLAGELLANT_B,    AXS_OUTFIT_FLAGELLANT_C,    AXS_OUTFIT_FLAGELLANT_D    } },
+    { "grave_robber",  { AXS_OUTFIT_GRAVE_ROBBER_A,  AXS_OUTFIT_GRAVE_ROBBER_B,  AXS_OUTFIT_GRAVE_ROBBER_C,  AXS_OUTFIT_GRAVE_ROBBER_D  } },
+    { "hellion",       { AXS_OUTFIT_HELLION_A,       AXS_OUTFIT_HELLION_B,       AXS_OUTFIT_HELLION_C,       AXS_OUTFIT_HELLION_D       } },
+    { "highwayman",    { AXS_OUTFIT_HIGHWAYMAN_A,    AXS_OUTFIT_HIGHWAYMAN_B,    AXS_OUTFIT_HIGHWAYMAN_C,    AXS_OUTFIT_HIGHWAYMAN_D    } },
+    { "houndmaster",   { AXS_OUTFIT_HOUNDMASTER_A,   AXS_OUTFIT_HOUNDMASTER_B,   AXS_OUTFIT_HOUNDMASTER_C,   AXS_OUTFIT_HOUNDMASTER_D   } },
+    { "jester",        { AXS_OUTFIT_JESTER_A,        AXS_OUTFIT_JESTER_B,        AXS_OUTFIT_JESTER_C,        AXS_OUTFIT_JESTER_D        } },
+    { "leper",         { AXS_OUTFIT_LEPER_A,         AXS_OUTFIT_LEPER_B,         AXS_OUTFIT_LEPER_C,         AXS_OUTFIT_LEPER_D         } },
+    { "man_at_arms",   { AXS_OUTFIT_MAN_AT_ARMS_A,   AXS_OUTFIT_MAN_AT_ARMS_B,   AXS_OUTFIT_MAN_AT_ARMS_C,   AXS_OUTFIT_MAN_AT_ARMS_D   } },
+    { "musketeer",     { AXS_OUTFIT_MUSKETEER_A,     AXS_OUTFIT_MUSKETEER_B,     AXS_OUTFIT_MUSKETEER_C,     AXS_OUTFIT_MUSKETEER_D     } },
+    { "occultist",     { AXS_OUTFIT_OCCULTIST_A,     AXS_OUTFIT_OCCULTIST_B,     AXS_OUTFIT_OCCULTIST_C,     AXS_OUTFIT_OCCULTIST_D     } },
+    { "plague_doctor", { AXS_OUTFIT_PLAGUE_DOCTOR_A, AXS_OUTFIT_PLAGUE_DOCTOR_B, AXS_OUTFIT_PLAGUE_DOCTOR_C, AXS_OUTFIT_PLAGUE_DOCTOR_D } },
+    { "shieldbreaker", { AXS_OUTFIT_SHIELDBREAKER_A, AXS_OUTFIT_SHIELDBREAKER_B, AXS_OUTFIT_SHIELDBREAKER_C, AXS_OUTFIT_SHIELDBREAKER_D } },
+    { "vestal",        { AXS_OUTFIT_VESTAL_A,        AXS_OUTFIT_VESTAL_B,        AXS_OUTFIT_VESTAL_C,        AXS_OUTFIT_VESTAL_D        } },
+};
+
+static bool csOutfitRead(uintptr_t hero, int* idx, int* count, const char** desc) {
+    *desc = "";
+    uint32_t cv = 0;
+    uintptr_t cls = 0, beg = 0, end = 0;
+    if (!hero || !safeReadU32(hero + CS_HERO_OUTFIT_OFF, &cv)) return false;
+    if (!safeReadPtr(hero + ACTOR_HEROCLASS_OFF, &cls) || cls <= 0x10000) return false;
+    if (!safeReadPtr(cls + CS_CLASS_OUTFITS_BEGIN_OFF, &beg) ||
+        !safeReadPtr(cls + CS_CLASS_OUTFITS_END_OFF, &end) || !beg || end <= beg) return false;
+    uintptr_t n = (end - beg) / CS_CLASS_OUTFIT_STRIDE;
+    if (n < 1 || n > 16 || (int32_t)cv < 0 || cv >= n) {
+        logLine("charsheet outfit: implausible read cv=%d count=%llu", (int)cv, (unsigned long long)n);
+        return false;
+    }
+    *idx = (int)cv;
+    *count = (int)n;
+
+    char path[CS_CLASS_OUTFIT_STRIDE], clsId[64];
+    if (!safeReadCStr(beg + cv * CS_CLASS_OUTFIT_STRIDE, path, sizeof path)) path[0] = 0;
+    if (!safeReadCStr(cls + HEROCLASS_ID_OFF, clsId, sizeof clsId)) clsId[0] = 0;
+    int len = (int)strlen(path);
+    while (len > 0 && (path[len - 1] == '/' || path[len - 1] == '\\')) path[--len] = 0;
+    const char* us = strrchr(path, '_');
+    char letter = (us && us[1] >= 'A' && us[1] <= 'Z' && us[2] == 0) ? us[1] : 0;
+    if (!letter) {
+        logLine("charsheet outfit: no folder letter in \"%s\" (class %s, cv %d)", path, clsId, (int)cv);
+        return true;
+    }
+    for (const CsOutfitDescs& o : kCsOutfits) {
+        if (strcmp(o.classId, clsId) != 0) continue;
+        int k = letter - 'A';
+        if (k >= 0 && k < 4) *desc = axs(o.desc[k]);
+        break;
+    }
+    return true;
+}
+
+static void csOutfitRowName(uintptr_t base, const char* tooltip, char* out, int outsz) {
+    int idx = 0, count = 0; const char* desc = "";
+    if (!csOutfitRead(abSelectedHero(base), &idx, &count, &desc)) {
+        strncpy(out, tooltip, outsz - 1); out[outsz - 1] = 0;
+        return;
+    }
+    if (desc[0]) _snprintf(out, outsz, axs(AXS_CS_OUTFIT_ROW_FMT), tooltip, idx + 1, count, desc);
+    else         _snprintf(out, outsz, axs(AXS_CS_OUTFIT_ROW_BARE_FMT), tooltip, idx + 1, count);
+    out[outsz - 1] = 0;
+}
+
+static uintptr_t g_csOutfitWatchHero  = 0;
+static int       g_csOutfitWatchFrom  = -1;
+static DWORD     g_csOutfitWatchUntil = 0;
+static bool      g_csOutfitWatchSaw   = false;
+
+static void csOutfitArm(uintptr_t base) {
+    uintptr_t hero = abSelectedHero(base);
+    int idx = -1, count = 0; const char* desc = "";
+    if (hero != g_csOutfitWatchHero || !g_csOutfitWatchUntil) {
+        g_csOutfitWatchHero = hero;
+        g_csOutfitWatchSaw  = false;
+        g_csOutfitWatchFrom = csOutfitRead(hero, &idx, &count, &desc) ? idx : -1;
+    }
+    g_csOutfitWatchUntil = GetTickCount() + 1500;
+}
+
+static void csOutfitService(uintptr_t base) {
+    if (!g_csOutfitWatchUntil) return;
+    uintptr_t hero = abSelectedHero(base);
+    if (hero != g_csOutfitWatchHero) { g_csOutfitWatchUntil = 0; return; }   // swapped away
+    int idx = -1, count = 0; const char* desc = "";
+    if (csOutfitRead(hero, &idx, &count, &desc) && idx != g_csOutfitWatchFrom) {
+        g_csOutfitWatchFrom = idx;
+        g_csOutfitWatchSaw  = true;
+        char line[320];
+        if (desc[0]) _snprintf(line, sizeof line, axs(AXS_CS_OUTFIT_NOW_FMT), idx + 1, count, desc);
+        else         _snprintf(line, sizeof line, axs(AXS_CS_OUTFIT_NOW_BARE_FMT), idx + 1, count);
+        line[sizeof line - 1] = 0;
+        logLine("charsheet outfit: now %d of %d", idx + 1, count);
+        postSpeech(line);
+        return;
+    }
+    if (GetTickCount() > g_csOutfitWatchUntil) {
+        g_csOutfitWatchUntil = 0;
+        if (!g_csOutfitWatchSaw) {
+            logLine("charsheet outfit: click produced no change in 1.5 s");
+            postSpeech(axs(AXS_CS_DIDNT_CHANGE));
+        }
+    }
+}
+
+static int64_t g_csManageIds[3];
+static char    g_csManageNames[3][256];
 static int     g_csManageCnt = 0;
 
 static int csManageCollect(uintptr_t base) {
     g_csManageCnt = 0;
-    if (!csTownSheetPanel(base)) return 0;         // raid sheet (or no sheet): no Manage section
-    static const struct { int64_t id; const char* key; const char* fallback; } kBtns[2] = {
-        { CS_MANAGE_RENAME_ID,  "character_panel_rename_tt",  "Rename"  },
-        { CS_MANAGE_DISMISS_ID, "character_panel_dismiss_tt", "Dismiss" },
+    bool town = csTownSheetPanel(base) != 0;
+    if (!town && !csOpenPanel(base)) return 0;     // no sheet: no Manage section
+    static const struct { int64_t id; const char* key; const char* fallback; bool townOnly; } kBtns[3] = {
+        { CS_MANAGE_RENAME_ID,  "character_panel_rename_tt",     "Rename",        true  },
+        { CS_MANAGE_DISMISS_ID, "character_panel_dismiss_tt",    "Dismiss",       true  },
+        { CS_MANAGE_OUTFIT_ID,  "character_panel_change_colour", "Switch Outfit", false },
     };
-    for (int i = 0; i < 2; i++) {
+    for (int i = 0; i < 3; i++) {
+        if (kBtns[i].townOnly && !town) continue;
         if (!feGetElementById(kBtns[i].id)) continue;
         g_csManageIds[g_csManageCnt] = kBtns[i].id;
         char* name = g_csManageNames[g_csManageCnt];
@@ -925,6 +1045,11 @@ static int csManageCollect(uintptr_t base) {
             name[sizeof g_csManageNames[0] - 1] = 0;
         }
         abStripMarkup(name);
+        if (kBtns[i].id == CS_MANAGE_OUTFIT_ID) {
+            char tip[96];
+            strncpy(tip, name, sizeof tip - 1); tip[sizeof tip - 1] = 0;
+            csOutfitRowName(base, tip, name, sizeof g_csManageNames[0]);
+        }
         g_csManageCnt++;
     }
     return g_csManageCnt;
@@ -1292,8 +1417,8 @@ static void csSpeakTipLine(uintptr_t base, int tipDir) {
     int total = n + ((n > 0) ? axTipKeywordCount(&lines[0][0], AB_TIP_LINE_SZ, n, 1, type) : 0);   // 1: line 0 is the row
     if (total <= 1) { postSpeech(axs(AXS_NO_MORE_INFO)); return; }
 
-    int line = (g_csTipLine + tipDir + total) % total;   // wraps, so neither direction dead-ends
-    const char* note = axWrapNote(g_csTipLine, line, tipDir);
+    const char* note = nullptr;
+    int line = axTipWrapStep(g_csTipLine, tipDir, total, &note);
     g_csTipLine = line;
     char def[AB_TIP_LINE_SZ];
     const char* text = lines[0];
@@ -1496,6 +1621,8 @@ bool routeCharSheetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repea
                     g_csManageNames[g_csRow], (unsigned long long)g_csManageIds[g_csRow]);
             if (g_csManageIds[g_csRow] == CS_MANAGE_RENAME_ID)
                 g_trOpenWatchUntil = GetTickCount() + 1500;  // checkTownRename pays this watch
+            if (g_csManageIds[g_csRow] == CS_MANAGE_OUTFIT_ID)
+                csOutfitArm(base);                          // serviceCharSheet pays this watch
         } else {
             logLine("charsheet manage: \"%s\" did not click", g_csManageNames[g_csRow]);
             postSpeech(axs(AXS_NOT_AVAILABLE));
@@ -1649,10 +1776,13 @@ void serviceCharSheet(uintptr_t base) {
             g_csSkillWatchUntil = 0;   // no equip watch outlives the sheet
             g_csTrkConfirmSlot  = -1;  // nor an armed unequip confirm
             g_csTrkWatchUntil   = 0;
+            g_csOutfitWatchUntil = 0;  // nor an outfit switch
         }
         return;
     }
     if (!open) return;
+
+    csOutfitService(base);
 
     if (g_csTrkWatchUntil) {
         uintptr_t h = abSelectedHero(base);

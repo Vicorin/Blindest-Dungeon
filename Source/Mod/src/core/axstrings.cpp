@@ -60,14 +60,21 @@ void axAppendHintText(char* buf, int bufsz, const char* hint) {
     size_t n = strlen(buf);
     while (n > 0 && (buf[n - 1] == ' ' || buf[n - 1] == '\t')) buf[--n] = 0;
     if ((int)n >= bufsz - 2) return;
-    bool ended = n == 0 || buf[n - 1] == '.' || buf[n - 1] == '?' || buf[n - 1] == '!';
-    if (!ended && n >= 3) {
-        const unsigned char* t = reinterpret_cast<const unsigned char*>(buf + n - 3);
-        ended = (t[0] == 0xE3 && t[1] == 0x80 && t[2] == 0x82) ||                       // 。
-                (t[0] == 0xEF && t[1] == 0xBC && (t[2] == 0x8E || t[2] == 0x9F || t[2] == 0x81));
-    }
+    bool ended = n == 0 || axEndsSentence(buf, n);
     _snprintf(buf + n, (size_t)bufsz - n, "%s%s%s", ended ? "" : ".", n ? " " : "", hint);
     buf[bufsz - 1] = 0;
+}
+bool axEndsSentence(const char* s, size_t n) {
+    if (!s || n == 0) return false;
+    char last = s[n - 1];
+    if ((last == ')' || last == ']' || last == '"' || last == '\'') && n >= 2) n--;
+    if (s[n - 1] == '.' || s[n - 1] == '?' || s[n - 1] == '!') return true;
+    if (n >= 3) {
+        const unsigned char* t = reinterpret_cast<const unsigned char*>(s + n - 3);
+        return (t[0] == 0xE3 && t[1] == 0x80 && t[2] == 0x82) ||                       // 。
+               (t[0] == 0xEF && t[1] == 0xBC && (t[2] == 0x8E || t[2] == 0x9F || t[2] == 0x81));
+    }
+    return false;
 }
 void axAppendHint(char* buf, int bufsz, AxStrId hint) { axAppendHintText(buf, bufsz, axs(hint)); }
 void axAppendHintToLast(AxStrId hint) {

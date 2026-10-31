@@ -425,12 +425,11 @@ static bool cdAnswersOnScreen(int count) {
 // ---- THE POPUP READER's rows ----
 static MvCursor g_cdCur = { 0xffffffffu, 0 };
 
-static MvRows* cdBuildRows(uintptr_t base, uint32_t* sigOut) {
-    MvRows* r = mvBegin();
+static int cdAddRows(uintptr_t base, MvRows* r, uint32_t* sigOut) {
     if (sigOut) *sigOut = 0;
     uintptr_t entry = 0, aBegin = 0;
     int count = confirmDialogAnswers(base, &entry, &aBegin);
-    if (count <= 0) return r;
+    if (count <= 0) return 0;
     if (count > CONFIRM_ANSWER_MAX) count = CONFIRM_ANSWER_MAX;
 
     char qraw[CD_QUESTION_TEXT_MAX + 4]; qraw[0] = 0;
@@ -479,7 +478,36 @@ static MvRows* cdBuildRows(uintptr_t base, uint32_t* sigOut) {
         }
         mvOption(r, i, line);
     }
+    return count;
+}
+
+static MvRows* cdBuildRows(uintptr_t base, uint32_t* sigOut) {
+    MvRows* r = mvBegin();
+    cdAddRows(base, r, sigOut);
     return r;
+}
+
+// ---- A CONFIRM DIALOG UNDER A TUTORIAL POPUP: its rows and its answers, for the popup's reader ----
+int cdAppendRowsUnderPopup(uintptr_t base, MvRows* r, uint32_t* sigOut) {
+    if (sigOut) *sigOut = 0;
+    int count = confirmDialogAnswers(base, nullptr, nullptr);
+    if (count <= 0 || !cdAnswersOnScreen(count)) return 0;
+    return cdAddRows(base, r, sigOut);
+}
+
+bool cdClickAnswerUnderPopup(int idx) {
+    if (clickQueued()) {
+        logLine("dialogkey (under a popup): a click is already in flight -- swallowing the press");
+        return true;
+    }
+    int64_t target = (int64_t)(CONFIRM_ANSWER_BASE + (uint32_t)idx);
+    if (!feElemOnScreen(target)) {
+        logLine("dialogkey (under a popup): answer %d is not on screen", idx);
+        return false;
+    }
+    bool ok = frontEndClickElementId(target);
+    logLine("dialogkey (under a popup): answer %d -> %s", idx, ok ? "clicked" : "NO ELEMENT");
+    return ok;
 }
 
 bool routeDialogKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {

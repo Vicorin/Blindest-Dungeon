@@ -47,6 +47,9 @@ DWORD        g_riEquipWatchUntil = 0;    // 0 = idle
 int          g_riEquipCountBefore = -1;  // occupied realm count before the drag
 char         g_riEquipHeroName[80];
 static uint32_t g_riEquipIdHash = 0;
+// ---- THE TARGET SLOT BEFORE THE DRAG ----
+static uint32_t g_riEquipTargetHashBefore = 0;
+static char     g_riEquipTargetNameBefore[256];
 bool         g_riEquipCloseSheet = false;
 static DWORD g_riSheetCloseUntil = 0;    // 0 = idle; watching the sheet actually go away
 
@@ -603,6 +606,26 @@ bool riStartEquipDrag(uintptr_t base, int realSlot, int gridPos) {
                        ? vbeg + (uintptr_t)realSlot * ITEM_STRIDE : 0;
     g_riEquipIdHash = 0;
     if (wantItem) safeReadU32(wantItem + ITEM_IDHASH_OFF, &g_riEquipIdHash);
+    g_riEquipTargetHashBefore = 0;
+    g_riEquipTargetNameBefore[0] = 0;
+    {
+        uintptr_t hbeg = 0; int hslots = 0;
+        if (g_riEquipForHero &&
+            invItemVectorAt(g_riEquipForHero + HERO_TRINKET_SYSTEM_OFF, &hbeg, &hslots) &&
+            g_riEquipForSlot >= 0 && g_riEquipForSlot < hslots) {
+            uintptr_t tgt = hbeg + (uintptr_t)g_riEquipForSlot * ITEM_STRIDE;
+            uint32_t amt = 0;
+            safeReadU32(tgt + ITEM_AMOUNT_OFF, &amt);
+            if ((int32_t)amt > 0) {
+                safeReadU32(tgt + ITEM_IDHASH_OFF, &g_riEquipTargetHashBefore);
+                char ttype[64] = {0}, tid[64] = {0}, tkey[192] = {0};
+                invItemName(base, tgt, ttype, tid, tkey, g_riEquipTargetNameBefore);
+                logLine("realminv: target slot %d is FILLED (\"%s\", hash 0x%08x) -- this drag is a "
+                        "swap; landing = a different occupant", g_riEquipForSlot + 1,
+                        g_riEquipTargetNameBefore, g_riEquipTargetHashBefore);
+            }
+        }
+    }
     logLine("realminv: 'rlmi' family=%d firstId=0x%llx shown=%d rawSlots=%d -> cell = raw slot %d "
             "(gridPos=%d)", family, (unsigned long long)firstId, shown, rawSlots, realSlot, gridPos);
     if (family <= realSlot) {
@@ -1057,37 +1080,46 @@ void checkRealmInv(uintptr_t base) {
         riProbeDragPickup(base);                       // did the game pick ANYTHING up, and where
         bool landed = false;
         uintptr_t hbeg = 0; int hslots = 0;
+        uint32_t landedHash = 0;
         if (g_riEquipForHero &&
             invItemVectorAt(g_riEquipForHero + HERO_TRINKET_SYSTEM_OFF, &hbeg, &hslots) &&
             g_riEquipForSlot >= 0 && g_riEquipForSlot < hslots) {
+            uintptr_t tgt = hbeg + (uintptr_t)g_riEquipForSlot * ITEM_STRIDE;
             uint32_t amt = 0;
-            safeReadU32(hbeg + (uintptr_t)g_riEquipForSlot * ITEM_STRIDE + ITEM_AMOUNT_OFF, &amt);
-            landed = (int32_t)amt > 0;
+            safeReadU32(tgt + ITEM_AMOUNT_OFF, &amt);
+            if ((int32_t)amt > 0) {
+                safeReadU32(tgt + ITEM_IDHASH_OFF, &landedHash);
+                landed = landedHash != g_riEquipTargetHashBefore;   // a change, not a fill
+            }
         }
         int occ[RI_MAX_TRINKETS];
         int nowCount = riOccupiedSlots(base, occ, RI_MAX_TRINKETS);
         if (landed) {
             uintptr_t landedItem = hbeg + (uintptr_t)g_riEquipForSlot * ITEM_STRIDE;
-            uint32_t landedHash = 0;
             char ltype[64] = {0}, lid[64] = {0}, lkey[192] = {0}, lname[256] = {0};
-            safeReadU32(landedItem + ITEM_IDHASH_OFF, &landedHash);
             invItemName(base, landedItem, ltype, lid, lkey, lname);
             bool mismatch = g_riEquipIdHash && landedHash && landedHash != g_riEquipIdHash;
             const char* spoken = lname[0] ? lname
                                           : (g_riEquipName[0] ? g_riEquipName
                                                               : axs(AXS_TRK_THE_TRINKET));
+            const char* who = g_riEquipHeroName[0] ? g_riEquipHeroName : axs(AXS_THE_HERO_LC);
             char utter[MAILBOX_SZ];
-            _snprintf(utter, sizeof utter, axs(AXS_RI_EQUIPPED_FMT),
-                      spoken,
-                      g_riEquipHeroName[0] ? g_riEquipHeroName : axs(AXS_THE_HERO_LC),
-                      g_riEquipForSlot + 1);
+            if (g_riEquipTargetNameBefore[0])
+                _snprintf(utter, sizeof utter, axs(AXS_INV_EQUIPPED_DISPLACED_FMT),
+                          spoken, who, g_riEquipForSlot + 1, g_riEquipTargetNameBefore);
+            else
+                _snprintf(utter, sizeof utter, axs(AXS_RI_EQUIPPED_FMT),
+                          spoken, who, g_riEquipForSlot + 1);
             utter[sizeof utter - 1] = 0;
             if (mismatch)
                 logLine("realminv: ⚠ WRONG TRINKET LANDED -- asked for \"%s\" (hash 0x%08x), got "
                         "\"%s\" (id \"%s\", hash 0x%08x). The 'rlmi' cell mapping is wrong.",
                         g_riEquipName, g_riEquipIdHash, lname, lid, landedHash);
-            logLine("realminv: equip observed (hero slot filled; realm count %d -> %d)",
+            logLine("realminv: equip observed (hero slot %s; realm count %d -> %d)",
+                    g_riEquipTargetNameBefore[0] ? "swapped" : "filled",
                     g_riEquipCountBefore, nowCount);
+            g_riEquipTargetHashBefore = 0;             // the snapshot is spent with the landing
+            g_riEquipTargetNameBefore[0] = 0;
             g_riEquipWatchUntil = 0;
             int backSlot = g_riEquipForSlot;           // ... which the hand-back lands on
             g_riEquipForHero = 0;                      // done: the pending target is consumed

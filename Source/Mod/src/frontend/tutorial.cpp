@@ -44,7 +44,8 @@ static bool tutComposeLine(uintptr_t base, const char* id, char* out, int outsz)
     if (haveT) stripMarkup(rawT, title, sizeof title);
     if (haveD) stripMarkup(rawD, desc,  sizeof desc);
 
-    if (haveT && haveD)      _snprintf(out, outsz, "%s. %s", title, desc);
+    if (haveT && haveD)      _snprintf(out, outsz, axEndsSentence(title, strlen(title)) ? "%s %s" : "%s. %s",
+                                       title, desc);
     else if (haveT)          _snprintf(out, outsz, "%s", title);
     else if (haveD)          _snprintf(out, outsz, "%s", desc);
     else { out[0] = 0; return false; }
@@ -129,8 +130,7 @@ static bool tutClickCloseIcon(uintptr_t base) {
         }
     }
     if (found == 0) {
-        logLine("tutorialkey: Escape with a confirm dialog underneath, but no 'slct' close icon is "
-                "on screen -- handing Escape to the game");
+        logLine("tutorialkey: a confirm dialog underneath, but no 'slct' close icon is on screen");
         return false;
     }
     uint32_t lb[2] = { 0, 0 }, lc[2] = { 0, 0 };
@@ -158,8 +158,10 @@ static bool tutClickCloseIcon(uintptr_t base) {
 // ---- THE POPUP READER's rows ----
 static MvCursor g_tutCur = { 0xffffffffu, 0 };
 
-static MvRows* tutBuildRows(uintptr_t base) {
+static MvRows* tutBuildRows(uintptr_t base, uint32_t* sigOut, int* answersOut) {
     MvRows* r = mvBegin();
+    if (sigOut) *sigOut = g_tutAppear;
+    if (answersOut) *answersOut = 0;
     char id[64];
     if (!tutReadId(g_tutSelf, id, sizeof id)) return r;
     char keyT[96], keyD[96], rawT[512], rawD[1536];
@@ -170,35 +172,89 @@ static MvRows* tutBuildRows(uintptr_t base) {
     if (haveT) mvText(r, rawT);
     if (haveD) mvText(r, rawD);
     if (!haveT && !haveD) mvTextLine(r, axs(AXS_TUT_POPUP));
-    mvClose(r);
+    bool dialog = confirmDialogOpen(base);
+    if (dialog) {
+        uint32_t dsig = 0;
+        int answers = cdAppendRowsUnderPopup(base, r, &dsig);
+        if (answersOut) *answersOut = answers;
+        if (sigOut) *sigOut = g_tutAppear * 2654435761u ^ dsig;
+    }
+    if (!dialog || feElemOnScreen((int64_t)UI_CLOSE_ELEM_ID)) mvClose(r);
     return r;
 }
+
+static uint32_t g_tutCloseTriedAppear = 0xffffffffu;
+static DWORD    g_tutCloseTriedTick   = 0;
+static const DWORD TUT_CLOSE_SETTLE_MS = TUT_GAP_MS + 200;
+static uint32_t g_tutStackDumpedAppear = 0xffffffffu;
 
 static void tutCloseRow(uintptr_t base) {
     if (clickQueued()) { logLine("tutorialkey: Close row while a click is landing -- swallowed"); return; }
     if (confirmDialogOpen(base)) {
-        if (tutClickCloseIcon(base)) return;
+        if (tutClickCloseIcon(base)) {
+            g_tutCloseTriedAppear = g_tutAppear;      // a following Escape goes to the answers
+            g_tutCloseTriedTick   = GetTickCount();
+            return;
+        }
         logLine("tutorialkey: Close row, dialog underneath, no close icon -- sending Escape anyway");
     }
     if (!mvSendEscape("tutorial")) postSpeech(axs(AXS_ACTION_FAILED));
 }
 
 bool routeTutorialKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
+    bool dialog = confirmDialogOpen(base);
+    if (dialog && g_tutStackDumpedAppear != g_tutAppear) {
+        g_tutStackDumpedAppear = g_tutAppear;
+        feDumpFocusVector("tutorial popup over a confirm dialog");
+    }
     if (sym == SDLK_ESCAPE) {
         if (mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL | KMOD_LSHIFT | KMOD_RSHIFT))
             return false;
-        if (!confirmDialogOpen(base)) return false;    // the game's own Escape works: hand it over
+        if (!dialog) return false;                     // the game's own Escape works: hand it over
         if (repeat) return true;                       // one click per physical press
-        return tutClickCloseIcon(base);
+        if (clickQueued()) {
+            logLine("tutorialkey: a click is already in flight -- swallowing the second Escape");
+            return true;
+        }
+        // First Escape of this appearance: the popup's own close icon (the 09-05 door).
+        if (g_tutCloseTriedAppear != g_tutAppear) {
+            if (tutClickCloseIcon(base)) {
+                g_tutCloseTriedAppear = g_tutAppear;
+                g_tutCloseTriedTick   = GetTickCount();
+                return true;
+            }
+        } else if (GetTickCount() - g_tutCloseTriedTick < TUT_CLOSE_SETTLE_MS) {
+            return true;                               // the click may still be closing it
+        }
+        uint32_t sig = 0;
+        int answers = 0;
+        MvRows* r = tutBuildRows(base, &sig, &answers);
+        mvSync(&g_tutCur, sig, r);
+        int first = mvFirstNonText(r);
+        if (answers > 0 && first >= 0) {
+            g_tutCur.row = first;
+            logLine("tutorialkey: Escape cannot close the popup over a dialog -> cursor to the "
+                    "dialog's first answer (row %d of %d)", first + 1, r->n);
+            mvSpeak(&g_tutCur, r, nullptr);
+            return true;
+        }
+        logLine("tutorialkey: Escape over a dialog, no close icon and no answer registered -- "
+                "handing Escape to the game");
+        return false;                                  // nothing the mod can press: never a trap
     }
-    MvRows* r = tutBuildRows(base);
-    mvSync(&g_tutCur, g_tutAppear, r);
+    uint32_t sig = 0;
+    int answers = 0;
+    MvRows* r = tutBuildRows(base, &sig, &answers);
+    mvSync(&g_tutCur, sig, r);
     int opt = -1;
     switch (mvKey(&g_tutCur, r, sym, mod, repeat, false, &opt)) {
         case MVK_TEXT:  mvSpeak(&g_tutCur, r, nullptr); return true;
         case MVK_CLOSE: tutCloseRow(base); return true;
-        case MVK_DONE:
-        case MVK_OPTION: return true;
+        case MVK_OPTION:
+            if (opt >= 0 && opt < answers && !cdClickAnswerUnderPopup(opt))
+                postSpeech(axs(AXS_ACTION_FAILED));
+            return true;
+        case MVK_DONE:  return true;
         default:        return false;
     }
 }

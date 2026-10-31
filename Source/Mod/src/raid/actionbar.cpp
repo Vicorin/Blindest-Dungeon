@@ -1703,8 +1703,10 @@ static void abSpeakTipLine(uintptr_t base, const ActionItem* it, int slotCount, 
     if (n <= 0) { if (head && head[0]) postSpeech(head); return; }
     int total = n + axTipKeywordCount(&lines[0][0], AB_TIP_LINE_SZ, n, 1, nullptr);   // 1: line 0 is the label
     const char* note = nullptr;
-    if (line < 0)      { line = total - 1; note = axs(AXS_WRAP_BOTTOM); }
-    if (line >= total) { line = 0;         note = axs(AXS_WRAP_TOP); }
+    if (line < 0 || line >= total) {
+        int from = line < 0 ? 0 : total - 1;
+        line = axTipWrapStep(from, line < 0 ? -1 : 1, total, &note);
+    }
     g_abTipLine = line;
     char def[AB_TIP_LINE_SZ];
     const char* text = lines[0];
@@ -2250,8 +2252,8 @@ bool routeActionKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) 
                          ? spHeroResistLines(base, hero, slot, slotEnd, false, rl, AB_TIP_MAX_LINES)
                          : spHeroItemLines(base, hero, slot, slotEnd, false, rl, AB_TIP_MAX_LINES);
             if (nr <= 0) { postSpeech(axs(AXS_NO_MORE_INFO)); return true; }
-            int line = (g_abTipLine + tipDir + nr) % nr;
-            const char* note = axWrapNote(g_abTipLine, line, tipDir);
+            const char* note = nullptr;
+            int line = axTipWrapStep(g_abTipLine, tipDir, nr, &note);
             g_abTipLine = line;
             logLine("actionbar %s tipline %d/%d -> \"%s\"",
                     g_abTipCol == 1 ? "resist" : "items", line, nr, rl[line]);

@@ -484,9 +484,8 @@ bool optTipStep(bool forward) {
         logLine("opttip: pos=%d desc=%d name=\"%s\" has no tooltip", pos, chosen, name);
         return true;
     }
-    int from = g_optTipLine;
-    g_optTipLine = (g_optTipLine + (forward ? 1 : -1) + total) % total;
-    const char* note = axWrapNote(from, g_optTipLine, forward ? 1 : -1);
+    const char* note = nullptr;
+    g_optTipLine = axTipWrapStep(g_optTipLine, forward ? 1 : -1, total, &note);
     if (g_optTipLine < own) axPostWrapped(note, both[g_optTipLine]);
     else {
         char def[1024];

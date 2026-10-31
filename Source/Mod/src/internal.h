@@ -90,6 +90,9 @@ void axSetAutoTooltips(bool on);
 enum { AX_KEYWORDS_SPOKEN = 0, AX_KEYWORDS_BUFFER = 1, AX_KEYWORDS_OFF = 2, AX_KEYWORDS_MODES = 3 };
 int  axKeywordsMode();
 void axSetKeywordsMode(int mode);      // out of range is refused (logged)
+enum { AX_TIPWRAP_OFF = 0, AX_TIPWRAP_SPOKEN = 1, AX_TIPWRAP_SILENT = 2, AX_TIPWRAP_MODES = 3 };
+int  axTipWrapMode();
+void axSetTipWrapMode(int mode);       // out of range is refused (logged)
 
 // ---- THE TOOLTIP CHANNEL ----
 bool axTipWanted();
@@ -101,6 +104,7 @@ void axTipGluePanel(char* buf, int bufsz, const char* head, const char* lines, i
 bool axTipStep(int* cursor, int dir, const char* lines, int stride, int n);
 const char* axWrapNote(int from, int to, int dir);
 void        axPostWrapped(const char* note, const char* text);
+int         axTipWrapStep(int from, int dir, int total, const char** note);
 void axTipNoteKeywords(const char* text);
 void axTipGlueKeywords(char* buf, int bufsz);
 void axTipGlueKeywordLine(char* buf, int bufsz, const char* line);
@@ -208,6 +212,9 @@ bool altControllerGlyphs(uintptr_t base);     // PlayStation-style prompts? (fro
 void tutReannounce(uintptr_t base);           // AX_TUTORIAL's ',' re-read
 void checkTutorialDismissed(uintptr_t base);  // the gap watch -> axModalClosed
 bool routeTutorialKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
+struct MvRows;
+int  cdAppendRowsUnderPopup(uintptr_t base, MvRows* r, uint32_t* sigOut);  // answers added, 0 = none
+bool cdClickAnswerUnderPopup(int idx);       // true = queued (or one already landing)
 
 // ---- Front-end module (frontend/naming.cpp): THE TEXT-FIELD MIRROR ----
 void beginNaming(uintptr_t display);          // the box appeared: seed the mirror and cue it

@@ -36,6 +36,7 @@ struct AxDebugLogState {
     volatile bool autoTooltips;
     volatile bool expandAbbrev;
     volatile int  keywordDefs;
+    volatile int  tipWrap;
     volatile bool modTutorials;
     char tutorialsSeen[512];
     volatile bool modEnabled;
@@ -47,7 +48,7 @@ struct AxDebugLogState {
     AxDebugLogState() : enabled(false), readSubtitles(true), readSubtitlesExplicit(false),
                         barks(AX_BARKS_ON), barksExplicit(false), checkUpdates(true), positionCounts(true),
                         controlHints(true), autoTooltips(true), expandAbbrev(true), keywordDefs(AX_KEYWORDS_SPOKEN),
-                        modTutorials(true), modEnabled(true), speechHandler(AX_SPEECH_AUTO),
+                        tipWrap(AX_TIPWRAP_SPOKEN), modTutorials(true), modEnabled(true), speechHandler(AX_SPEECH_AUTO),
                         sapiRate(-1), sapiVolume(-1) {
         InitializeCriticalSection(&g_logCs);
         InitializeCriticalSection(&g_speechCfgCs);
@@ -100,6 +101,10 @@ struct AxDebugLogState {
                         int v = p[21] - '0';
                         if (v >= 0 && v < AX_KEYWORDS_MODES) keywordDefs = v;
                     }
+                    else if (strncmp(p, "tooltip_wrapping=", 17) == 0) {
+                        int v = p[17] - '0';
+                        if (v >= 0 && v < AX_TIPWRAP_MODES) tipWrap = v;
+                    }
                     else if (strncmp(p, "mod_tutorials=", 14) == 0)   modTutorials   = (p[14] != '0');
                     else if (strncmp(p, "mod_enabled=", 12) == 0)     modEnabled     = (p[12] != '0');
                     else if (strncmp(p, "tutorials_seen=", 15) == 0)  iniCopyValue(tutorialsSeen, sizeof tutorialsSeen, p + 15);
@@ -146,6 +151,7 @@ static void axSaveIni() {
     fprintf(f, "auto_tooltips=%d\n", s.autoTooltips ? 1 : 0);
     fprintf(f, "expand_abbreviations=%d\n", s.expandAbbrev ? 1 : 0);
     fprintf(f, "glossary_definitions=%d\n", (int)s.keywordDefs);
+    fprintf(f, "tooltip_wrapping=%d\n", (int)s.tipWrap);
     fprintf(f, "mod_tutorials=%d\n", s.modTutorials ? 1 : 0);
     fprintf(f, "mod_enabled=%d\n", s.modEnabled ? 1 : 0);
     fprintf(f, "tutorials_seen=%s\n", s.tutorialsSeen);             // comma list of topic ids
@@ -214,6 +220,12 @@ int  axKeywordsMode() { return axDebugState().keywordDefs; }
 void axSetKeywordsMode(int mode) {
     if (mode < 0 || mode >= AX_KEYWORDS_MODES) { logLine("keywords: mode %d refused", mode); return; }
     axDebugState().keywordDefs = mode;
+    axSaveIni();
+}
+int  axTipWrapMode() { return axDebugState().tipWrap; }
+void axSetTipWrapMode(int mode) {
+    if (mode < 0 || mode >= AX_TIPWRAP_MODES) { logLine("tipwrap: mode %d refused", mode); return; }
+    axDebugState().tipWrap = mode;
     axSaveIni();
 }
 bool axModTutorials() { return axDebugState().modTutorials; }
