@@ -561,7 +561,11 @@ static bool feFocusStep(int dir, bool forceSeed, bool withSurface) {
     return true;
 }
 
-void frontEndFocusMove(int dir) { feFocusStep(dir, false, false); }
+void frontEndFocusMove(int dir) {
+    if (feFocusStep(dir, false, false)) return;
+    // A hard stop: say where focus still is, so a key never goes unanswered.
+    if (!isNoFocus(g_feFocusId) && g_axLastSpoken[0]) postSpeech(g_axLastSpoken);
+}
 
 void feReannounce(uintptr_t base) {
     (void)base;
