@@ -635,8 +635,14 @@ static void tmSurfacePrefix(uintptr_t base, uintptr_t root, char* out, int outsz
     out[outsz - 1] = 0;
 }
 
+static DWORD g_tmEntrySpokeAt = 0;   // the entry announce; a modal closing right after it
+                                     // (the town event on arrival) must not say it all again
 void tmReannounce(uintptr_t base) {
     if (!g_tmActive) return;
+    if (g_tmEntrySpokeAt && GetTickCount() - g_tmEntrySpokeAt < 1500) {
+        logLine("townmap: the entry announce just spoke -- no second re-announce");
+        return;
+    }
     logLine("townmap: re-announcing after a modal closed");
     char prefix[TM_NAME_MAX + 16];
     tmSurfacePrefix(base, resTownRoot(base), prefix, sizeof prefix);
@@ -907,6 +913,7 @@ void checkTownMap(uintptr_t base) {
         if (!g_tjChainId[0] && !g_bnSwitchUntil) {
             tmSurfacePrefix(base, root, prefix, sizeof prefix);
             tmSpeakRow(base, prefix);                // land ON something, in one utterance
+            g_tmEntrySpokeAt = GetTickCount();
             if (g_tmArrivalHintDue) {
                 g_tmArrivalHintDue = false;
                 axAppendHintToLast(AXS_TM_ARRIVAL_HINT);

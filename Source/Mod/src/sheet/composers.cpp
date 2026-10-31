@@ -801,6 +801,8 @@ static bool csQuirkRowAt(uintptr_t base, int i, CsQuirkFilter f, bool consume,
     bool replSpoken = false, newSpoken = false;
     if (!csQuirkRowCompose(base, quirk, entry, false, false, &replSpoken, &newSpoken, out, outsz))
         return false;
+    if (g_fdComposingLabel) consume = false;   // Find builds every row's label unheard: the
+                                               // "New" / "Replaces" flags must survive it
     if (consume && replSpoken && entry) {
         if (safeWriteU8(entry + QUIRK_ENTRY_REPLVIEW_OFF, 1))
             logLine("charsheet quirk: row %d replaced clause spoken — entry marked viewed", i);

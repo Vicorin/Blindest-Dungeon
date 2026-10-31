@@ -1029,8 +1029,13 @@ void serviceFrontEndLanding(uintptr_t base) {
     uint32_t page = landable ? optPageId() : 0;
 
     DWORD now = GetTickCount();
-    if (blocked != g_felBlocked || (int)ctx != g_felCtx || st != g_felState || page != g_felPage) {
+    static bool s_felOptUp = false;                  // the in-game options screen up or down is an
+    const bool optUp = g_axOptionsUp;                // edge too: its category list and the pause
+                                                     // menu both report page 0
+    if (blocked != g_felBlocked || (int)ctx != g_felCtx || st != g_felState || page != g_felPage ||
+        optUp != s_felOptUp) {
         g_felCtx = (int)ctx; g_felState = st; g_felPage = page; g_felBlocked = blocked;
+        s_felOptUp = optUp;
         bool claimed = g_felClaimed; g_felClaimed = false;
         if (blocked) {
             feLandingCancel("screen not landable");

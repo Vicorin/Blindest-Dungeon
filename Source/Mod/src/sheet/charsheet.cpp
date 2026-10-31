@@ -1911,12 +1911,23 @@ void checkTownRename(uintptr_t base) {
         return;
     }
 
+    // The first click after the sheet opens can open the box and close it in the same frame
+    // (SDL_StartTextInput then SDL_StopTextInput); a second click, cursor already on the
+    // button, opens it for good. So one quiet retry before the failure is spoken.
+    static bool s_trRetried = false;
     if (g_trOpenWatchUntil && !on && GetTickCount() > g_trOpenWatchUntil) {
         g_trOpenWatchUntil = 0;
+        if (!s_trRetried && frontEndClickElementId(CS_MANAGE_RENAME_ID)) {
+            s_trRetried = true;
+            g_trOpenWatchUntil = GetTickCount() + 1500;
+            logLine("townrename: the rename click made no observable change -- clicking once more");
+            return;
+        }
+        s_trRetried = false;
         logLine("townrename: the rename click made no observable change");
         postSpeech(axs(AXS_CS_RENAME_NO_BOX));
     }
-    if (on) g_trOpenWatchUntil = 0;
+    if (on) { g_trOpenWatchUntil = 0; s_trRetried = false; }
 }
 
 // ---- PAD FOCUS FOLLOWER ----

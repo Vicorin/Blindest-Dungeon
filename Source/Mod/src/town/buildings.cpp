@@ -4240,7 +4240,7 @@ static bool haStepRefused(uintptr_t base, uintptr_t hero, const HaTree* t, const
                     flag ? "locked" : "buyable", why ? "locked: " : "buyable", why ? reason : "");
         }
     }
-    if (flag && why) return true;
+    if (why && (flag || !st->armedKnown)) return true;   // no panel flag read: the data decides
     reason[0] = 0;
     return false;
 }
