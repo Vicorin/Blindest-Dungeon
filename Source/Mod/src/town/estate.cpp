@@ -63,7 +63,7 @@ void tlGather(uintptr_t base, uintptr_t node, int depth, int* budget,
     safeReadPtr(node, &vft);
 
     if (vft == base + TBW_VFTABLE_RVA) {
-        char raw[512], clean[TL_ROW_MAX];
+        char raw[1536], clean[TL_ROW_MAX];           // raw still carries the colour codes
         if (readTbwText(node, raw, sizeof raw)) {
             stripMarkup(raw, clean, sizeof clean);
             if (clean[0]) {
@@ -1117,5 +1117,12 @@ void serviceInfestation(uintptr_t base) {
         if (!utter[0]) return;
     }
     utter[sizeof utter - 1] = 0;
+    char key[96], raw[320], verbose[320];            // the game's own sentence for the new level
+    _snprintf(key, sizeof key, "infestation_level_verbose_%s", name);
+    key[sizeof key - 1] = 0;
+    if (resolveKey(base, key, raw, sizeof raw) && raw[0]) {
+        stripMarkup(raw, verbose, sizeof verbose);
+        axAppendHintText(utter, sizeof utter, verbose);
+    }
     postSpeech(utter);
 }

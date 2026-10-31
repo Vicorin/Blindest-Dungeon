@@ -178,7 +178,7 @@ void resolveLabel(uintptr_t base, uintptr_t tbwVtbl, int64_t id,
     if (owner != 0) {
         char via[32]; via[0] = 0;
         bool got = extractWidgetText(owner, tbwVtbl, text, textsz, via, sizeof via);
-        if (!got) { strncpy(text, "unlabeled", textsz - 1); text[textsz - 1] = 0; }
+        if (!got) { strncpy(text, axs(AXS_FE_UNLABELED_BUTTON), textsz - 1); text[textsz - 1] = 0; }
         logLine("ingame id=0x%llx ascii=\"%s\" vcount=%ld owner=0x%llx via=%s text=\"%s\"",
                 (unsigned long long)id, idasc, vcount, (unsigned long long)owner,
                 got ? via : "(none)", text);

@@ -118,6 +118,11 @@ extern bool g_fdComposingLabel;
 bool axModTutorials();
 void axSetModTutorials(bool on);
 bool axExpandAbbreviations();
+// A FENCE no abbreviation expansion crosses: the glossary's own "HP: Short for ..." line
+// would otherwise read "health points: Short for health points". postSpeech drops both bytes.
+static const char AX_NOEXPAND_OPEN  = '\x02';
+static const char AX_NOEXPAND_CLOSE = '\x03';
+bool axIsAbbreviation(const char* word);   // core/speech.cpp: the expander would rewrite it
 void axSetExpandAbbreviations(bool on);
 bool axTutorialSeen(const char* id);
 void axMarkTutorialSeen(const char* id);
@@ -588,7 +593,8 @@ static const char* const PROV_SHARD_NAME_KEY = "str_inventory_title_shard";
 static const int       TL_WALK_KIDS_MAX    = 96;        // sanity cap on any children vector
 static const int       TL_WALK_NODES_MAX   = 1024;
 static const int       TL_LIST_CELLS_MAX   = 16384;     // cap on a top-level list's cell vector
-static const int       TL_ROW_MAX          = 384;       // bytes per collected row / fragment
+static const int       TL_ROW_MAX          = 1024;      // bytes per collected row / fragment: a stress-relief
+                                                              // story runs 3-5 sentences, colour codes stripped
 static const int       TL_FRAGS_MAX        = 16;        // fragments gathered per entry
 
 // ---- Town module (town/estate.cpp): the ACTIVITY LOG + the RESOURCES BAR ----

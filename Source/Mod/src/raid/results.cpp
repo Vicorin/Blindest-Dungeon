@@ -180,7 +180,7 @@ static void rrItemRowText(uintptr_t base, uintptr_t item, int pos, int total,
     const char* trig   = c.trig;    const char* fx     = c.fx;
 
     char head[384];
-    if (amount > 1) _snprintf(head, sizeof head, "%s, %u", name, amount);
+    if (amount > 1) _snprintf(head, sizeof head, axs(AXS_INV_NAME_COUNT_FMT), name, (int)amount);
     else            _snprintf(head, sizeof head, "%s", name);
     head[sizeof head - 1] = 0;
 
@@ -1055,8 +1055,7 @@ bool routeResultsKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat)
             if (item && invItemIsTrinket(item)) {
                 InvCard c;
                 invCardRead(base, item, &c);
-                c.desc[0]  = 0;                        // the results rows never spoke flavour text
-                c.value[0] = 0;                        // ...nor the value: this screen shows none
+                c.value[0] = 0;                        // this screen shows no value
                 ln = invCardLines(&c, lines, 1, AB_TIP_MAX_LINES);
             }
         }

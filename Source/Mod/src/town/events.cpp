@@ -719,7 +719,10 @@ bool routeTownEventHeroKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t r
         teReleaseReadHold("Escape");
         g_teRecArm = 0;
         logLine("townevent: recruit cancelled (slot %d)", g_teRecIndex);
-        teSpeakHeroRow(base, g_teHeroRow, n, "Cancelled. ");
+        char pre[96];
+        _snprintf(pre, sizeof pre, "%s ", axs(AXS_CANCELLED));
+        pre[sizeof pre - 1] = 0;
+        teSpeakHeroRow(base, g_teHeroRow, n, pre);
         return true;
     }
 
@@ -794,7 +797,7 @@ bool routeTownEventEnter(uintptr_t base) {
             logLine("townevent enter: clicking '  et' elem id=0x%llx at (%.0f,%.0f)",
                     (unsigned long long)id, cx, cy);
             char line[300];
-            _snprintf(line, sizeof line, "%s.", g_teActLabel[0] ? g_teActLabel : "Interacting");
+            _snprintf(line, sizeof line, "%s.", g_teActLabel[0] ? g_teActLabel : axs(AXS_TE_INTERACTING));
             line[sizeof line - 1] = 0;
             postSpeech(line, true, SPK_EVENT);
             return true;

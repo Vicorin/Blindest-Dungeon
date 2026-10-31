@@ -359,13 +359,24 @@ static int hpCollect(uintptr_t base, uintptr_t obj, bool probe) {
     return count;
 }
 
+static void hpParaLine(int row, char* out, int outsz) {
+    const char* p = g_hpPara[row];
+    size_t l = strlen(p);
+    char last = l ? p[l - 1] : 0;
+    bool punct = axEndsSentence(p, l) || last == ':';
+    _snprintf(out, outsz, "%s%s", p, punct ? "" : ".");
+    out[outsz - 1] = 0;
+}
+
 static void hpBuildWhole(char* full, int sz) {
     const char* label = (g_hpCtxIdx >= 0 && g_hpCtxIdx < HP_CTX_COUNT) ? axs(kHelpCtx[g_hpCtxIdx].label) : "";
     _snprintf(full, sz, axs(AXS_HELP_TITLE_FMT), label);
     full[sz - 1] = 0;
-    for (int i = 0; i < g_hpCount; i++) {
+    for (int i = 0; i < g_hpCount; i++) {              // each paragraph ends its sentence, as
+        char para[MAILBOX_SZ];                         // the arrow walk speaks it
+        hpParaLine(i, para, sizeof para);
         int cur = (int)strlen(full);
-        _snprintf(full + cur, sz - cur, " %s", g_hpPara[i]);
+        _snprintf(full + cur, sz - cur, " %s", para);
         full[sz - 1] = 0;
     }
 }
@@ -389,14 +400,6 @@ static void hpSpeakWhole(uintptr_t base) {
     postSpeech(full);
 }
 
-static void hpParaLine(int row, char* out, int outsz) {
-    const char* p = g_hpPara[row];
-    size_t l = strlen(p);
-    char last = l ? p[l - 1] : 0;
-    bool punct = last == '.' || last == '!' || last == '?' || last == ':';
-    _snprintf(out, outsz, "%s%s", p, punct ? "" : ".");
-    out[outsz - 1] = 0;
-}
 
 static void hpSpeakClose() {
     char line[MV_ROW_SZ];
@@ -810,6 +813,15 @@ static int jpTotalPages(uintptr_t base) {
     return (int)total;
 }
 
+// A sentence ends on . ! ? (then a space) or on the full-width marks 。！？ (no space follows
+// in CJK text). A row that fills up is closed at a character boundary, never cut.
+static bool jpWideStop(const char* row, int used) {
+    if (used < 3) return false;
+    const unsigned char* t = reinterpret_cast<const unsigned char*>(row + used - 3);
+    return (t[0] == 0xE3 && t[1] == 0x80 && t[2] == 0x82) ||                       // 。
+           (t[0] == 0xEF && t[1] == 0xBC && (t[2] == 0x81 || t[2] == 0x9F));      // ！ ？
+}
+
 static void jpBuildRows(const char* header, const char* text) {
     for (int i = 0; i < JP_MAX_ROWS; i++) g_jpRows[i][0] = 0;
     _snprintf(g_jpRows[0], JP_ROW_SZ, "%s", header);
@@ -820,7 +832,18 @@ static void jpBuildRows(const char* header, const char* text) {
     const char* p = text;
     while (*p && g_jpCount < JP_MAX_ROWS) {
         char c = *p++;
-        if (used < JP_ROW_SZ - 1) { g_jpRows[g_jpCount][used++] = c; g_jpRows[g_jpCount][used] = 0; }
+        bool lead = ((unsigned char)c & 0xC0) != 0x80;
+        if (lead && used >= JP_ROW_SZ - 8) {                                       // full: next row
+            if (++g_jpCount >= JP_MAX_ROWS) break;
+            used = 0;
+        }
+        g_jpRows[g_jpCount][used++] = c; g_jpRows[g_jpCount][used] = 0;
+        if (jpWideStop(g_jpRows[g_jpCount], used)) {
+            if (used < JP_MERGE_MIN) continue;
+            g_jpCount++;
+            used = 0;
+            continue;
+        }
         bool term = (c == '.' || c == '!' || c == '?');
         if (!term) continue;
         while (*p == '.' || *p == '!' || *p == '?' || *p == '"' || *p == '\'') {   // "..." / .!" runs

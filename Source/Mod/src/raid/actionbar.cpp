@@ -484,7 +484,7 @@ void abStripMarkup(char* s) {
     for (char* r = s; *r; ) {
         if (*r == '{') {
             const char* e = strchr(r, '}');
-            if (!e) break;                      // unterminated: stop, keep what we already have
+            if (!e) { *w++ = *r++; continue; }  // unterminated: a literal brace, the text goes on
             r = (char*)e + 1;
             continue;
         }
@@ -3287,7 +3287,7 @@ static bool tpBuildPreview(uintptr_t base, uintptr_t target, bool isMonster,
 
     float hit = 0.0f;
     if (tpHitChance(base, hero, target, &hit)) {
-        tpPhrase(clause, clausesz, "%.0f%% to hit", (double)(hit * TP_PERCENT_SCALE));
+        tpPhrase(clause, clausesz, axs(AXS_TP_HIT_FMT), (double)(hit * TP_PERCENT_SCALE));
         got++;
     } else logLine("targetinfo: hit chance unreadable");
     {
@@ -3305,26 +3305,26 @@ static bool tpBuildPreview(uintptr_t base, uintptr_t target, bool isMonster,
     if (atDeathsDoor) {
         float db = 0.0f;
         if (tpDeathblowChance(base, hero, target, skill, &db)) {
-            tpPhrase(clause, clausesz, "%.0f%% deathblow", (double)(db * TP_PERCENT_SCALE));
+            tpPhrase(clause, clausesz, axs(AXS_TP_DEATHBLOW_FMT), (double)(db * TP_PERCENT_SCALE));
             got++;
         } else logLine("targetinfo: deathblow chance unreadable");
     } else {
         int lo = 0, hi = 0;
         if (tpDamageRange(base, hero, target, skill, &lo, &hi)) {
-            tpPhrase(clause, clausesz, "%d-%d damage", lo, hi);
+            tpPhrase(clause, clausesz, axs(AXS_TP_DAMAGE_FMT), lo, hi);
             got++;
         } else logLine("targetinfo: damage range unreadable");
     }
 
     float crit = 0.0f;
     if (csStatOwnMask(hero, CS_STAT_CRIT_OFF, &crit)) {
-        tpPhrase(clause, clausesz, "%.1f%% crit", (double)(crit * TP_PERCENT_SCALE));
+        tpPhrase(clause, clausesz, axs(AXS_TP_CRIT_FMT), (double)(crit * TP_PERCENT_SCALE));
         got++;
     } else logLine("targetinfo: crit chance unreadable");
 
     int stress = 0;
     if (tpStress(hero, target, skill, isMonster, &stress)) {
-        tpPhrase(clause, clausesz, "%d stress", stress);
+        tpPhrase(clause, clausesz, axs(AXS_TP_STRESS_FMT), stress);
         got++;
     }
 

@@ -827,8 +827,7 @@ int csTrinketTipLines(uintptr_t base, int i, char lines[AB_TIP_MAX_LINES][AB_TIP
     uint32_t amount = 0;
     if (!safeReadU32(item + ITEM_AMOUNT_OFF, &amount) || (int32_t)amount < 1) return 1;
     InvCard c;
-    invCardRead(base, item, &c);
-    c.desc[0] = 0;
+    invCardRead(base, item, &c);                     // flavour included: it is the game's prose
     return invCardLines(&c, lines, 1, AB_TIP_MAX_LINES);
 }
 
@@ -919,6 +918,7 @@ static const CsOutfitDescs kCsOutfits[] = {
     { "arbalest",      { AXS_OUTFIT_ARBALEST_A,      AXS_OUTFIT_ARBALEST_B,      AXS_OUTFIT_ARBALEST_C,      AXS_OUTFIT_ARBALEST_D      } },
     { "bounty_hunter", { AXS_OUTFIT_BOUNTY_HUNTER_A, AXS_OUTFIT_BOUNTY_HUNTER_B, AXS_OUTFIT_BOUNTY_HUNTER_C, AXS_OUTFIT_BOUNTY_HUNTER_D } },
     { "crusader",      { AXS_OUTFIT_CRUSADER_A,      AXS_OUTFIT_CRUSADER_B,      AXS_OUTFIT_CRUSADER_C,      AXS_OUTFIT_CRUSADER_D      } },
+    { "duelist",       { AXS_OUTFIT_DUELIST_A,       AXS_OUTFIT_DUELIST_B,       AXS_OUTFIT_DUELIST_C,       AXS_OUTFIT_DUELIST_D       } },
     { "flagellant",    { AXS_OUTFIT_FLAGELLANT_A,    AXS_OUTFIT_FLAGELLANT_B,    AXS_OUTFIT_FLAGELLANT_C,    AXS_OUTFIT_FLAGELLANT_D    } },
     { "grave_robber",  { AXS_OUTFIT_GRAVE_ROBBER_A,  AXS_OUTFIT_GRAVE_ROBBER_B,  AXS_OUTFIT_GRAVE_ROBBER_C,  AXS_OUTFIT_GRAVE_ROBBER_D  } },
     { "hellion",       { AXS_OUTFIT_HELLION_A,       AXS_OUTFIT_HELLION_B,       AXS_OUTFIT_HELLION_C,       AXS_OUTFIT_HELLION_D       } },
@@ -930,6 +930,7 @@ static const CsOutfitDescs kCsOutfits[] = {
     { "musketeer",     { AXS_OUTFIT_MUSKETEER_A,     AXS_OUTFIT_MUSKETEER_B,     AXS_OUTFIT_MUSKETEER_C,     AXS_OUTFIT_MUSKETEER_D     } },
     { "occultist",     { AXS_OUTFIT_OCCULTIST_A,     AXS_OUTFIT_OCCULTIST_B,     AXS_OUTFIT_OCCULTIST_C,     AXS_OUTFIT_OCCULTIST_D     } },
     { "plague_doctor", { AXS_OUTFIT_PLAGUE_DOCTOR_A, AXS_OUTFIT_PLAGUE_DOCTOR_B, AXS_OUTFIT_PLAGUE_DOCTOR_C, AXS_OUTFIT_PLAGUE_DOCTOR_D } },
+    { "runaway",       { AXS_OUTFIT_RUNAWAY_A,       AXS_OUTFIT_RUNAWAY_B,       AXS_OUTFIT_RUNAWAY_C,       AXS_OUTFIT_RUNAWAY_D       } },
     { "shieldbreaker", { AXS_OUTFIT_SHIELDBREAKER_A, AXS_OUTFIT_SHIELDBREAKER_B, AXS_OUTFIT_SHIELDBREAKER_C, AXS_OUTFIT_SHIELDBREAKER_D } },
     { "vestal",        { AXS_OUTFIT_VESTAL_A,        AXS_OUTFIT_VESTAL_B,        AXS_OUTFIT_VESTAL_C,        AXS_OUTFIT_VESTAL_D        } },
 };

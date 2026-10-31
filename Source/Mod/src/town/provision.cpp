@@ -237,6 +237,8 @@ static const ProvGrant kProvGrants[] = {
     { "leper",         "medicinal_herbs" },
     { "jester",        "medicinal_herbs" },
     { "antiquarian",   "skeleton_key"    },
+    { "musketeer",     "bandage"         },   // dlc/445700_musketeer musketeer.provision.json
+    { "runaway",       "torch"           },   // dlc/4964110_fires_edge runaway.provision.json
 };
 static void provFreeHint(uintptr_t base, const char* rawItemId, int freeCount,
                          char* out, int outsz) {

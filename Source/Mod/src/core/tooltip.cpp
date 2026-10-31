@@ -11,6 +11,7 @@ void axTipSetUnprompted(bool on) { g_tipUnprompted = on; }
 bool axTipWanted() { return axAutoTooltips() && !g_tipUnprompted; }
 
 static bool tipEnded(const char* buf, size_t n) {
+    while (n > 0 && buf[n - 1] == AX_NOEXPAND_CLOSE) n--;   // a fence closing after the stop
     if (n == 0) return true;
     char c = buf[n - 1];
     if (c == '.' || c == '?' || c == '!') return true;
