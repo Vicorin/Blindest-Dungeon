@@ -1223,6 +1223,7 @@ static void axSayAgain(uintptr_t base) {
     if (tutPopupActive())     { tutReannounce(base); return; }
     if (axIsTownEvent())      { teReannounce(base); return; }   // not under C's preview sheet
     if (clogClearAskActive()) { clogReannounceClearAsk(base); return; }
+    if (preambleReannounce(base)) { logLine("sayagain: re-reading the preamble"); return; }
 
     for (int i = 0; i < kAxContextCount; i++) {
         const AxContextDef* d = &kAxContexts[i];

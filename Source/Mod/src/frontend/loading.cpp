@@ -78,6 +78,14 @@ void checkPreamble(uintptr_t base, uintptr_t display) {
     speakPreamble(base);
 }
 
+// Say again (the comma key) while the preamble is up: it is a message like any popup.
+bool preambleReannounce(uintptr_t base) {
+    uintptr_t display = frontEndDisplay(base);
+    if (!display || frontEndState(display) != FE_STATE_PREAMBLE) return false;
+    speakPreamble(base);
+    return true;
+}
+
 // ---- Loading screen reader (main thread) ----
 
 static void lsReadText(uintptr_t ls, char* title, int tsz, char* tip, int psz) {
