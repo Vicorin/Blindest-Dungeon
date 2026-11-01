@@ -45,15 +45,22 @@ Write-Host "[+] Embedded $($langNames.Count) translation(s) -> src\core\axlang_e
 
 $bat = @"
 @echo off
-call "$vcvars" >nul 2>nul
+call "$vcvars"
+if errorlevel 1 exit /b 1
 cd /d "$root\build"
-cl /nologo /LD /O2 /MT /EHsc /std:c++17 /D_CRT_SECURE_NO_WARNINGS /DPRISM_STATIC /I "$root\lib\prism" /I "$root\src" /Fe:version.dll "$root\src\dllmain.cpp" "$root\src\core\speech.cpp" "$root\src\core\gameread.cpp" "$root\src\core\subtitles.cpp" "$root\src\core\hooks.cpp" "$root\src\game\gamebuild.cpp" "$root\src\core\axstrings.cpp" "$root\src\core\find.cpp" "$root\src\core\modtutorial.cpp" "$root\src\core\msgview.cpp" "$root\src\core\updatecheck.cpp" "$root\src\core\tooltip.cpp" "$root\src\core\keywords.cpp" "$root\src\frontend\loading.cpp" "$root\src\frontend\sharedui.cpp" "$root\src\frontend\options.cpp" "$root\src\frontend\dialog.cpp" "$root\src\frontend\display.cpp" "$root\src\frontend\tutorial.cpp" "$root\src\frontend\naming.cpp" "$root\src\frontend\pause.cpp" "$root\src\frontend\credits.cpp" "$root\src\input\synth.cpp" "$root\src\input\layout.cpp" "$root\src\input\pad.cpp" "$root\src\input\padmap.cpp" "$root\src\town\estate.cpp" "$root\src\town\map.cpp" "$root\src\town\districts.cpp" "$root\src\town\embark.cpp" "$root\src\town\provision.cpp" "$root\src\town\buildings.cpp" "$root\src\town\party.cpp" "$root\src\town\trinkets.cpp" "$root\src\town\exchange.cpp" "$root\src\town\barks.cpp" "$root\src\town\events.cpp" "$root\src\town\menupanel.cpp" "$root\src\raid\resting.cpp" "$root\src\raid\raidmap.cpp" "$root\src\raid\dungeonview.cpp" "$root\src\raid\actionbar.cpp" "$root\src\raid\camp.cpp" "$root\src\raid\loot.cpp" "$root\src\raid\eventscroll.cpp" "$root\src\raid\inventory.cpp" "$root\src\raid\light.cpp" "$root\src\raid\combattext.cpp" "$root\src\raid\results.cpp" "$root\src\raid\quest.cpp" "$root\src\sheet\charsheet.cpp" "$root\src\sheet\composers.cpp" "$root\src\settings\keymap.cpp" "$root\src\settings\modmenu.cpp" "$root\src\dlc\color_of_madness\wave.cpp" "$root\src\dlc\butchers_circus\dueling.cpp" "$root\src\dlc\butchers_circus\ring.cpp" "$root\src\dlc\butchers_circus\pit.cpp" "$root\src\dlc\butchers_circus\matchresults.cpp" "$root\src\dlc\butchers_circus\prizebox.cpp" "$root\src\dlc\butchers_circus\rankings.cpp" "$root\src\dlc\butchers_circus\banner.cpp" /link /WHOLEARCHIVE:"$root\lib\prism\prism-static.lib" ole32.lib onecore.lib runtimeobject.lib uiautomationcore.lib rpcrt4.lib PowrProf.lib user32.lib shell32.lib winhttp.lib
+if errorlevel 1 exit /b 1
+cl /nologo /LD /O2 /MT /EHsc /std:c++17 /D_CRT_SECURE_NO_WARNINGS /DPRISM_STATIC /I "$root\lib\prism" /I "$root\src" /Fe"$root\build\version.dll" "$root\src\dllmain.cpp" "$root\src\core\speech.cpp" "$root\src\core\gameread.cpp" "$root\src\core\subtitles.cpp" "$root\src\core\hooks.cpp" "$root\src\core\version_proxy.cpp" "$root\src\game\gamebuild.cpp" "$root\src\core\axstrings.cpp" "$root\src\core\find.cpp" "$root\src\core\modtutorial.cpp" "$root\src\core\msgview.cpp" "$root\src\core\updatecheck.cpp" "$root\src\core\tooltip.cpp" "$root\src\core\keywords.cpp" "$root\src\frontend\loading.cpp" "$root\src\frontend\sharedui.cpp" "$root\src\frontend\options.cpp" "$root\src\frontend\dialog.cpp" "$root\src\frontend\display.cpp" "$root\src\frontend\tutorial.cpp" "$root\src\frontend\naming.cpp" "$root\src\frontend\pause.cpp" "$root\src\frontend\credits.cpp" "$root\src\input\synth.cpp" "$root\src\input\layout.cpp" "$root\src\input\pad.cpp" "$root\src\input\padmap.cpp" "$root\src\town\estate.cpp" "$root\src\town\map.cpp" "$root\src\town\districts.cpp" "$root\src\town\embark.cpp" "$root\src\town\provision.cpp" "$root\src\town\buildings.cpp" "$root\src\town\party.cpp" "$root\src\town\trinkets.cpp" "$root\src\town\exchange.cpp" "$root\src\town\barks.cpp" "$root\src\town\events.cpp" "$root\src\town\menupanel.cpp" "$root\src\raid\resting.cpp" "$root\src\raid\raidmap.cpp" "$root\src\raid\dungeonview.cpp" "$root\src\raid\actionbar.cpp" "$root\src\raid\camp.cpp" "$root\src\raid\loot.cpp" "$root\src\raid\eventscroll.cpp" "$root\src\raid\inventory.cpp" "$root\src\raid\light.cpp" "$root\src\raid\combattext.cpp" "$root\src\raid\results.cpp" "$root\src\raid\quest.cpp" "$root\src\sheet\charsheet.cpp" "$root\src\sheet\composers.cpp" "$root\src\settings\keymap.cpp" "$root\src\settings\modmenu.cpp" "$root\src\dlc\color_of_madness\wave.cpp" "$root\src\dlc\butchers_circus\dueling.cpp" "$root\src\dlc\butchers_circus\ring.cpp" "$root\src\dlc\butchers_circus\pit.cpp" "$root\src\dlc\butchers_circus\matchresults.cpp" "$root\src\dlc\butchers_circus\prizebox.cpp" "$root\src\dlc\butchers_circus\rankings.cpp" "$root\src\dlc\butchers_circus\banner.cpp" /link /OUT:"$root\build\version.dll" /DEF:"$root\src\core\version_proxy.def" /WHOLEARCHIVE:"$root\lib\prism\prism-static.lib" ole32.lib onecore.lib runtimeobject.lib uiautomationcore.lib rpcrt4.lib PowrProf.lib user32.lib shell32.lib winhttp.lib
 if errorlevel 1 exit /b 1
 "@
 $batPath = Join-Path $env:TEMP "dd_mod_build.bat"
 Set-Content -Path $batPath -Value $bat -Encoding ascii
-cmd /c "`"$batPath`""
+# Use the Windows command processor explicitly and CALL the batch file, matching
+# invocation from cmd.exe even when launched through SSH or an MSYS environment.
+& "$env:SystemRoot\System32\cmd.exe" /d /c "call `"$batPath`""
 if ($LASTEXITCODE -ne 0) { throw "Build failed (exit $LASTEXITCODE)" }
+if (-not (Test-Path -LiteralPath "$root\build\version.dll" -PathType Leaf)) {
+    throw "Build command returned success but '$root\build\version.dll' was not created. Review the compiler/linker output above and '$batPath'. NOT deployed."
+}
 Write-Host "`n[+] Build OK. Outputs in $root\build" -ForegroundColor Green
 Get-ChildItem "$root\build" -Include version.dll -Recurse | Select-Object Name,Length
 
@@ -62,9 +69,15 @@ $dumpbin = Get-ChildItem "$vs\VC\Tools\MSVC\*\bin\Hostx64\x64\dumpbin.exe" -Erro
 if (-not $dumpbin) { throw "dumpbin.exe not found under $vs -- cannot verify the proxy's exports. NOT deployed." }
 function AxExportRows($dll) {
     $dump = & $dumpbin.FullName /nologo /exports $dll | Out-String
+    if ($LASTEXITCODE -ne 0) {
+        throw "dumpbin failed for '$dll' (exit $LASTEXITCODE). NOT deployed.`n$dump"
+    }
     $rows = @{}
     foreach ($m in [regex]::Matches($dump, "(?m)^\s+(\d+)\s+[0-9A-Fa-f]+\s+(?:[0-9A-Fa-f]{8}\s+)?(\w+)(.*)$")) {
         $rows[$m.Groups[2].Value] = [pscustomobject]@{ ord = [int]$m.Groups[1].Value; fwd = ($m.Groups[3].Value -match "forwarded to") }
+    }
+    if ($rows.Count -eq 0) {
+        throw "No exports parsed from '$dll'. NOT deployed. Raw dumpbin output:`n$dump"
     }
     return $rows
 }
@@ -74,11 +87,11 @@ $bad = @()
 foreach ($k in $sysRows.Keys) {
     if (-not $ourRows.ContainsKey($k)) { $bad += "MISSING export $k"; continue }
     if ($ourRows[$k].ord -ne $sysRows[$k].ord) { $bad += "ORDINAL $k ours @$($ourRows[$k].ord) real @$($sysRows[$k].ord)" }
-    if (-not $ourRows[$k].fwd) { $bad += "NOT A FORWARDER $k" }
+    if ($ourRows[$k].fwd) { $bad += "UNEXPECTED FORWARDER $k" }
 }
 foreach ($k in $ourRows.Keys) { if (-not $sysRows.ContainsKey($k)) { $bad += "UNEXPECTED export $k (a mod symbol leaked into the export table?)" } }
 if ($bad.Count) { $bad | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }; throw "version.dll's export table does not match the real one. NOT deployed." }
-Write-Host "[+] Proxy gate 1: export table equals System32\version.dll ($($sysRows.Count) names, ordinals, all forwarders)" -ForegroundColor Green
+Write-Host "[+] Proxy gate 1: export table equals System32\version.dll ($($sysRows.Count) names, ordinals, no PE forwarders)" -ForegroundColor Green
 
 # ---- Deploy ----
 $gameDir = "C:\Program Files (x86)\Steam\steamapps\common\DarkestDungeon\_windows\win64"

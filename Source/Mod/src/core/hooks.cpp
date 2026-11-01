@@ -660,30 +660,6 @@ static DWORD WINAPI SpeechThread(LPVOID) {
     }
 }
 
-// ---- THE VERSION.DLL PROXY ----
-#define AX_REAL_VERSION_DLL "\\\\.\\GLOBALROOT\\SystemRoot\\System32\\version.dll"
-#define AX_FWD(name, ord) \
-    __pragma(comment(linker, "/EXPORT:" #name "=" AX_REAL_VERSION_DLL "." #name ",@" #ord))
-AX_FWD(GetFileVersionInfoA,        1)
-AX_FWD(GetFileVersionInfoByHandle, 2)
-AX_FWD(GetFileVersionInfoExA,      3)
-AX_FWD(GetFileVersionInfoExW,      4)
-AX_FWD(GetFileVersionInfoSizeA,    5)
-AX_FWD(GetFileVersionInfoSizeExA,  6)
-AX_FWD(GetFileVersionInfoSizeExW,  7)
-AX_FWD(GetFileVersionInfoSizeW,    8)
-AX_FWD(GetFileVersionInfoW,        9)
-AX_FWD(VerFindFileA,              10)
-AX_FWD(VerFindFileW,              11)
-AX_FWD(VerInstallFileA,           12)
-AX_FWD(VerInstallFileW,           13)
-AX_FWD(VerLanguageNameA,          14)
-AX_FWD(VerLanguageNameW,          15)
-AX_FWD(VerQueryValueA,            16)
-AX_FWD(VerQueryValueW,            17)
-#undef AX_FWD
-#undef AX_REAL_VERSION_DLL
-
 static bool axHostIsDarkest() {
     wchar_t exe[MAX_PATH * 2];
     DWORD n = GetModuleFileNameW(nullptr, exe, MAX_PATH * 2);

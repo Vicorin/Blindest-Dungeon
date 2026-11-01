@@ -1,0 +1,19 @@
+LIBRARY version
+EXPORTS
+    GetFileVersionInfoA=AxGetFileVersionInfoA @1
+    GetFileVersionInfoByHandle=AxGetFileVersionInfoByHandle @2
+    GetFileVersionInfoExA=AxGetFileVersionInfoExA @3
+    GetFileVersionInfoExW=AxGetFileVersionInfoExW @4
+    GetFileVersionInfoSizeA=AxGetFileVersionInfoSizeA @5
+    GetFileVersionInfoSizeExA=AxGetFileVersionInfoSizeExA @6
+    GetFileVersionInfoSizeExW=AxGetFileVersionInfoSizeExW @7
+    GetFileVersionInfoSizeW=AxGetFileVersionInfoSizeW @8
+    GetFileVersionInfoW=AxGetFileVersionInfoW @9
+    VerFindFileA=AxVerFindFileA @10
+    VerFindFileW=AxVerFindFileW @11
+    VerInstallFileA=AxVerInstallFileA @12
+    VerInstallFileW=AxVerInstallFileW @13
+    VerLanguageNameA=AxVerLanguageNameA @14
+    VerLanguageNameW=AxVerLanguageNameW @15
+    VerQueryValueA=AxVerQueryValueA @16
+    VerQueryValueW=AxVerQueryValueW @17

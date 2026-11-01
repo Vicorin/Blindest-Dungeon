@@ -360,3 +360,5 @@ Donations are not expected. I do this because I like games and am passionate abo
 Disclaimer: Blindest Dungeon is not an official Red Hook Studios product or product modification, and Red Hook Studios Inc. is not responsible in any way for changes or damages that may result from using the mod. Furthermore, “Darkest Dungeon” and the Darkest Dungeon logo are trademarks of Red Hook Studios Inc. All content in the game is Copyright Red Hook Studios Inc. All rights reserved.
 
 Note: AI coding agents were used in the development of this mod.
+
+Linux users: see [Wine / Proton proxy build and testing notes](docs/proton.md).
