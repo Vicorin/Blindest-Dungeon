@@ -29,7 +29,7 @@ static const uintptr_t RR_ENTRY_HERO_OFF  = 0x08;      // entry+: the Hero objec
 static const uint32_t  RR_STATUS_DEAD     = 3;         // roster status: dead (no XP line, dead portrait)
 static const uint32_t  RR_STATUS_LOST_A   = 7;         // roster status: "in_time_and_space" (Color of
 static const uint32_t  RR_STATUS_LOST_B   = 8;         //   Madness), two variants, one portrait swap
-static const uintptr_t RR_ENTRY_STATUS_OFF= 0x1540;    // entry+: int status; 3 = dead (dead (was 0x14c0;
+static const uintptr_t RR_ENTRY_STATUS_OFF= 0x15b0;
 static const int64_t   RR_BTN_FWRD        = 0x66777264; // 'fwrd' — Next / Return to Town
 static const int64_t   RR_BTN_BACK        = 0x6261636b; // 'back' — the game-wide back id (logged only)
 static const uint32_t  RR_MASK_ID_BASE    = 0x6d61736b; // 'mask' + N — un-revealed quirk click zones
@@ -177,7 +177,8 @@ static void rrItemRowText(uintptr_t base, uintptr_t item, int pos, int total,
     else                                memset(&c, 0, sizeof c);
     c.value[0] = 0;
     const char* rarity = c.rarity;  const char* clsreq = c.clsreq;  const char* charges = c.charges;
-    const char* trig   = c.trig;    const char* fx     = c.fx;
+    char trigSet[2600]; const char* trig = invCardTrigSet(&c, trigSet, sizeof trigSet);
+    const char* fx     = c.fx;
 
     char head[384];
     if (amount > 1) _snprintf(head, sizeof head, "%s, %u", name, amount);
@@ -594,7 +595,7 @@ static int rrLevelOfXp(uintptr_t base, uint32_t xp) {
     return level;
 }
 
-static bool rrXpProgress(uintptr_t base, uint32_t xp, int* intoOut, int* spanOut, bool* maxOut) {
+bool rrXpProgress(uintptr_t base, uint32_t xp, int* intoOut, int* spanOut, bool* maxOut) {
     uintptr_t tbl = 0, begin = 0, end = 0;
     if (!safeReadPtr(base + RESOLVE_TABLE_RVA, &tbl) || tbl <= 0x10000) return false;
     if (!safeReadPtr(tbl + RESOLVE_VEC_BEGIN, &begin) || begin <= 0x10000) return false;
@@ -1055,8 +1056,7 @@ bool routeResultsKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat)
             if (item && invItemIsTrinket(item)) {
                 InvCard c;
                 invCardRead(base, item, &c);
-                c.desc[0]  = 0;                        // the results rows never spoke flavour text
-                c.value[0] = 0;                        // ...nor the value: this screen shows none
+                c.value[0] = 0;
                 ln = invCardLines(&c, lines, 1, AB_TIP_MAX_LINES);
             }
         }

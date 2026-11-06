@@ -22,11 +22,11 @@ static const uintptr_t PROP_TRAP_SEEN_OFF   = 0x123; // Prop+: byte, the reveale
 
 static const uintptr_t OE_TRAP_HERO_IDX_OFF = 0xd80;
 static const uintptr_t OE_TRAP_DELIBERATE_OFF = 0xd84;
-static const uintptr_t MONSTER_CLASS_OFF  = 0x13f8;  // Monster+: MonsterClass* (was 0x1378)
+static const uintptr_t MONSTER_CLASS_OFF  = 0x1468;
 
 // ---- CAPTOR OFFSETS: the Hag's pot and the Drowned Crew's anchor ----
 static const uintptr_t MONSTERCLASS_CAPTOR_FULL_OFF = 0xc68;
-static const uintptr_t MONSTER_PRISONER_GUID_OFF    = 0x14fc;
+static const uintptr_t MONSTER_PRISONER_GUID_OFF    = 0x156c;
 
 // ---- The MONSTER HOVER TOOLTIP (FUN_1406ee670) ----
 static const char* const MT_HP_KEY    = "monster_tooltip_hp_format";
@@ -611,18 +611,23 @@ int spHeroTipLines(uintptr_t base, uintptr_t hero, int slot, int slotEnd, bool w
         buf[0] = 0;
         if (abHeroStress(base, hero, frag, sizeof frag)) rvAppendComma(buf, sizeof buf, frag);
         else logLine("herotip: stress unreadable for hero=%p", (void*)hero);
+        char tdesc[320] = { 0 };
         {
             uint32_t th = 0;
             char tname[128];
             if (safeReadU32(hero + ACTOR_TRAIT_OFF, &th) && th &&
-                spTraitName(base, th, false, tname, sizeof tname))
+                spTraitName(base, th, false, tname, sizeof tname)) {
                 rvAppendComma(buf, sizeof buf, tname);
-            else if (safeReadU32(hero + ACTOR_VIRTUE_OFF, &th) && th &&
-                     spTraitName(base, th, true, tname, sizeof tname))
+                spTraitDescription(base, th, false, tdesc, sizeof tdesc);
+            } else if (safeReadU32(hero + ACTOR_VIRTUE_OFF, &th) && th &&
+                     spTraitName(base, th, true, tname, sizeof tname)) {
                 rvAppendComma(buf, sizeof buf, tname);
+                spTraitDescription(base, th, true, tdesc, sizeof tdesc);
+            }
         }
         spAddBucket(base, hero, SP_COND_STRESS, buf, sizeof buf);
         spEndSentence(buf, sizeof buf);
+        if (!spBriefTooltip() && tdesc[0]) axTipGlue(buf, sizeof buf, tdesc);
         if (!spBriefTooltip()) {                 // the landing's brief form: no modifier clauses
             if (spIncomingModsFrag(base, hero, "stress_dmg_received_percent", frag, sizeof frag))
                 abAppendFrag(buf, sizeof buf, frag);
@@ -1871,7 +1876,7 @@ static bool rvSkillName(uintptr_t base, uintptr_t mon, int i, char* out, int out
 
 // ---- RANK TARGETS: the marked rank (Prophet, Brigand Vvulf) ----
 static const uintptr_t ACTOR_ENEMY_RANK_TARGETS_OFF     = 0x480;  // Actor+: uint, "enemy_rank_targets"
-static const uintptr_t EFFECT_PERFORMER_RANK_TARGET_OFF = 0x2bc;  // Effect+: byte, ".performer_rank_target"
+static const uintptr_t EFFECT_PERFORMER_RANK_TARGET_OFF = 0x338;
 static const int       RV_MARK_EFFECT_MAX               = 32;     // sanity cap; a shipped skill carries <= 6
 
 bool rvRankMarksOf(uintptr_t mon, uint32_t* maskOut) {
@@ -1955,7 +1960,7 @@ bool rvRankMarkClause(uintptr_t base, int slot, int slotEnd, char* out, int outs
 }
 
 // ---- WHICH SKILLS THE GAME'S TOOLTIP ACTUALLY DRAWS ----
-static const uintptr_t MONSTER_SKILL_SHOWN_OFF = 0x4a9;
+static const uintptr_t MONSTER_SKILL_SHOWN_OFF = 0x4b1;
 
 static uint32_t rvSkillIdHash(const char* id) {
     uint32_t h = 0;
@@ -2462,7 +2467,7 @@ static int rvBuildLines(uintptr_t base, const RvEntry& e,
 }
 
 // ---- THE ARENA MIRROR PROBE ----
-static const uintptr_t RV_PROBE_HEX_BASE = 0x1200;   // covers +0x12b0 class, +0x128c stress, +0x13f8
+static const uintptr_t RV_PROBE_HEX_BASE = 0x1270;
 static const int       RV_PROBE_HEX_LEN  = 0x220;
 
 static void rvProbeClass(uintptr_t base, const char* who, int i, const char* which,

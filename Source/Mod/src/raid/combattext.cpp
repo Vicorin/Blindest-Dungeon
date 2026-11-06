@@ -493,6 +493,13 @@ static void clBuffScanActor(uintptr_t base, uintptr_t actor) {
         int had = 0;
         for (int k = 0; k < snap->n; k++) if (snap->fp[k] == fp) had++;
         if (seenNow < had) continue;            // this occurrence was already there last poll
+        if (spBuffIsInstantSkill(base, rec)) {
+            logLine("combatbuff: actor=%p instant-skill record stat=%u sub=\"%.32s\" -- not a buff, "
+                    "not offered to a popup", (void*)actor,
+                    *(const uint32_t*)(rec + BUFFREC_STAT_TYPE_OFF),
+                    (const char*)(rec + BUFFREC_STATSUB_OFF));
+            continue;
+        }
         clBuffRemember(base, actor, rec);
     }
 
@@ -661,7 +668,32 @@ struct ClMarkSnap { uintptr_t actor; uint32_t mask; };
 static ClMarkSnap g_clMark[RV_MAX_ENEMIES];
 static int        g_clMarkN = -1;                      // -1 = no baseline yet
 
-static void clMarkScan(uintptr_t base, const uintptr_t* foes, int ne) {
+// ---- RANK-MARK WITNESS ----
+static void clMarkWitness(uintptr_t mon, uintptr_t turnActor, const uintptr_t* tgt, int nTgt,
+                          const uintptr_t* party, int np) {
+    if (!axDebugLogEnabled()) return;
+    uint32_t enemyRaw = 0, friendRaw = 0, monRank = 0, turnRank = 0;
+    safeReadU32(mon + 0x480, &enemyRaw);                // ACTOR_ENEMY_RANK_TARGETS_OFF, unmasked
+    safeReadU32(mon + 0x484, &friendRaw);               // friendly_rank_targets
+    safeReadU32(mon + ACTOR_RANK_MASK_OFF, &monRank);
+    if (turnActor) safeReadU32(turnActor + ACTOR_RANK_MASK_OFF, &turnRank);
+    logLine("rankmark witness: marker=%p raw enemy=0x%x friendly=0x%x own rank mask=0x%x; turn actor=%p (rank mask 0x%x)%s",
+            (void*)mon, enemyRaw, friendRaw, monRank, (void*)turnActor, turnRank,
+            turnActor == mon ? " = the marker" : "");
+    for (int j = 0; j < nTgt; j++) {
+        uint32_t r = 0;
+        safeReadU32(tgt[j] + ACTOR_RANK_MASK_OFF, &r);
+        logLine("rankmark witness:   chosen target %d = %p, rank mask 0x%x", j, (void*)tgt[j], r);
+    }
+    for (int j = 0; j < np; j++) {
+        uint32_t r = 0;
+        safeReadU32(party[j] + ACTOR_RANK_MASK_OFF, &r);
+        logLine("rankmark witness:   party[%d] = %p, rank mask 0x%x", j, (void*)party[j], r);
+    }
+}
+
+static void clMarkScan(uintptr_t base, const uintptr_t* foes, int ne, uintptr_t turnActor,
+                       const uintptr_t* tgt, int nTgt, const uintptr_t* party, int np) {
     ClMarkSnap next[RV_MAX_ENEMIES];
     const bool baseline = (g_clMarkN < 0);
     for (int i = 0; i < ne; i++) {
@@ -682,7 +714,8 @@ static void clMarkScan(uintptr_t base, const uintptr_t* foes, int ne) {
         if (cur == old) continue;
         const uint32_t added = cur & ~old;
         logLine("rankmark: monster=%p mask 0x%x -> 0x%x (added 0x%x)", (void*)foes[i], old, cur, added);
-        if (!added) continue;                          // cleared: the follow-up speaks for itself
+        clMarkWitness(foes[i], turnActor, tgt, nTgt, party, np);
+        if (!added) continue;                         // cleared: the follow-up speaks for itself
 
         char name[160], ranks[64], line[CLOG_LINE_MAX];
         if (!rvRankMarkName(base, foes[i], name, sizeof name)) {
@@ -832,7 +865,7 @@ static void clRankScan(uintptr_t base, uintptr_t root) {
     int ne = rvEnemyList(base, foes, RV_MAX_ENEMIES);
     clRankScanSide(base, party, np, g_clRankParty, &g_clRankPartyN, true,  turnActor, tgt, nTgt);
     clRankScanSide(base, foes,  ne, g_clRankFoes,  &g_clRankFoesN,  false, turnActor, tgt, nTgt);
-    clMarkScan(base, foes, ne);
+    clMarkScan(base, foes, ne, turnActor, tgt, nTgt, party, np);
     clShapeScan(base, foes, ne);
     clCaptorScan(base, foes, ne);
 }

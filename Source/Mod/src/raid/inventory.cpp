@@ -133,6 +133,7 @@ void invCardRead(uintptr_t base, uintptr_t item, InvCard* c) {
             bldTrinketClassReq(base, rec, c->clsreq, sizeof c->clsreq, false);
             bldTrinketCharges(base, item, rec, c->charges, sizeof c->charges, false);
             bldTrinketTriggers(base, rec, c->trig, sizeof c->trig, false);
+            bldTrinketSet(base, rec, c->set, sizeof c->set, false);
         }
         bldTrinketEffects(base, item, c->fx, sizeof c->fx, false);
     }
@@ -151,10 +152,18 @@ void invCardReadRec(uintptr_t base, uintptr_t rec, InvCard* c) {
     bldTrinketClassReq(base, rec, c->clsreq, sizeof c->clsreq, false);
     bldTrinketEffectsRec(base, rec, c->fx, sizeof c->fx, false);
     bldTrinketTriggers(base, rec, c->trig, sizeof c->trig, false);
+    bldTrinketSet(base, rec, c->set, sizeof c->set, false);
+}
+const char* invCardTrigSet(const InvCard* c, char* buf, int bufsz) {
+    if (!c->set[0]) return c->trig;
+    if (c->trig[0]) _snprintf(buf, bufsz, "%s. %s", c->trig, c->set);
+    else            _snprintf(buf, bufsz, "%s", c->set);
+    buf[bufsz - 1] = 0;
+    return buf;
 }
 int invCardLines(const InvCard* c, char lines[][AB_TIP_LINE_SZ], int at, int max) {
-    const char* piece[7] = { c->rarity, c->clsreq, c->charges, c->fx, c->trig, c->desc, c->value };
-    for (int p = 0; p < 7 && at < max; p++) {
+    const char* piece[8] = { c->rarity, c->clsreq, c->charges, c->fx, c->trig, c->desc, c->set, c->value };
+    for (int p = 0; p < 8 && at < max; p++) {
         if (!piece[p][0]) continue;
         _snprintf(lines[at], AB_TIP_LINE_SZ, "%s", piece[p]);
         lines[at][AB_TIP_LINE_SZ - 1] = 0;
@@ -163,8 +172,8 @@ int invCardLines(const InvCard* c, char lines[][AB_TIP_LINE_SZ], int at, int max
     return at;
 }
 void invCardNoteKeywords(const InvCard* c) {
-    const char* piece[7] = { c->rarity, c->clsreq, c->charges, c->fx, c->trig, c->desc, c->value };
-    for (int p = 0; p < 7; p++) axTipNoteKeywords(piece[p]);
+    const char* piece[8] = { c->rarity, c->clsreq, c->charges, c->fx, c->trig, c->desc, c->set, c->value };
+    for (int p = 0; p < 8; p++) axTipNoteKeywords(piece[p]);
 }
 int invSlotTipLines(uintptr_t base, uintptr_t system, int slot, const char* noun,
                     int posNum, int posTotal, char lines[][AB_TIP_LINE_SZ], int max) {
@@ -231,6 +240,7 @@ bool invSystemSlotText(uintptr_t base, uintptr_t system, int slot, const char* n
     invAppendClause(out, outsz, charges);
     invAppendClause(out, outsz, fx);
     invAppendClause(out, outsz, trig);
+    invAppendClause(out, outsz, c.set);
     char pos[256];
     _snprintf(pos, sizeof pos, axs(AXS_INV_POS_FMT), noun, slotNum, slotTot);
     pos[sizeof pos - 1] = 0;
@@ -453,9 +463,11 @@ static void ruSpeakEquipLanded(const char* who, const char* name, int landed,
     postSpeech(utter);
 }
 
-static void ruSpeakEquipRefused(const char* who, const char* name) {
+static void ruSpeakEquipRefused(const char* who, const char* name, bool slotsFull, bool classNo) {
     char utter[800];
-    _snprintf(utter, sizeof utter, axs(AXS_INV_COULDNT_WEAR_FMT), who, name);
+    _snprintf(utter, sizeof utter,
+              axs(slotsFull ? AXS_INV_SLOTS_FULL_FMT
+                  : classNo ? AXS_INV_COULDNT_WEAR_FMT : AXS_INV_COULDNT_WEAR_PLAIN_FMT), who, name);
     utter[sizeof utter - 1] = 0;
     postSpeech(utter);
 }
@@ -468,9 +480,13 @@ static void ruAskClear(const char* why) {
     g_ruAskSawDialog = false;
 }
 
+static bool      g_ruAskFull    = false;        // both slots were taken before the call
+static bool      g_ruAskClassNo = false;        // the fit predicate had already said no
 static void ruAskArm(uintptr_t hero, const char* who, const char* name,
-                     char before[TRINKET_SLOT_COUNT][160]) {
-    g_ruAskHero = hero;
+                     char before[TRINKET_SLOT_COUNT][160], bool slotsFull, bool classNo) {
+    g_ruAskHero    = hero;
+    g_ruAskFull    = slotsFull;
+    g_ruAskClassNo = classNo;
     _snprintf(g_ruAskName, sizeof g_ruAskName, "%s", name ? name : "");
     g_ruAskName[sizeof g_ruAskName - 1] = 0;
     _snprintf(g_ruAskWho, sizeof g_ruAskWho, "%s", who ? who : "");
@@ -507,7 +523,7 @@ void serviceRaidTrinketConfirm(uintptr_t base) {   // OurPoll, beside serviceRai
         int landed = ruEquipLanded(base, g_ruAskHero, g_ruAskName, g_ruAskBefore, displacedName,
                                    "no question came");
         if (landed >= 0) ruSpeakEquipLanded(g_ruAskWho, g_ruAskName, landed, displacedName);
-        else             ruSpeakEquipRefused(g_ruAskWho, g_ruAskName);
+        else             ruSpeakEquipRefused(g_ruAskWho, g_ruAskName, g_ruAskFull, g_ruAskClassNo);
         ruAskClear(nullptr);
         return;
     }
@@ -524,7 +540,7 @@ void serviceRaidTrinketConfirm(uintptr_t base) {   // OurPoll, beside serviceRai
     if ((DWORD)(now - g_ruAskGoneAt) < RU_ASK_SETTLE_MS) return;
     logLine("trinket: \"%s\" never reached the hero after the question closed -- the refusal stands",
             g_ruAskName);
-    ruSpeakEquipRefused(g_ruAskWho, g_ruAskName);
+    ruSpeakEquipRefused(g_ruAskWho, g_ruAskName, g_ruAskFull, g_ruAskClassNo);
     ruAskClear(nullptr);
 }
 
@@ -566,6 +582,331 @@ bool ruBeginFromSheet(uintptr_t base, uintptr_t hero) {
         return true;
     }
     return true;
+}
+
+// ---- RAID UNEQUIP: a trinket off a hero, into the bag ----
+static const uint32_t RU_SHEET_TRK_ID0 = INV_FOURCC_BASE + 0x12;   // sheet trinket slot 1; +1 = slot 2
+static const DWORD    RU_UNQ_FIND_MS   = 1500;   // both elements must be on screen within this
+static const DWORD    RU_UNQ_WATCH_MS  = 2000;
+static int       g_ruUnqPhase   = 0;
+static uintptr_t g_ruUnqHero    = 0;
+static int       g_ruUnqSlot    = -1;     // the hero's trinket slot (0/1)
+static int       g_ruUnqBagSlot = -1;     // the empty bag cell it is dropped on
+static uint32_t  g_ruUnqHash    = 0;
+static char      g_ruUnqName[256];
+static DWORD     g_ruUnqUntil   = 0;
+
+static void ruUnqClear(const char* why) {
+    if (why) logLine("trinket unequip: ended (%s)", why);
+    g_ruUnqPhase = 0; g_ruUnqHero = 0; g_ruUnqSlot = -1; g_ruUnqBagSlot = -1;
+    g_ruUnqHash = 0; g_ruUnqName[0] = 0; g_ruUnqUntil = 0;
+}
+
+bool ruUnequipBusy() { return g_ruUnqPhase != 0; }
+
+static int ruFirstEmptyBagSlot(uintptr_t base) {
+    uintptr_t beg = 0; int slots = 0;
+    if (!invItemVector(base, &beg, &slots)) return -1;
+    for (int i = 0; i < slots; i++) {
+        int32_t amount = 0;
+        safeReadU32(beg + (uintptr_t)i * ITEM_STRIDE + ITEM_AMOUNT_OFF, (uint32_t*)&amount);
+        if (amount < 1) return i;
+    }
+    return -1;
+}
+
+// The hero slot's amount and id hash, re-read live (0 / 0 = empty or unreadable).
+static int32_t ruHeroTrinketAt(uintptr_t hero, int slot, uint32_t* hashOut) {
+    uintptr_t beg = 0; int slots = 0;
+    int32_t amount = 0;
+    if (hashOut) *hashOut = 0;
+    if (!hero || slot < 0 || !invItemVectorAt(hero + HERO_TRINKET_SYSTEM_OFF, &beg, &slots) || slot >= slots)
+        return 0;
+    uintptr_t item = beg + (uintptr_t)slot * ITEM_STRIDE;
+    safeReadU32(item + ITEM_AMOUNT_OFF, (uint32_t*)&amount);
+    if (hashOut && amount > 0) safeReadU32(item + ITEM_IDHASH_OFF, hashOut);
+    return amount;
+}
+
+// ---- THE GAME'S OWN REFUSAL WORDS ----
+static void ruSayGameOr(uintptr_t base, const char* key, AxStrId fallback) {
+    char line[256];
+    if (abTipPlain(base, key, line, sizeof line)) postSpeech(line);
+    else postSpeech(axs(fallback));
+}
+
+bool ruUnequipRefused(uintptr_t base) {
+    if (ruFightingNow(base)) {
+        logLine("trinket unequip: refused -- in combat");
+        ruSayGameOr(base, "str_user_information_cant_unequip_trinket_in_battle", AXS_INV_NO_TRINKET_IN_FIGHT);
+        return true;
+    }
+    if (ruFirstEmptyBagSlot(base) < 0) {
+        logLine("trinket unequip: refused -- no empty bag cell");
+        ruSayGameOr(base, "str_user_information_not_enough_room", AXS_INV_NO_ROOM_FOR_TRINKET);
+        return true;
+    }
+    return false;
+}
+
+void ruBeginUnequip(uintptr_t base, uintptr_t hero, int slot, const char* name) {
+    if (g_ruUnqPhase) { postSpeech(axs(AXS_STILL_WORKING)); return; }
+    if (ruUnequipRefused(base)) return;
+    uint32_t hash = 0;
+    if (ruHeroTrinketAt(hero, slot, &hash) < 1) {        // emptied under the confirm
+        logLine("trinket unequip: hero slot %d is already empty", slot + 1);
+        postSpeech(axs(AXS_DIDNT_HAPPEN));
+        return;
+    }
+    g_ruUnqHero    = hero;
+    g_ruUnqSlot    = slot;
+    g_ruUnqBagSlot = ruFirstEmptyBagSlot(base);
+    g_ruUnqHash    = hash;
+    _snprintf(g_ruUnqName, sizeof g_ruUnqName, "%s", name && name[0] ? name : axs(AXS_CS_TRK_FALLBACK));
+    g_ruUnqName[sizeof g_ruUnqName - 1] = 0;
+    g_ruUnqPhase   = 1;
+    g_ruUnqUntil   = GetTickCount() + RU_UNQ_FIND_MS;
+
+    uintptr_t rd = (uintptr_t)g_raidDisplay;
+    uint32_t idx = 0;
+    uintptr_t p = 0;
+    if (rd > 0x10000 && safeReadU32(rd + RD_ACTIVE_IDX_OFF, &idx) && idx != 2 &&
+        safeReadPtr(rd + RD_PANEL_ARR_OFF + 2 * 8, &p) && p > 0x10000) {
+        logLine("trinket unequip: corner selector %u -> 2 (the bag) for the drop target", idx);
+        safeWriteU32(rd + RD_ACTIVE_IDX_OFF, 2);
+    }
+    logLine("trinket unequip: armed \"%s\" hero=%p slot %d -> bag cell %d (hash 0x%08x)",
+            g_ruUnqName, (void*)hero, slot + 1, g_ruUnqBagSlot, hash);
+}
+
+// Per frame (OurPoll, with the other raid trinket services).
+void serviceRaidUnequip(uintptr_t base) {
+    if (!g_ruUnqPhase) return;
+    if (!mapRoot(base)) { ruUnqClear("the raid ended"); return; }
+    DWORD now = GetTickCount();
+
+    if (g_ruUnqPhase == 1) {
+        int64_t srcId = (int64_t)(RU_SHEET_TRK_ID0 + (uint32_t)g_ruUnqSlot);
+        int64_t dstId = (int64_t)(INV_FOURCC_BASE + (uint32_t)g_ruUnqBagSlot);
+        uintptr_t src = feGetElementById(srcId), dst = feGetElementById(dstId);
+        if (src && dst && !clickQueued()) {
+            uintptr_t beg = 0; int slots = 0; int32_t cellAmt = 1;
+            if (invItemVector(base, &beg, &slots) && g_ruUnqBagSlot < slots)
+                safeReadU32(beg + (uintptr_t)g_ruUnqBagSlot * ITEM_STRIDE + ITEM_AMOUNT_OFF, (uint32_t*)&cellAmt);
+            uint32_t hash = 0;
+            if (cellAmt > 0 || ruHeroTrinketAt(g_ruUnqHero, g_ruUnqSlot, &hash) < 1 || hash != g_ruUnqHash) {
+                logLine("trinket unequip: an end changed before the drag (cell amount %d, slot hash 0x%08x)",
+                        cellAmt, hash);
+                postSpeech(axs(AXS_DIDNT_HAPPEN));
+                ruUnqClear("stale ends");
+                return;
+            }
+            if (synthDragElements(srcId, dstId, "raid trinket unequip")) {
+                g_ruUnqPhase = 2;
+                g_ruUnqUntil = now + RU_UNQ_WATCH_MS;
+                return;
+            }
+        }
+        if ((int32_t)(now - g_ruUnqUntil) > 0) {
+            logLine("trinket unequip: drag ends not on screen in time -- sheet slot 0x%llx %s, bag cell 0x%llx %s",
+                    (unsigned long long)srcId, src ? "found" : "MISSING",
+                    (unsigned long long)dstId, dst ? "found" : "MISSING");
+            postSpeech(axs(AXS_DIDNT_HAPPEN));
+            ruUnqClear("ends not found");
+        }
+        return;
+    }
+
+    if (ruHeroTrinketAt(g_ruUnqHero, g_ruUnqSlot, nullptr) < 1) {
+        int landed = -1;
+        uintptr_t beg = 0; int slots = 0;
+        if (invItemVector(base, &beg, &slots)) {
+            for (int i = 0; i < slots && landed < 0; i++) {
+                uintptr_t item = beg + (uintptr_t)i * ITEM_STRIDE;
+                int32_t amount = 0; uint32_t h = 0;
+                safeReadU32(item + ITEM_AMOUNT_OFF, (uint32_t*)&amount);
+                safeReadU32(item + ITEM_IDHASH_OFF, &h);
+                if (amount > 0 && h == g_ruUnqHash && invItemIsTrinket(item)) landed = i;
+            }
+        }
+        logLine("trinket unequip: slot %d emptied; bag %s (cell %d, aimed at %d)", g_ruUnqSlot + 1,
+                landed >= 0 ? "holds it" : "does NOT show it", landed, g_ruUnqBagSlot);
+        char utter[MAILBOX_SZ];
+        _snprintf(utter, sizeof utter, axs(AXS_CS_TRK_UNEQUIPPED_BAG_FMT), g_ruUnqName);
+        utter[sizeof utter - 1] = 0;
+        postSpeech(utter);
+        ruUnqClear(nullptr);
+        return;
+    }
+    if ((int32_t)(now - g_ruUnqUntil) > 0) {
+        logLine("trinket unequip: watch timed out, slot %d still filled", g_ruUnqSlot + 1);
+        postSpeech(axs(AXS_DIDNT_HAPPEN));
+        ruUnqClear("timed out");
+    }
+}
+
+// ---- RAID SWAP: a trinket from the bag onto a FULL hero ----
+static const DWORD RU_SW_OPEN_MS  = 2000;
+static const DWORD RU_SW_FIND_MS  = 1500;   // both drag ends on screen within this
+static const DWORD RU_SW_WATCH_MS = 2000;
+static int       g_ruSwPhase   = 0;
+static uintptr_t g_ruSwHero    = 0;
+static int       g_ruSwCursor  = 0;   // the sheet slot that comes off (0/1)
+static int       g_ruSwBagSlot = -1;  // the bag cell the new trinket sits in
+static uint32_t  g_ruSwHash    = 0;
+static bool      g_ruSwOpened  = false;   // the mod opened the sheet, so the mod closes it
+static char      g_ruSwName[160], g_ruSwWho[160], g_ruSwBefore[TRINKET_SLOT_COUNT][160];
+static DWORD     g_ruSwUntil   = 0;
+
+static void ruSwClear(const char* why) {
+    if (why && g_ruSwPhase) logLine("trinket swap: ended (%s)", why);
+    g_ruSwPhase = 0; g_ruSwHero = 0; g_ruSwCursor = 0; g_ruSwBagSlot = -1; g_ruSwHash = 0;
+    g_ruSwOpened = false; g_ruSwName[0] = 0; g_ruSwWho[0] = 0; g_ruSwUntil = 0;
+    for (int i = 0; i < TRINKET_SLOT_COUNT; i++) g_ruSwBefore[i][0] = 0;
+}
+bool ruSwapChoosing() { return g_ruSwPhase == 1; }
+
+static void ruSwSpeakChoice(bool first) {
+    char line[640];
+    if (first) _snprintf(line, sizeof line, axs(AXS_INV_SWAP_PROMPT_FMT),
+                         g_ruSwWho, g_ruSwBefore[g_ruSwCursor], g_ruSwCursor + 1);
+    else       _snprintf(line, sizeof line, axs(AXS_INV_SWAP_ROW_FMT),
+                         g_ruSwBefore[g_ruSwCursor], g_ruSwCursor + 1);
+    line[sizeof line - 1] = 0;
+    axAppendHint(line, sizeof line, AXS_INV_SWAP_HINT);
+    postSpeech(line);
+}
+
+static void ruSwapOffer(uintptr_t base, uintptr_t hero, const char* who, const char* name,
+                        int bagSlot, char before[TRINKET_SLOT_COUNT][160]) {
+    uintptr_t beg = 0; int slots = 0; uint32_t hash = 0;
+    if (invItemVector(base, &beg, &slots) && bagSlot >= 0 && bagSlot < slots)
+        safeReadU32(beg + (uintptr_t)bagSlot * ITEM_STRIDE + ITEM_IDHASH_OFF, &hash);
+    ruSwClear(nullptr);
+    g_ruSwPhase   = 1;
+    g_ruSwHero    = hero;
+    g_ruSwCursor  = 0;
+    g_ruSwBagSlot = bagSlot;
+    g_ruSwHash    = hash;
+    _snprintf(g_ruSwName, sizeof g_ruSwName, "%s", name ? name : "");  g_ruSwName[sizeof g_ruSwName - 1] = 0;
+    _snprintf(g_ruSwWho,  sizeof g_ruSwWho,  "%s", who  ? who  : "");  g_ruSwWho[sizeof g_ruSwWho - 1] = 0;
+    for (int i = 0; i < TRINKET_SLOT_COUNT; i++) {
+        _snprintf(g_ruSwBefore[i], sizeof g_ruSwBefore[i], "%s", before[i]);
+        g_ruSwBefore[i][sizeof g_ruSwBefore[i] - 1] = 0;
+    }
+    logLine("trinket swap: offered -- \"%s\" (bag cell %d, hash 0x%08x) onto %p who wears [\"%s\",\"%s\"]",
+            g_ruSwName, bagSlot, hash, (void*)hero, before[0], before[1]);
+    ruSwSpeakChoice(true);
+}
+
+static void ruSwapCommit(uintptr_t base) {
+    iuAbandon("swap chosen");
+    if (ruFightingNow(base)) {                       // a fight can start under the question
+        logLine("trinket swap: refused -- combat started under the choice");
+        postSpeech(axs(AXS_INV_NO_TRINKET_IN_FIGHT));
+        ruSwClear("combat");
+        return;
+    }
+    uint32_t hash = 0;
+    if (ruHeroTrinketAt(g_ruSwHero, g_ruSwCursor, &hash) < 1) {   // emptied under the question
+        logLine("trinket swap: hero slot %d is empty now -- nothing to swap", g_ruSwCursor + 1);
+        postSpeech(axs(AXS_DIDNT_HAPPEN));
+        ruSwClear("slot emptied");
+        return;
+    }
+    if (g_csOpen && abSelectedHero(base) == g_ruSwHero) {        // armed from this hero's own sheet
+        g_ruSwPhase = 3;
+        g_ruSwUntil = GetTickCount() + RU_SW_FIND_MS;
+        logLine("trinket swap: the sheet is already up for %p -- straight to the drag", (void*)g_ruSwHero);
+        return;
+    }
+    if (!abOpenSheetByRightClick(base, g_ruSwHero)) {
+        postSpeech(axs(AXS_DIDNT_HAPPEN));
+        ruSwClear("no point to right-click");
+        return;
+    }
+    g_ruSwOpened = true;
+    g_ruSwPhase  = 2;
+    g_ruSwUntil  = GetTickCount() + RU_SW_OPEN_MS;
+}
+
+// Per frame (OurPoll, beside the other raid trinket services).
+void serviceRaidSwap(uintptr_t base) {
+    if (g_ruSwPhase < 2) return;
+    if (!mapRoot(base)) { ruSwClear("the raid ended"); return; }
+    DWORD now = GetTickCount();
+
+    if (g_ruSwPhase == 2) {                          // the right-click went out; the sheet must follow
+        if (g_csOpen) {
+            g_ruSwPhase = 3;
+            g_ruSwUntil = now + RU_SW_FIND_MS;
+            logLine("trinket swap: the sheet opened (selected hero %p, wanted %p)",
+                    (void*)abSelectedHero(base), (void*)g_ruSwHero);
+            return;
+        }
+        if ((int32_t)(now - g_ruSwUntil) > 0) {
+            logLine("trinket swap: the sheet did not open after the right-click");
+            postSpeech(axs(AXS_DIDNT_HAPPEN));
+            ruSwClear("sheet did not open");
+        }
+        return;
+    }
+
+    if (g_ruSwPhase == 3) {                          // both ends on screen, then the drag
+        int64_t srcId = (int64_t)(INV_FOURCC_BASE + (uint32_t)g_ruSwBagSlot);
+        int64_t dstId = (int64_t)(RU_SHEET_TRK_ID0 + (uint32_t)g_ruSwCursor);
+        uintptr_t src = feGetElementById(srcId), dst = feGetElementById(dstId);
+        if (src && dst && !clickQueued()) {
+            uintptr_t beg = 0; int slots = 0; uint32_t cellHash = 0; int32_t cellAmt = 0;
+            if (invItemVector(base, &beg, &slots) && g_ruSwBagSlot < slots) {
+                safeReadU32(beg + (uintptr_t)g_ruSwBagSlot * ITEM_STRIDE + ITEM_AMOUNT_OFF, (uint32_t*)&cellAmt);
+                safeReadU32(beg + (uintptr_t)g_ruSwBagSlot * ITEM_STRIDE + ITEM_IDHASH_OFF, &cellHash);
+            }
+            if (cellAmt < 1 || cellHash != g_ruSwHash || ruHeroTrinketAt(g_ruSwHero, g_ruSwCursor, nullptr) < 1) {
+                logLine("trinket swap: an end changed before the drag (cell amount %d hash 0x%08x, wanted 0x%08x)",
+                        cellAmt, cellHash, g_ruSwHash);
+                postSpeech(axs(AXS_DIDNT_HAPPEN));
+                if (g_ruSwOpened) abToggleCharSheet(base);
+                ruSwClear("stale ends");
+                return;
+            }
+            if (synthDragElements(srcId, dstId, "raid trinket swap")) {
+                g_ruSwPhase = 4;
+                g_ruSwUntil = now + RU_SW_WATCH_MS;
+                return;
+            }
+        }
+        if ((int32_t)(now - g_ruSwUntil) > 0) {
+            logLine("trinket swap: drag ends not on screen in time -- bag cell 0x%llx %s, sheet slot 0x%llx %s",
+                    (unsigned long long)srcId, src ? "found" : "MISSING",
+                    (unsigned long long)dstId, dst ? "found" : "MISSING");
+            postSpeech(axs(AXS_DIDNT_HAPPEN));
+            if (g_ruSwOpened) abToggleCharSheet(base);
+            ruSwClear("ends not found");
+        }
+        return;
+    }
+
+    uint32_t hash = 0;
+    if (ruHeroTrinketAt(g_ruSwHero, g_ruSwCursor, &hash) > 0 && hash == g_ruSwHash) {
+        logLine("trinket swap: slot %d now holds \"%s\" (hash 0x%08x); \"%s\" came off",
+                g_ruSwCursor + 1, g_ruSwName, hash, g_ruSwBefore[g_ruSwCursor]);
+        char utter[800];
+        _snprintf(utter, sizeof utter, axs(AXS_INV_EQUIPPED_DISPLACED_FMT),
+                  g_ruSwName, g_ruSwWho, g_ruSwCursor + 1, g_ruSwBefore[g_ruSwCursor]);
+        utter[sizeof utter - 1] = 0;
+        if (g_ruSwOpened) abToggleCharSheet(base);
+        postSpeech(utter);
+        ruSwClear(nullptr);
+        return;
+    }
+    if ((int32_t)(now - g_ruSwUntil) > 0) {
+        logLine("trinket swap: watch timed out, slot %d still holds hash 0x%08x (wanted 0x%08x)",
+                g_ruSwCursor + 1, hash, g_ruSwHash);
+        postSpeech(axs(AXS_DIDNT_HAPPEN));
+        if (g_ruSwOpened) abToggleCharSheet(base);
+        ruSwClear("timed out");
+    }
 }
 
 void serviceRaidTrinket(uintptr_t base) {
@@ -851,7 +1192,18 @@ static void iuCommit(uintptr_t base, uintptr_t hero) {
         return;
     }
     char trkBefore[TRINKET_SLOT_COUNT][160];
-    if (g_iuIsTrinket) ruSnapTrinkets(base, hero, trkBefore);
+    bool trkFull = false, trkClassNo = false;      // what a refusal will be explained by, read
+    if (g_iuIsTrinket) {                           // BEFORE the call while the bag slot is still
+        ruSnapTrinkets(base, hero, trkBefore);
+        trkFull = trkBefore[0][0] && trkBefore[1][0];
+        bool sure = false;
+        bool fits = bldTrinketFitsHero(base, item, hero, &sure);
+        trkClassNo = sure && !fits;
+        if (trkFull && !trkClassNo) {
+            ruSwapOffer(base, hero, who, g_iuName, g_iuSlot, trkBefore);
+            return;
+        }
+    }
 
     bool gameOk = false;
     bool called = sehHeroUseItem(base, hero, root + INV_SYSTEM_OFF, (uint32_t)g_iuSlot, &gameOk);
@@ -871,7 +1223,7 @@ static void iuCommit(uintptr_t base, uintptr_t hero) {
             ruSpeakEquipLanded(who, nm, landed, displacedName);
             return;
         }
-        ruAskArm(hero, who, nm, trkBefore);
+        ruAskArm(hero, who, nm, trkBefore, trkFull, trkClassNo);
         return;
     }
 
@@ -933,6 +1285,7 @@ bool routeItemUseKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat)
 
     if (sym == SDLK_ESCAPE) {
         if (repeat) return true;
+        if (ruSwapChoosing()) ruSwClear("cancelled");
         iuAbandon("cancelled");
         postSpeech(axs(AXS_CANCELLED));
         return true;
@@ -948,6 +1301,13 @@ bool routeItemUseKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat)
         default: return false;
     }
     if (repeat) return true;
+
+    if (ruSwapChoosing()) {
+        if (confirm) { ruSwapCommit(base); return true; }
+        g_ruSwCursor = (g_ruSwCursor + dir + TRINKET_SLOT_COUNT) % TRINKET_SLOT_COUNT;   // two rows: a step is the other one
+        ruSwSpeakChoice(false);
+        return true;
+    }
 
     uintptr_t heroes[RV_MAX_MEMBERS];
     int n = iuTargetList(base, heroes, RV_MAX_MEMBERS);

@@ -1,0 +1,24 @@
+; The proxy's export table: the real version.dll's seventeen names at the real DLL's ordinals,
+; each an alias of its wrapper in version_proxy.cpp. Mod\build.ps1 gate 1 refuses to deploy
+; unless this table equals the live System32 version.dll's (names, ordinals, no forwarders,
+; no leaked mod symbol). The old note that .def FORWARDERS fail to link beside a DllMain
+; object (2026-07-28) does not apply to these: they are aliases of code exports.
+LIBRARY version
+EXPORTS
+    GetFileVersionInfoA=AxGetFileVersionInfoA @1
+    GetFileVersionInfoByHandle=AxGetFileVersionInfoByHandle @2
+    GetFileVersionInfoExA=AxGetFileVersionInfoExA @3
+    GetFileVersionInfoExW=AxGetFileVersionInfoExW @4
+    GetFileVersionInfoSizeA=AxGetFileVersionInfoSizeA @5
+    GetFileVersionInfoSizeExA=AxGetFileVersionInfoSizeExA @6
+    GetFileVersionInfoSizeExW=AxGetFileVersionInfoSizeExW @7
+    GetFileVersionInfoSizeW=AxGetFileVersionInfoSizeW @8
+    GetFileVersionInfoW=AxGetFileVersionInfoW @9
+    VerFindFileA=AxVerFindFileA @10
+    VerFindFileW=AxVerFindFileW @11
+    VerInstallFileA=AxVerInstallFileA @12
+    VerInstallFileW=AxVerInstallFileW @13
+    VerLanguageNameA=AxVerLanguageNameA @14
+    VerLanguageNameW=AxVerLanguageNameW @15
+    VerQueryValueA=AxVerQueryValueA @16
+    VerQueryValueW=AxVerQueryValueW @17

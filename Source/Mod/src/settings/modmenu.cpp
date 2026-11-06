@@ -90,6 +90,8 @@ static int  smTutGet()       { return axModTutorials() ? 0 : 1; }
 static void smTutSet(int v)  { axSetModTutorials(v == 0); }
 static int  smAbbrGet()      { return axExpandAbbreviations() ? 0 : 1; }
 static void smAbbrSet(int v) { axSetExpandAbbreviations(v == 0); }
+static int  smRouteGet()     { return axMapRouteAuto() ? 1 : 0; }
+static void smRouteSet(int v){ axSetMapRouteAuto(v == 1); }
 static const SmValRow kSmAnn[] = {
     { AXS_SM_ANN_SUBTITLES, 2, nullptr, smSubsGet, smSubsSet, 0,
       { AXS_VALUE_ON, AXS_VALUE_OFF }, nullptr,
@@ -118,6 +120,9 @@ static const SmValRow kSmAnn[] = {
     { AXS_SM_ANN_TIPWRAP, AX_TIPWRAP_MODES, nullptr, axTipWrapMode, axSetTipWrapMode, 0,
       { AXS_VALUE_OFF, AXS_SM_ANN_TW_V_SPOKEN, AXS_SM_ANN_TW_V_SILENT }, nullptr,
       { AXS_SM_ANN_TW_OFF, AXS_SM_ANN_TW_SPOKEN, AXS_SM_ANN_TW_SILENT }, nullptr },
+    { AXS_SM_ANN_MAPROUTE, 2, nullptr, smRouteGet, smRouteSet, 0,
+      { AXS_SM_ANN_MR_V_REQUEST, AXS_SM_ANN_MR_V_ROOM }, nullptr,
+      { AXS_SM_ANN_MR_REQUEST, AXS_SM_ANN_MR_ROOM }, nullptr },
 };
 static const int SM_ANN_N = (int)(sizeof kSmAnn / sizeof kSmAnn[0]);
 

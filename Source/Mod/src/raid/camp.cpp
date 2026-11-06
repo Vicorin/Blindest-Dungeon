@@ -12,8 +12,8 @@ static const uintptr_t RAID_CAMP_POINTS_OFF = 0x511c;
 static const uintptr_t RAID_CAMP_USED_OFF   = 0x5120;
 static const int CAMP_PHASE_MEAL    = 3;
 static const int CAMP_PHASE_RESPITE = 6;
-static const uintptr_t ACTOR_CAMP_ID_OFF    = 0x130c;
-static const uintptr_t ACTOR_CAMP_ARMED_OFF = 0x13ac;
+static const uintptr_t ACTOR_CAMP_ID_OFF    = 0x137c;
+static const uintptr_t ACTOR_CAMP_ARMED_OFF = 0x141c;
                                                         // (-1 = none). Camp start writes -1 per hero.
 
 // ---- PERFORMING a camping skill ----

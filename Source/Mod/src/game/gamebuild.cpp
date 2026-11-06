@@ -27,8 +27,8 @@ AxGameBuild axGameBuild() {
 const char* axGameBuildName() {
     switch (axGameBuild()) {
         case AX_BUILD_STEAM:   return "Steam";
-        case AX_BUILD_DRMFREE:      return "DRM-free (GOG)";
-        case AX_BUILD_DRMFREE_PREV: return "DRM-free (GOG, previous release)";
+        case AX_BUILD_DRMFREE:      return "DRM-free (Steam depot copy)";   // _windowsnosteam\win64
+        case AX_BUILD_DRMFREE_PREV: return "DRM-free (GOG)";
         default:               return "unknown";
     }
 }

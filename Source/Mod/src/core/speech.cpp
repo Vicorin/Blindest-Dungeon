@@ -34,6 +34,7 @@ struct AxDebugLogState {
     volatile bool positionCounts;
     volatile bool controlHints;
     volatile bool autoTooltips;
+    volatile bool mapRouteAuto;
     volatile bool expandAbbrev;
     volatile int  keywordDefs;
     volatile int  tipWrap;
@@ -47,7 +48,7 @@ struct AxDebugLogState {
     int  sapiVolume;
     AxDebugLogState() : enabled(false), readSubtitles(true), readSubtitlesExplicit(false),
                         barks(AX_BARKS_ON), barksExplicit(false), checkUpdates(true), positionCounts(true),
-                        controlHints(true), autoTooltips(true), expandAbbrev(true), keywordDefs(AX_KEYWORDS_SPOKEN),
+                        controlHints(true), autoTooltips(true), mapRouteAuto(false), expandAbbrev(true), keywordDefs(AX_KEYWORDS_SPOKEN),
                         tipWrap(AX_TIPWRAP_SPOKEN), modTutorials(true), modEnabled(true), speechHandler(AX_SPEECH_AUTO),
                         sapiRate(-1), sapiVolume(-1) {
         InitializeCriticalSection(&g_logCs);
@@ -96,6 +97,7 @@ struct AxDebugLogState {
                     else if (strncmp(p, "position_counts=", 16) == 0) positionCounts = (p[16] != '0');
                     else if (strncmp(p, "control_hints=", 14) == 0)   controlHints   = (p[14] != '0');
                     else if (strncmp(p, "auto_tooltips=", 14) == 0)   autoTooltips   = (p[14] != '0');
+                    else if (strncmp(p, "map_route=", 10) == 0)       mapRouteAuto   = (p[10] == '1');   // 1 = with every room
                     else if (strncmp(p, "expand_abbreviations=", 21) == 0) expandAbbrev = (p[21] != '0');
                     else if (strncmp(p, "glossary_definitions=", 21) == 0) {
                         int v = p[21] - '0';
@@ -149,6 +151,7 @@ static void axSaveIni() {
     fprintf(f, "position_counts=%d\n", s.positionCounts ? 1 : 0);
     fprintf(f, "control_hints=%d\n", s.controlHints ? 1 : 0);
     fprintf(f, "auto_tooltips=%d\n", s.autoTooltips ? 1 : 0);
+    fprintf(f, "map_route=%d\n", s.mapRouteAuto ? 1 : 0);
     fprintf(f, "expand_abbreviations=%d\n", s.expandAbbrev ? 1 : 0);
     fprintf(f, "glossary_definitions=%d\n", (int)s.keywordDefs);
     fprintf(f, "tooltip_wrapping=%d\n", (int)s.tipWrap);
@@ -209,6 +212,11 @@ void axSetControlHints(bool on) {
 bool axAutoTooltips() { return axDebugState().autoTooltips; }
 void axSetAutoTooltips(bool on) {
     axDebugState().autoTooltips = on;
+    axSaveIni();
+}
+bool axMapRouteAuto() { return axDebugState().mapRouteAuto; }
+void axSetMapRouteAuto(bool on) {
+    axDebugState().mapRouteAuto = on;
     axSaveIni();
 }
 bool axExpandAbbreviations() { return axDebugState().expandAbbrev; }
@@ -830,6 +838,12 @@ static void axExpandAbbrevText(const char* in, char* out, size_t outsz) {
     const unsigned char* s = (const unsigned char*)in;
     size_t o = 0;
     for (size_t i = 0; s[i] && o + 1 < outsz; ) {
+        if (s[i] == (unsigned char)AX_NOEXPAND_OPEN) {
+            for (i++; s[i] && s[i] != (unsigned char)AX_NOEXPAND_CLOSE && o + 1 < outsz; ) out[o++] = (char)s[i++];
+            if (s[i]) i++;
+            continue;
+        }
+        if (s[i] == (unsigned char)AX_NOEXPAND_CLOSE) { i++; continue; }
         size_t bestLen = 0; const char* bestFull = nullptr;
         if (!axWordBefore(s, i)) {
             for (int e = 0; e < AX_ABBREV_N; e++) {
@@ -857,8 +871,27 @@ static void axExpandAbbrevText(const char* in, char* out, size_t outsz) {
     out[o] = 0;
 }
 
+bool axIsAbbreviation(const char* word) {
+    if (!word || !word[0]) return false;
+    char out[256];
+    axExpandAbbrevText(word, out, sizeof out);
+    return strcmp(out, word) != 0;
+}
+
 void postSpeech(const char* text, bool interrupt, SpeechKind kind) {
     if (kind == SPK_AUTO) kind = interrupt ? SPK_NAV : SPK_EVENT;
+    // ---- EXPAND ABBREVIATIONS (above): the F10 row's one consumer ----
+    char expanded[MAILBOX_SZ];
+    if (axExpandAbbreviations()) {
+        axExpandAbbrevText(text, expanded, sizeof expanded);
+        text = expanded;
+    } else if (strchr(text, AX_NOEXPAND_OPEN) || strchr(text, AX_NOEXPAND_CLOSE)) {
+        size_t n = 0;
+        for (size_t i = 0; text[i] && n < MAILBOX_SZ - 1; i++)
+            if (text[i] != AX_NOEXPAND_OPEN && text[i] != AX_NOEXPAND_CLOSE) expanded[n++] = text[i];
+        expanded[n] = 0;
+        text = expanded;
+    }
     // ---- A STRAY ".." IS COLLAPSED HERE, ONCE FOR EVERY LINE ----
     char clean[MAILBOX_SZ];
     {
@@ -870,11 +903,6 @@ void postSpeech(const char* text, bool interrupt, SpeechKind kind) {
         }
         clean[n] = 0;
         text = clean;
-    }
-    char expanded[MAILBOX_SZ];
-    if (axExpandAbbreviations()) {
-        axExpandAbbrevText(text, expanded, sizeof expanded);
-        text = expanded;
     }
     if (kind == SPK_NAV) {
         if (text != g_lastNavLine) {
@@ -1032,7 +1060,7 @@ void stripMarkup(const char* in, char* out, int outsz) {
             if (*p) p++;
             continue;
         }
-        if (p[0] == '{') {                                  // legacy "{...}" tag
+        if (p[0] == '{' && strchr(p, '}')) {
             while (*p && *p != '}') p++;
             if (*p) p++;
             continue;

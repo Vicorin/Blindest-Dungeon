@@ -35,15 +35,15 @@ static const char* const TP_STRESS_KEY    = "str_ui_hero_stress";        // "Her
 static const uintptr_t ACTOR_ARM_PIERCE_OFF   = 0xc18;
 static const uintptr_t ACTOR_DMG_RECV_OFF     = 0xbe0;
 static const uintptr_t ACTOR_DEATHBLOW_OFF    = 0xcbc;
-static const uintptr_t ACTOR_STRESS_DEALT_OFF = 0xecc;
-static const uintptr_t ACTOR_STRESS_RECV_OFF  = 0xf2c;
-static const uintptr_t ACTOR_VS_RANK_A_OFF    = 0x1010;
-static const uintptr_t ACTOR_VS_RANK_B_OFF    = 0x1014;
+static const uintptr_t ACTOR_STRESS_DEALT_OFF = 0xf24;
+static const uintptr_t ACTOR_STRESS_RECV_OFF  = 0xf84;
+static const uintptr_t ACTOR_VS_RANK_A_OFF    = 0x1080;
+static const uintptr_t ACTOR_VS_RANK_B_OFF    = 0x1084;
 static const uintptr_t ACTOR_CUR_SKILL_OFF    = 0x8e0;
 
 // Skill fields, all bytes, all read as "does this skill bypass X".
-static const uintptr_t SKILL_IGNORE_PROT_OFF  = 0x43c;
-static const uintptr_t SKILL_IGN_DEATHBLW_OFF = 0x43f;
+static const uintptr_t SKILL_IGNORE_PROT_OFF  = 0x444;
+static const uintptr_t SKILL_IGN_DEATHBLW_OFF = 0x447;
 static const uintptr_t SKILL_EFFECTS_END_OFF  = 0x3d0;
 static const uintptr_t EFFECT_STRESS_OFF      = 0x4c;   // Effect+: float, stress this effect deals
 
@@ -66,16 +66,16 @@ static const uintptr_t SKILL_HEAL_MIN_OFF = 0x364;   // int .heal min
 static const uintptr_t SKILL_HEAL_MAX_OFF = 0x368;   // int .heal max
 static const uintptr_t SKILL_ACC_OFF      = 0x380;   // float .atk (accuracy), stored as a fraction
 static const uintptr_t SKILL_CRIT_OFF     = 0x384;   // float .crit, stored as a fraction
-static const uintptr_t SKILL_DMG_OFF      = 0x41c;
+static const uintptr_t SKILL_DMG_OFF      = 0x420;
 static const uintptr_t SKILL_HEALFLAG_OFF = 0x90;    // byte: picks the composer's heal branch
                                                      // (heal skills show Heal x-y, not ACC/DMG/CRIT)
 static const uintptr_t SKILL_RANDTGT_OFF  = 0x91;    // byte: random target
 static const uintptr_t SKILL_NOINFO_OFF   = 0x3ac;
-static const uintptr_t SKILL_PLAIN_OFF    = 0x4f8;
-static const uintptr_t SKILL_IGN_PROT_OFF = 0x43c;
-static const uintptr_t SKILL_IGN_GUARD_OFF= 0x43d;
-static const uintptr_t SKILL_IGN_STLTH_OFF= 0x43e;
-static const uintptr_t SKILL_IGN_DDOOR_OFF= 0x43f;
+static const uintptr_t SKILL_PLAIN_OFF    = 0x500;
+static const uintptr_t SKILL_IGN_PROT_OFF = 0x444;
+static const uintptr_t SKILL_IGN_GUARD_OFF= 0x445;
+static const uintptr_t SKILL_IGN_STLTH_OFF= 0x446;
+static const uintptr_t SKILL_IGN_DDOOR_OFF= 0x447;
 static const uintptr_t SKILL_REQ_BURNING_OFF  = 0x398;  // byte: the skill needs a BURNING target
 static const uintptr_t SKILL_DMG_PER_BURN_OFF = 0x39c;  // float FRACTION: +DMG per burn stack
 static const uintptr_t SKILL_COPY_BURN_OFF    = 0x3a0;  // byte: hits behind too, and copies the burn
@@ -87,7 +87,7 @@ static const uintptr_t SKILL_ISMOVE_OFF   = 0x3ac;
 
 static const uintptr_t SKILL_SELFONLY_OFF = 0x3ae;
 
-static const uintptr_t SKILL_USER_SELECTED_OFF = 0x4a8;
+static const uintptr_t SKILL_USER_SELECTED_OFF = 0x4b0;
 
 // ---- SKIP TURN (the action bar's 'pass' button) ----
 
@@ -97,14 +97,14 @@ static const uintptr_t HEROCLASS_EFFDEF_END_OFF = 0xb40;  // HeroClass+: ... and
 static const uintptr_t EFFDEF_STRIDE      = 0x90;
 static const uintptr_t EFFDEF_KEY_OFF     = 0x20;    // uint key into the skill's effect map
 static const uintptr_t SKILL_EFFMAP_OFF   = 0x3e0;
-static const uintptr_t SKILL_PERLINE_OFF  = 0x500;
+static const uintptr_t SKILL_PERLINE_OFF  = 0x508;
 
-static const uintptr_t EFF_DISPLAY_OFF    = 0x43c;
+static const uintptr_t EFF_DISPLAY_OFF    = 0x4c0;
 static const uintptr_t EFF_CHANCE_OFF     = 0x48;   // float, stored as a fraction
 static const uintptr_t EFF_CATEGORY_OFF   = 0x44;   // int display type -> which header bucket
-static const uintptr_t EFF_NOHEADER_OFF   = 0x2c8;
-static const uintptr_t EFF_TORCH_OFF      = 0x198;
-static const uintptr_t EFF_TORCH_NEG_OFF  = 0x19c;
+static const uintptr_t EFF_NOHEADER_OFF   = 0x344;
+static const uintptr_t EFF_TORCH_OFF      = 0x210;
+static const uintptr_t EFF_TORCH_NEG_OFF  = 0x214;
 static const uintptr_t EFF_STRESS_OFF     = 0x4c;   // float
 static const uintptr_t EFF_STRESS_HEAL_OFF= 0xd4;   // float
 static const uintptr_t EFF_STUN_OFF       = 0x50;   // float
@@ -119,49 +119,49 @@ static const uintptr_t EFF_CURE_POISON_OFF= 0xd8;   // int
 static const uintptr_t EFF_CURE_BLEED_OFF = 0xdc;   // int
 static const uintptr_t EFF_CURE_BURN_OFF  = 0xe0;   // int (The Fire's Edge) — and THIS is why cure
 static const uintptr_t EFF_CURE_DISEASE_OFF = 0xe4;
-static const uintptr_t EFF_DOT_POISON_OFF = 0x130;
-static const uintptr_t EFF_DOT_BLEED_OFF  = 0x134;
-static const uintptr_t EFF_DOT_BURN_OFF   = 0x138;  // int burn stacks applied (The Fire's Edge)
-static const uintptr_t EFF_DOT_IRRESIST_OFF = 0x13c;  // byte .dot_irresistible: burn ignores resist
-static const uintptr_t EFF_REQ_BURNING_OFF     = 0x13d;
-static const uintptr_t EFF_REQ_NOT_BURNING_OFF = 0x13e;  // byte: ...only vs a target that is NOT burning
-static const uintptr_t EFF_DOT_STRESS_OFF = 0x140;
-static const uintptr_t EFF_CLEAR_DOT_STRESS_OFF = 0x144;
-static const uintptr_t EFF_SHUFFLE_DOT_OFF= 0x14c;
-static const uintptr_t EFF_HEAL_DOT_OFF   = 0x150;
-static const uintptr_t EFF_DOT_DURATION_OFF = 0x154;
-static const uintptr_t EFF_GUARD_OFF      = 0x158;
-static const uintptr_t EFF_CLEAR_GUARDING_OFF = 0x15c;
-static const uintptr_t EFF_CLEAR_GUARDED_OFF  = 0x160;
-static const uintptr_t EFF_RIPOSTE_OFF    = 0x168;
-static const uintptr_t EFF_CLEAR_VIRTUE_OFF = 0x17c;
-static const uintptr_t EFF_MOVE_OFF       = 0x1a4;
-static const uintptr_t EFF_SHUFFLE_OFF    = 0x1a8;
-static const uintptr_t EFF_DISEASE_OFF    = 0x20f;
-static const uintptr_t EFF_CBURN_OFF      = 0x2c0;  // int .controlled_burn_amount (The Fire's Edge)
-static const uintptr_t EFF_HEALTH_BLOCKS_OFF = 0x2ec;
-static const uintptr_t EFF_STEALTH_OFF    = 0x2f0;
-static const uintptr_t EFF_UNSTEALTH_OFF  = 0x2f4;
-static const uintptr_t EFF_GUARD_PERF_OFF = 0x360;
-static const uintptr_t EFF_ACTOR_MODE_OFF = 0x36c;
-static const uintptr_t EFF_HP_DAMAGE_OFF  = 0x3e0;
-static const uintptr_t EFF_CURE_DEBUFF_OFF= 0x434;
-static const uintptr_t EFF_REFRESH_SKILL_OFF = 0x4c5;
-static const uintptr_t EFF_REQ_KILL_OFF   = 0x4c6;
+static const uintptr_t EFF_DOT_POISON_OFF = 0x134;
+static const uintptr_t EFF_DOT_BLEED_OFF  = 0x138;
+static const uintptr_t EFF_DOT_BURN_OFF   = 0x13c;
+static const uintptr_t EFF_DOT_IRRESIST_OFF = 0x140;
+static const uintptr_t EFF_REQ_BURNING_OFF     = 0x148;
+static const uintptr_t EFF_REQ_NOT_BURNING_OFF = 0x149;
+static const uintptr_t EFF_DOT_STRESS_OFF = 0x1b8;
+static const uintptr_t EFF_CLEAR_DOT_STRESS_OFF = 0x1bc;
+static const uintptr_t EFF_SHUFFLE_DOT_OFF= 0x1c4;
+static const uintptr_t EFF_HEAL_DOT_OFF   = 0x1c8;
+static const uintptr_t EFF_DOT_DURATION_OFF = 0x1cc;
+static const uintptr_t EFF_GUARD_OFF      = 0x1d0;
+static const uintptr_t EFF_CLEAR_GUARDING_OFF = 0x1d4;
+static const uintptr_t EFF_CLEAR_GUARDED_OFF  = 0x1d8;
+static const uintptr_t EFF_RIPOSTE_OFF    = 0x1e0;
+static const uintptr_t EFF_CLEAR_VIRTUE_OFF = 0x1f4;
+static const uintptr_t EFF_MOVE_OFF       = 0x21c;
+static const uintptr_t EFF_SHUFFLE_OFF    = 0x220;
+static const uintptr_t EFF_DISEASE_OFF    = 0x287;
+static const uintptr_t EFF_CBURN_OFF      = 0x33c;
+static const uintptr_t EFF_HEALTH_BLOCKS_OFF = 0x368;
+static const uintptr_t EFF_STEALTH_OFF    = 0x36c;
+static const uintptr_t EFF_UNSTEALTH_OFF  = 0x370;
+static const uintptr_t EFF_GUARD_PERF_OFF = 0x3e0;
+static const uintptr_t EFF_ACTOR_MODE_OFF = 0x3ec;
+static const uintptr_t EFF_HP_DAMAGE_OFF  = 0x460;
+static const uintptr_t EFF_CURE_DEBUFF_OFF= 0x4b8;
+static const uintptr_t EFF_REFRESH_SKILL_OFF = 0x589;
+static const uintptr_t EFF_REQ_KILL_OFF   = 0x58a;
 // ---- The Fire's Edge: TRINKET effects ----
-static const uintptr_t EFF_ON_HIT_OFF     = 0x2c9;
-static const uintptr_t EFF_ON_MISS_OFF    = 0x2ca;  // byte .on_miss   -> appends "_miss"
-static const uintptr_t EFF_IS_TRIGGER_OFF = 0x2ce;
-static const uintptr_t EFF_TRIG_INC_LO_OFF = 0x2d0; // int  \ "Trigger Limit +%d-%d"; shown when either
-static const uintptr_t EFF_TRIG_INC_HI_OFF = 0x2d4; // int  /  half is > 0
-static const uintptr_t EFF_ACTIONS_OFF    = 0x430;
-static const uintptr_t EFF_QUIRK_POS_PCT_OFF = 0x4c8;
-static const uintptr_t EFF_QUIRK_NEG_OFF  = 0x4cc;  // byte (was 0x4c4 before 6aa18626)
-static const uintptr_t EFF_GAIN_TRINKET_OFF = 0x50d;
-static const uintptr_t EFF_GAIN_RND_TRINKET_OFF = 0x4cd; // byte (was 0x4c5 before 6aa18626)
-static const uintptr_t EFF_TOWN_EVENT_OFF = 0x54d;
-static const uintptr_t EFF_DESTROY_TRINKET_OFF = 0x54e; // byte (was 0x546 before 6aa18626)
-static const uintptr_t EFF_IN_INVENTORY_OFF = 0x54f;
+static const uintptr_t EFF_ON_HIT_OFF     = 0x345;
+static const uintptr_t EFF_ON_MISS_OFF    = 0x346;
+static const uintptr_t EFF_IS_TRIGGER_OFF = 0x34a;
+static const uintptr_t EFF_TRIG_INC_LO_OFF = 0x34c;
+static const uintptr_t EFF_TRIG_INC_HI_OFF = 0x350;
+static const uintptr_t EFF_ACTIONS_OFF    = 0x4b4;
+static const uintptr_t EFF_QUIRK_POS_PCT_OFF = 0x58c;
+static const uintptr_t EFF_QUIRK_NEG_OFF  = 0x590;
+static const uintptr_t EFF_GAIN_TRINKET_OFF = 0x5d1;
+static const uintptr_t EFF_GAIN_RND_TRINKET_OFF = 0x591;
+static const uintptr_t EFF_TOWN_EVENT_OFF = 0x611;
+static const uintptr_t EFF_DESTROY_TRINKET_OFF = 0x612;
+static const uintptr_t EFF_IN_INVENTORY_OFF = 0x613;
 
 static const int AB_EFF_BUCKETS   = 29;   // (was 23)
 static const char* const kEffBucketKey[AB_EFF_BUCKETS] = {
@@ -484,7 +484,7 @@ void abStripMarkup(char* s) {
     for (char* r = s; *r; ) {
         if (*r == '{') {
             const char* e = strchr(r, '}');
-            if (!e) break;                      // unterminated: stop, keep what we already have
+            if (!e) { *w++ = *r++; continue; }
             r = (char*)e + 1;
             continue;
         }
@@ -630,7 +630,7 @@ static void abSkillRanksText(uintptr_t base, uintptr_t skill, char* out, int out
     out[outsz - 1] = 0;
 }
 
-// ---- Skill grey-out: is the selected hero out of position to use this skill? ----
+// ---- Out of position: the WORDING for a refused launch, not the decision ----
 static bool skillOutOfPosition(uintptr_t skill, uintptr_t perf) {
     if (!skill || !perf) return false;
     uint8_t isMove = 0;
@@ -716,41 +716,84 @@ static bool abSkillHpReqText(uintptr_t base, uintptr_t skill, char* out, int out
                      (int)(lo * 100.0f + 0.5f), (int)(hi * 100.0f + 0.5f), out, outsz);
 }
 
-static bool skillHpGateUnmet(uintptr_t skill, uintptr_t hero) {
-    if (!skill || !hero) return false;
-    uint8_t declared = 0;
-    if (!safeReadU8(skill + SKILL_HP_RANGE_SET_OFF, &declared) || !declared) return false;
-    float lo = 0.0f, hi = 0.0f, cur = 0.0f, max = 0.0f;
-    uint32_t mask = 0;
-    if (!abReadF32(skill + SKILL_HP_RANGE_MIN_OFF, &lo)) return false;
-    if (!abReadF32(skill + SKILL_HP_RANGE_MAX_OFF, &hi)) return false;
-    if (!(hi >= lo)) return false;
-    if (!abReadF32(hero + ACTOR_CUR_HP_OFF, &cur)) return false;
-    if (!safeReadU32(hero + ACTOR_HP_MASK_OFF, &mask)) return false;
-    if (!abStatValue(hero + ACTOR_STAT_OFF, mask, true, &max) || max <= 0.0f) return false;
-    float ratio = cur / max;
-    return ratio < lo || ratio > hi;
-}
+// ---- THE SKILL BUTTON'S OWN GREY TEST ----
+static const int AB_USE_GATES_SZ = 0x1c;
+static const int AB_GATE_MODE      = 0x00;        // byte: != 0 -> locked in the current mode
+static const int AB_GATE_TURN_OK   = 0x08;        // byte: 1 -> per-turn uses left
+static const int AB_GATE_BATTLE_OK = 0x10;        // byte: 1 -> per-battle uses left
+static const int AB_GATE_HP_OK     = 0x18;        // byte: 1 -> hp inside the skill's band
+static bool sehHasAnyTarget(uintptr_t base, uintptr_t skill, uintptr_t perf);          // defined with the layer
+static bool sehUseGates(uintptr_t base, uintptr_t hero, uintptr_t skill, unsigned char* out);
 
-static bool skillUsedUp(uintptr_t skill, uintptr_t hero) {
-    if (!skill || !hero) return false;
-    int limit = 0, left = -1;
-    if (!abSkillBattleUses(skill, hero, &limit, &left)) return false;
-    return left == 0;
-}
-
-// ---- A MOVE THAT CANNOT LEAVE ITS RANK ----
-static bool sehHasAnyTarget(uintptr_t base, uintptr_t skill, uintptr_t perf);   // defined with the layer
-static bool skillMoveStuck(uintptr_t skill, uintptr_t perf) {
-    if (!skill || !perf) return false;
-    uint8_t isMove = 0;
-    if (!safeReadU8(skill + SKILL_ISMOVE_OFF, &isMove) || !isMove) return false;
-    return !sehHasAnyTarget(g_base, skill, perf);
+static bool skillGatesShut(uintptr_t skill, uintptr_t perf, unsigned char* out) {
+    unsigned char rec[AB_USE_GATES_SZ];
+    unsigned char* r = out ? out : rec;
+    memset(r, 0, AB_USE_GATES_SZ);
+    r[AB_GATE_TURN_OK] = r[AB_GATE_BATTLE_OK] = r[AB_GATE_HP_OK] = 1;   // the "all clear" shape
+    if (!sehUseGates(g_base, perf, skill, r)) return false;
+    return r[AB_GATE_MODE] != 0 || r[AB_GATE_TURN_OK] != 1 ||
+           r[AB_GATE_BATTLE_OK] != 1 || r[AB_GATE_HP_OK] != 1;
 }
 
 static bool skillUnavailable(uintptr_t skill, uintptr_t perf) {
-    return skillOutOfPosition(skill, perf) || skillUsedUp(skill, perf) ||
-           skillHpGateUnmet(skill, perf) || skillMoveStuck(skill, perf);
+    if (!skill || !perf) return false;
+    uint8_t isMove = 0;
+    safeReadU8(skill + SKILL_ISMOVE_OFF, &isMove);
+    if (!isMove && !abBattleLive(mapRoot(g_base))) return false;
+    if (skillGatesShut(skill, perf, nullptr)) return true;
+    return !sehHasAnyTarget(g_base, skill, perf);
+}
+
+// ---- THE REASON A GATE SHUT, row by row ----
+static const int AB_GATE_BATTLE_LEFT = 0x14;
+static void abStripTrailingColon(char* s) {
+    size_t n = strlen(s);
+    while (n) {
+        if (s[n - 1] == ':' || s[n - 1] == ' ') { s[--n] = 0; continue; }
+        if (n >= 3 && (unsigned char)s[n - 3] == 0xEF && (unsigned char)s[n - 2] == 0xBC &&
+            (unsigned char)s[n - 1] == 0x9A) { n -= 3; s[n] = 0; continue; }           // U+FF1A
+        if (n >= 2 && (unsigned char)s[n - 2] == 0xC2 && (unsigned char)s[n - 1] == 0xA0) { n -= 2; s[n] = 0; continue; }  // nbsp
+        break;
+    }
+}
+static void abGateReasonText(uintptr_t base, uintptr_t skill, uintptr_t perf,
+                             const unsigned char* gates, char* out, int outsz) {
+    out[0] = 0;
+    char buf[256];
+    if (gates[AB_GATE_MODE] != 0) {
+        uintptr_t cobj = abHeroClassOf(perf);
+        uintptr_t dbeg = 0, dend = 0;
+        if (cobj && safeReadPtr(cobj + HEROCLASS_EFFDEF_BEG_OFF, &dbeg) &&
+            safeReadPtr(cobj + HEROCLASS_EFFDEF_END_OFF, &dend) && dbeg && dend >= dbeg &&
+            (dend - dbeg) / EFFDEF_STRIDE <= (size_t)AB_EFF_MAX_DEFS) {
+            size_t ndef = (dend - dbeg) / EFFDEF_STRIDE;
+            char modes[200] = { 0 };
+            for (size_t i = 0; i < ndef; i++) {
+                uintptr_t rec = dbeg + i * EFFDEF_STRIDE;
+                uint32_t key = 0;
+                char modeId[0x20] = { 0 };
+                if (!safeReadU32(rec + EFFDEF_KEY_OFF, &key) || !key) continue;
+                if (!abModeAllowsSkill(skill, key)) continue;
+                if (!safeReadCStr(rec, modeId, sizeof modeId) || !abPlausibleName(modeId)) continue;
+                char k[96];
+                _snprintf(k, sizeof k, "str_skill_mode_info_%s", modeId); k[sizeof k - 1] = 0;
+                if (!abTipPlain(base, k, buf, sizeof buf)) continue;
+                abStripTrailingColon(buf);
+                if (!buf[0]) continue;
+                if (modes[0]) strncat(modes, ", ", sizeof modes - strlen(modes) - 1);
+                strncat(modes, buf, sizeof modes - strlen(modes) - 1);
+            }
+            if (modes[0]) abAppend(out, outsz, modes);
+        }
+    }
+    if (gates[AB_GATE_TURN_OK] != 1) abAppend(out, outsz, axs(AXS_TS_ONCE_PER_TURN));
+    if (gates[AB_GATE_BATTLE_OK] != 1) {
+        int32_t left = 0;
+        memcpy(&left, gates + AB_GATE_BATTLE_LEFT, 4);
+        if (left < 0) left = 0;
+        if (abTipInt(base, "skill_battle_limit_in_battle", left, buf, sizeof buf)) abAppend(out, outsz, buf);
+    }
+    if (gates[AB_GATE_HP_OK] != 1 && abSkillHpReqText(base, skill, buf, sizeof buf)) abAppend(out, outsz, buf);
 }
 
 static void abSkillLimitsText(uintptr_t base, uintptr_t skill, uintptr_t hero, char* out, int outsz) {
@@ -1417,7 +1460,7 @@ static uintptr_t abEffMapFind(uintptr_t skill, uint32_t key) {
     return bound + RBNODE_VALUE_OFF;
 }
 
-static void abSkillEffects(uintptr_t base, uintptr_t skill, char* out, int outsz) {
+static void abSkillEffects(uintptr_t base, uintptr_t skill, uintptr_t hero, char* out, int outsz) {
     out[0] = 0;
     char buf[AB_EFF_BUCKET_SZ * 2];
 
@@ -1426,7 +1469,7 @@ static void abSkillEffects(uintptr_t base, uintptr_t skill, char* out, int outsz
     abEffRenderVector(base, skill, skill + SKILL_EFFECTS_OFF, (tgt & 0x100) != 0, buf, sizeof buf);
     if (buf[0]) abAppend(out, outsz, buf);
 
-    uintptr_t cobj = abHeroClass(base);
+    uintptr_t cobj = hero ? abHeroClassOf(hero) : abHeroClass(base);
     if (!cobj) return;
     uintptr_t dbeg = 0, dend = 0;
     if (!safeReadPtr(cobj + HEROCLASS_EFFDEF_BEG_OFF, &dbeg) ||
@@ -1437,13 +1480,48 @@ static void abSkillEffects(uintptr_t base, uintptr_t skill, char* out, int outsz
         logLine("actionbar eff: class claims %zu effect defs — implausible, skipped", ndef);
         return;
     }
+    uint32_t onlyMode = 0;
+    if (hero) {
+        if (!safeReadU32(hero + ACTOR_MODE_ID_OFF, &onlyMode) || !onlyMode) return;
+    }
+    size_t listed = 0;
+    if (!onlyMode) {
+        for (size_t i = 0; i < ndef; i++) {
+            uint32_t key = 0;
+            if (safeReadU32(dbeg + i * EFFDEF_STRIDE + EFFDEF_KEY_OFF, &key) &&
+                abModeAllowsSkill(skill, key)) listed++;
+        }
+    }
     for (size_t i = 0; i < ndef; i++) {
+        uintptr_t rec = dbeg + i * EFFDEF_STRIDE;
         uint32_t key = 0;
-        if (!safeReadU32(dbeg + i * EFFDEF_STRIDE + EFFDEF_KEY_OFF, &key)) continue;
+        if (!safeReadU32(rec + EFFDEF_KEY_OFF, &key)) continue;
+        if (onlyMode ? key != onlyMode : !abModeAllowsSkill(skill, key)) continue;
+        char heading[128] = { 0 };
+        if (!onlyMode && listed > 1) {
+            char modeId[0x20] = { 0 };
+            if (safeReadCStr(rec, modeId, sizeof modeId) && abPlausibleName(modeId)) {
+                char key2[96];
+                _snprintf(key2, sizeof key2, "str_skill_mode_info_%s", modeId);
+                key2[sizeof key2 - 1] = 0;
+                if (!abTipPlain(base, key2, heading, sizeof heading)) heading[0] = 0;
+            }
+        }
         uintptr_t vec = abEffMapFind(skill, key);
-        if (!vec) continue;
-        abEffRenderVector(base, skill, vec, false, buf, sizeof buf);
-        if (buf[0]) abAppend(out, outsz, buf);
+        buf[0] = 0;
+        if (vec) abEffRenderVector(base, skill, vec, false, buf, sizeof buf);
+        if (heading[0] && buf[0]) {
+            size_t hl = strlen(heading);
+            bool colon = hl && (heading[hl - 1] == ':' ||
+                         (hl >= 3 && (unsigned char)heading[hl - 3] == 0xEF &&
+                          (unsigned char)heading[hl - 2] == 0xBC && (unsigned char)heading[hl - 1] == 0x9A));
+            char piece[AB_EFF_BUCKET_SZ * 2 + 160];
+            _snprintf(piece, sizeof piece, colon ? "%s %s" : "%s: %s", heading, buf);
+            piece[sizeof piece - 1] = 0;
+            abAppend(out, outsz, piece);
+        } else if (buf[0]) {
+            abAppend(out, outsz, buf);
+        }
     }
 }
 
@@ -1539,7 +1617,7 @@ int abBuildSkillLines(uintptr_t base, uintptr_t skill, uintptr_t hero, const cha
     abSkillTooltip(base, skill, buf, sizeof buf);
     if (buf[0]) { _snprintf(lines[n], AB_TIP_LINE_SZ, "%s.", buf); lines[n][AB_TIP_LINE_SZ-1]=0; n++; }
 
-    abSkillEffects(base, skill, buf, sizeof buf);
+    abSkillEffects(base, skill, hero, buf, sizeof buf);
     if (buf[0]) { _snprintf(lines[n], AB_TIP_LINE_SZ, "%s.", buf); lines[n][AB_TIP_LINE_SZ-1]=0; n++; }
     return n;
 }
@@ -1853,6 +1931,26 @@ typedef void (*ToggleSheetFn)();
 bool abToggleCharSheet(uintptr_t base) {
     __try { ((ToggleSheetFn)(base + TOGGLE_CHARSHEET_RVA))(); return true; }
     __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+static bool tsRowClickPoint(uintptr_t base, const RvEntry& row, float* tx, float* ty);
+bool abOpenSheetByRightClick(uintptr_t base, uintptr_t hero) {
+    if (!hero || clickQueued()) return false;
+    RvEntry rows[RV_MAX_ROWS];
+    int n = rvBuildRoom(base, rows, RV_MAX_ROWS);
+    for (int i = 0; i < n; i++) {
+        if (rows[i].actor != hero || rows[i].enemy) continue;
+        float tx = 0, ty = 0;
+        if (!tsRowClickPoint(base, rows[i], &tx, &ty)) return false;
+        enqueueSynthAt(SDL_EVT_MOUSEMOTION,     0,                0, 0, tx, ty, 0);   // hover
+        enqueueSynthAt(SDL_EVT_MOUSEMOTION,     0,                0, 0, tx, ty, 1);   // ...settle
+        enqueueSynthAt(SDL_EVT_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT, 1, 0, tx, ty, 2);
+        enqueueSynthAt(SDL_EVT_MOUSEBUTTONUP,   SDL_BUTTON_RIGHT, 0, 0, tx, ty, 3);
+        logLine("sheet: right-click on hero %p at (%.0f,%.0f) to open their sheet", (void*)hero, tx, ty);
+        return true;
+    }
+    logLine("sheet: hero %p is not on the room list -- no point to right-click", (void*)hero);
+    return false;
 }
 
 uintptr_t abCurrentTurnActor(uintptr_t root) {
@@ -2514,6 +2612,41 @@ static void serviceGameArmedSkill(uintptr_t base, uintptr_t hero) {
     tsBegin(base, armed, name, cursor);
 }
 
+// ---- 1..5 IN A FIGHT ARE ENTER ON THAT BAR SLOT ----
+bool routeSkillKey(uintptr_t base, AxContext ctx, int slot, uint8_t repeat) {
+    if (slot < 0 || slot > 4) return false;
+    if (!(ctx == AX_ACTIONS || ctx == AX_ROOM || ctx == AX_MAP || ctx == AX_INV ||
+          ctx == AX_INGAME  || ctx == AX_QUEST || ctx == AX_TARGET)) return false;
+    uintptr_t root = mapRoot(base);
+    if (!root || !abBattleLive(root) || campInSkillPhase(base)) return false;
+    if (g_tsActive && g_tsUserSel) return false;
+    if (repeat) return true;                     // a held digit is one press, not a stream of them
+
+    ActionItem items[AB_MAX_ITEMS];
+    const int n = abBuildBar(base, items, AB_MAX_ITEMS);
+    const int slots = abSlotCount(items, n);
+    int idx = -1;
+    for (int i = 0; i < n; i++) {
+        if (items[i].kind != AB_SKILL) continue;
+        bool mv = tsIsMoveSkill(abSkillAt(base, items[i].skillIdx, slots));
+        if (slot == 4 ? mv : (!mv && items[i].skillIdx == slot)) { idx = i; break; }
+    }
+    if (idx < 0) {
+        // A hero with fewer than four skills equipped: the digit has no button to press.
+        logLine("skillkey: slot %d has no bar button (%d items)", slot + 1, n);
+        postSpeech(axs(AXS_AB_CANT_USE_NOW));
+        return true;
+    }
+    if (!g_tsActive) {
+        if (g_rvActive) { g_abRoomReturn = g_rvCursor; rvSetActive(base, false); }   // Up returns here
+        if (g_qtActive) qtSetActive(base, false);
+        abSetActive(base, true);
+        g_abCursor = idx;
+    }
+    logLine("skillkey: digit %d -> bar item %d, as Enter%s", slot + 1, idx, g_tsActive ? " (mid-aim)" : "");
+    return abActivate(base, &items[idx], slots, idx);
+}
+
 void serviceHeroWatch(uintptr_t base) {
     serviceUserSelectedTarget(base);
     tsServiceAim(base);
@@ -2598,6 +2731,7 @@ static uintptr_t g_tsCommitVec[3] = {0};     // std::vector<Actor*> {begin, end,
 
 typedef char (*TargetValidFn)(void*, void*, void*);
 typedef char (*TargetAnyFn)(void*, void*);
+typedef void* (*UseGatesFn)(void*, void*, void*, void*);     // (battle, out, hero, skill) -> out
 typedef void (*DoSkillFn)(void*, void*, void*, void*, unsigned char);
 typedef void (*MoveSkillFn)(void*, void*, int);
 
@@ -2625,6 +2759,16 @@ static bool sehHasAnyTarget(uintptr_t base, uintptr_t skill, uintptr_t perf) {
                  reinterpret_cast<void*>(skill), reinterpret_cast<void*>(perf));
     } __except (EXCEPTION_EXECUTE_HANDLER) { ok = 0; }
     return ok != 0;
+}
+static bool sehUseGates(uintptr_t base, uintptr_t hero, uintptr_t skill, unsigned char* out) {
+    uintptr_t root = mapRoot(base);
+    if (!root || !hero || !skill) return false;
+    __try {
+        ((UseGatesFn)(base + SKILL_USE_GATES_RVA))(
+            reinterpret_cast<void*>(root + BATTLE_OBJ_OFF), out,
+            reinterpret_cast<void*>(hero), reinterpret_cast<void*>(skill));
+        return true;
+    } __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
 }
 static bool sehDoSkill(uintptr_t base, uintptr_t battle, uintptr_t perf, uintptr_t skill,
                        void* targets) {
@@ -2820,25 +2964,29 @@ static bool tsGameHoldsSkill(uintptr_t base, uintptr_t hero, uintptr_t skill, co
 }
 
 // ---- ARM THE SKILL THE WAY THE GAME'S OWN 1..4 DOES: click its button ----
-static bool tsArmSkill(uintptr_t base, int64_t skillElemId) {
+static bool tsClickSkillButton(uintptr_t base, int64_t skillElemId, const char* why) {
     if (!skillElemId) return false;
     if (clickQueued()) {
-        logLine("targeting: not arming, a click is already queued");
+        logLine("targeting: not %s, a click is already queued", why);
         return false;
     }
     uintptr_t el = feGetElementById(skillElemId);
     float sx = 0, sy = 0;
     if (!el || !elemCenter(el, &sx, &sy)) {
-        logLine("targeting: not arming, skill element 0x%llx is not on screen",
+        logLine("targeting: not %s, skill element 0x%llx is not on screen", why,
                 (unsigned long long)skillElemId);
         return false;
     }
     moveCursorTo(sx, sy);
     enqueueSynthAt(SDL_EVT_MOUSEBUTTONDOWN, SDL_BUTTON_LEFT, 1, 0, sx, sy, 1);
     enqueueSynthAt(SDL_EVT_MOUSEBUTTONUP,   SDL_BUTTON_LEFT, 0, 0, sx, sy, 2);
-    logLine("targeting: arming -- clicked skill elem 0x%llx at (%.0f,%.0f)",
+    logLine("targeting: %s -- clicked skill elem 0x%llx at (%.0f,%.0f)", why,
             (unsigned long long)skillElemId, sx, sy);
     return true;
+}
+
+static bool tsArmSkill(uintptr_t base, int64_t skillElemId) {
+    return tsClickSkillButton(base, skillElemId, "arming");
 }
 
 static bool tsClickArmedTarget(uintptr_t base, float tx, float ty, const char* what) {
@@ -2870,7 +3018,7 @@ static bool tsGameHovers(uintptr_t base, uintptr_t actor, uintptr_t* hovOut, int
     return type == RD_HOVER_ACTOR && actor && hov == actor;
 }
 
-static const int TS_SWEEP_MAX    = 40;
+static const int TS_SWEEP_MAX    = 41;       // 40 geometry points + the blind point in front
 static const int TS_SWEEP_FRAMES = 3;        // frames a candidate point gets to be hovered
 static bool      g_tsSweepOn    = false;
 static bool      g_tsSweepSkip  = false;
@@ -2879,6 +3027,27 @@ static RvEntry   g_tsSweepRow;
 static char      g_tsSweepName[160] = {0};
 static float     g_tsSweepX[TS_SWEEP_MAX], g_tsSweepY[TS_SWEEP_MAX];
 static int       g_tsSweepN = 0, g_tsSweepIdx = -1, g_tsSweepWait = 0;
+static bool      g_tsSweepBlind0 = false;
+static uintptr_t g_tsSweepBlindHov = 0;
+static int       g_tsSweepBlindType = -1;
+
+static bool tsShortName(uintptr_t base, const RvEntry& e, char* out, int outsz);
+
+// ---- ⚠ THE BLIND CLICK MUST NOT HIT A CREATURE THE GAME HAS NAMED ----
+static bool tsHoverNamesOther(uintptr_t base, uintptr_t actor, uintptr_t hov, int htype,
+                              char* other, int otherSz) {
+    if (htype != RD_HOVER_ACTOR || !hov || hov == actor) return false;
+    RvEntry all[RV_MAX_ROWS];
+    const int n = rvBuildRoom(base, all, RV_MAX_ROWS);
+    for (int i = 0; i < n; i++) {
+        if (all[i].actor != hov) continue;
+        if (!tsShortName(base, all[i], other, otherSz))
+            _snprintf(other, otherSz, "%s", axs(AXS_TS_TARGET_FALLBACK));
+        other[otherSz - 1] = 0;
+        return true;
+    }
+    return false;
+}
 
 static int tsSweepCandidates(uintptr_t base, uintptr_t actor, float* xs, float* ys, int max) {
     uint32_t guid = 0;
@@ -2922,7 +3091,22 @@ static int tsSweepCandidates(uintptr_t base, uintptr_t actor, float* xs, float* 
 static bool tsSweepBegin(uintptr_t base, const RvEntry& row, bool armed, const char* name,
                          uintptr_t hov, int htype) {
     if (g_tsSweepOn) return true;                            // one at a time; a second Enter changes nothing
-    g_tsSweepN = tsSweepCandidates(base, row.actor, g_tsSweepX, g_tsSweepY, TS_SWEEP_MAX);
+    g_tsSweepN = 0;
+    g_tsSweepBlind0 = false;
+    g_tsSweepBlindHov = 0; g_tsSweepBlindType = -1;
+    float bx = 0, by = 0;
+    if (tsEnemyClickPoint(base, row.actor, &bx, &by)) {
+        g_tsSweepX[0] = bx; g_tsSweepY[0] = by;
+        g_tsSweepN = 1; g_tsSweepBlind0 = true;
+    }
+    float gx[TS_SWEEP_MAX], gy[TS_SWEEP_MAX];
+    const int gn = tsSweepCandidates(base, row.actor, gx, gy, TS_SWEEP_MAX - 1);
+    for (int i = 0; i < gn && g_tsSweepN < TS_SWEEP_MAX; i++) {
+        const float dx = gx[i] - bx, dy = gy[i] - by;      // no <math.h> in this tree
+        if (g_tsSweepBlind0 && dx < 1.0f && dx > -1.0f && dy < 1.0f && dy > -1.0f) continue;
+        g_tsSweepX[g_tsSweepN] = gx[i]; g_tsSweepY[g_tsSweepN] = gy[i];
+        g_tsSweepN++;
+    }
     if (g_tsSweepN <= 0) {
         logLine("targeting: hover witness says the cursor is NOT on %s (hovered=%p type=%d) and no "
                 "candidate points could be built -- blind click as before", name, (void*)hov, htype);
@@ -2979,11 +3163,31 @@ static void tsServiceAim(uintptr_t base) {
                 tsCloseToBar(base);
             } else if (++g_tsSweepWait >= TS_SWEEP_FRAMES) {
                 g_tsSweepWait = 0;
+                if (g_tsSweepIdx == 0 && g_tsSweepBlind0) {
+                    // Candidate 0's last frame: what the blind click would land on.
+                    g_tsSweepBlindHov = hov; g_tsSweepBlindType = htype;
+                }
                 if (++g_tsSweepIdx >= g_tsSweepN) {
                     g_tsSweepOn = false;
+                    char other[160];
+                    if (g_tsSweepBlind0 &&
+                        tsHoverNamesOther(base, g_tsSweepRow.actor, g_tsSweepBlindHov,
+                                          g_tsSweepBlindType, other, sizeof other)) {
+                        logLine("targeting: sweep EXHAUSTED after %d points and the blind point is on "
+                                "%s (hovered=%p type=%d), not %s -- blind click REFUSED, aim kept open",
+                                g_tsSweepN, other, (void*)g_tsSweepBlindHov, g_tsSweepBlindType,
+                                g_tsSweepName);
+                        char msg[400];
+                        _snprintf(msg, sizeof msg, axs(AXS_TS_CLICK_BLOCKED_FMT), g_tsSweepName, other);
+                        msg[sizeof msg - 1] = 0;
+                        postSpeech(msg);
+                        return;
+                    }
                     logLine("targeting: sweep EXHAUSTED after %d points -- the hover witness never "
-                            "named %s (last hovered=%p type=%d); falling back to the blind click",
-                            g_tsSweepN, g_tsSweepName, (void*)hov, htype);
+                            "named %s (last hovered=%p type=%d, blind point hovered=%p type=%d); "
+                            "falling back to the blind click",
+                            g_tsSweepN, g_tsSweepName, (void*)hov, htype,
+                            (void*)g_tsSweepBlindHov, g_tsSweepBlindType);
                     g_tsSweepSkip = true; tsConfirm(base, g_tsSweepRow); g_tsSweepSkip = false;
                 } else {
                     moveCursorTo(g_tsSweepX[g_tsSweepIdx], g_tsSweepY[g_tsSweepIdx]);
@@ -3287,7 +3491,7 @@ static bool tpBuildPreview(uintptr_t base, uintptr_t target, bool isMonster,
 
     float hit = 0.0f;
     if (tpHitChance(base, hero, target, &hit)) {
-        tpPhrase(clause, clausesz, "%.0f%% to hit", (double)(hit * TP_PERCENT_SCALE));
+        tpPhrase(clause, clausesz, axs(AXS_TP_HIT_FMT), (double)(hit * TP_PERCENT_SCALE));
         got++;
     } else logLine("targetinfo: hit chance unreadable");
     {
@@ -3305,26 +3509,26 @@ static bool tpBuildPreview(uintptr_t base, uintptr_t target, bool isMonster,
     if (atDeathsDoor) {
         float db = 0.0f;
         if (tpDeathblowChance(base, hero, target, skill, &db)) {
-            tpPhrase(clause, clausesz, "%.0f%% deathblow", (double)(db * TP_PERCENT_SCALE));
+            tpPhrase(clause, clausesz, axs(AXS_TP_DEATHBLOW_FMT), (double)(db * TP_PERCENT_SCALE));
             got++;
         } else logLine("targetinfo: deathblow chance unreadable");
     } else {
         int lo = 0, hi = 0;
         if (tpDamageRange(base, hero, target, skill, &lo, &hi)) {
-            tpPhrase(clause, clausesz, "%d-%d damage", lo, hi);
+            tpPhrase(clause, clausesz, axs(AXS_TP_DAMAGE_FMT), lo, hi);
             got++;
         } else logLine("targetinfo: damage range unreadable");
     }
 
     float crit = 0.0f;
     if (csStatOwnMask(hero, CS_STAT_CRIT_OFF, &crit)) {
-        tpPhrase(clause, clausesz, "%.1f%% crit", (double)(crit * TP_PERCENT_SCALE));
+        tpPhrase(clause, clausesz, axs(AXS_TP_CRIT_FMT), (double)(crit * TP_PERCENT_SCALE));
         got++;
     } else logLine("targetinfo: crit chance unreadable");
 
     int stress = 0;
     if (tpStress(hero, target, skill, isMonster, &stress)) {
-        tpPhrase(clause, clausesz, "%d stress", stress);
+        tpPhrase(clause, clausesz, axs(AXS_TP_STRESS_FMT), stress);
         got++;
     }
 
@@ -3632,33 +3836,34 @@ static bool tsBegin(uintptr_t base, uintptr_t skill, const char* skillName, int 
         postSpeech(axs(AXS_TS_NOT_YOUR_TURN));
         return true;
     }
-    if (skillOutOfPosition(skill, perf)) {
-        uint32_t launch = 0;
-        char where[80];
-        strncpy(where, axs(AXS_AB_ANOTHER_POSITION), sizeof where - 1); where[sizeof where - 1] = 0;
-        if (safeReadU32(skill + SKILL_LAUNCH_MASK_OFF, &launch) && launch)
-            skillLaunchPositions(launch, where, sizeof where);
-        char msg[160];
-        _snprintf(msg, sizeof msg, axs(AXS_TS_MUST_BE_IN_FMT), where);
-        msg[sizeof msg - 1] = 0;
-        logLine("targeting: \"%s\" out of position (launch=0x%x) -> %s",
-                skillName ? skillName : "?", launch, where);
-        postSpeech(msg);
-        return true;
-    }
-    bool spent = skillUsedUp(skill, perf), hpGate = skillHpGateUnmet(skill, perf);
-    if (spent || hpGate) {
-        char why[256], msg[320];
-        abSkillLimitsText(base, skill, perf, why, sizeof why);
+    unsigned char gates[AB_USE_GATES_SZ];
+    if (skillGatesShut(skill, perf, gates)) {
+        char why[400], msg[480];
+        abGateReasonText(base, skill, perf, gates, why, sizeof why);
         if (why[0]) _snprintf(msg, sizeof msg, axs(AXS_TS_CANT_USE_REASON_FMT), why);
         else        _snprintf(msg, sizeof msg, "%s", axs(AXS_AB_CANT_USE_NOW));
         msg[sizeof msg - 1] = 0;
-        logLine("targeting: \"%s\" refused — %s", skillName ? skillName : "?",
-                spent ? "no per-battle uses left" : "performer hp outside the required range");
+        logLine("targeting: \"%s\" refused by the game's use gates: mode=%u turnOk=%u battleOk=%u "
+                "hpOk=%u", skillName ? skillName : "?", gates[AB_GATE_MODE], gates[AB_GATE_TURN_OK],
+                gates[AB_GATE_BATTLE_OK], gates[AB_GATE_HP_OK]);
         postSpeech(msg);
         return true;
     }
     if (!sehHasAnyTarget(base, skill, perf)) {
+        if (skillOutOfPosition(skill, perf)) {
+            uint32_t launch = 0;
+            char where[80];
+            strncpy(where, axs(AXS_AB_ANOTHER_POSITION), sizeof where - 1); where[sizeof where - 1] = 0;
+            if (safeReadU32(skill + SKILL_LAUNCH_MASK_OFF, &launch) && launch)
+                skillLaunchPositions(launch, where, sizeof where);
+            char msg[160];
+            _snprintf(msg, sizeof msg, axs(AXS_TS_MUST_BE_IN_FMT), where);
+            msg[sizeof msg - 1] = 0;
+            logLine("targeting: \"%s\" out of position (launch=0x%x) -> %s",
+                    skillName ? skillName : "?", launch, where);
+            postSpeech(msg);
+            return true;
+        }
         if (isMove) {
             uint32_t rankMask = 0;
             int rank = 0;
@@ -3721,9 +3926,9 @@ static bool tsBegin(uintptr_t base, uintptr_t skill, const char* skillName, int 
     if (isMove && !abHeroLabelOf(base, perf, g_tsMoverName, sizeof g_tsMoverName)) g_tsMoverName[0] = 0;
 
     int start = -1;
-    if (!isMove) {
+    {
         bool attack = false;
-        for (int i = 0; i < n; i++) if (rows[i].enemy) { attack = true; break; }
+        if (!isMove) for (int i = 0; i < n; i++) if (rows[i].enemy) { attack = true; break; }
         for (int i = 0; i < n; i++) {
             if (rows[i].enemy != attack) continue;
             if (start < 0 || rows[i].slot < rows[start].slot) start = i;
@@ -3951,8 +4156,11 @@ static void tsConfirm(uintptr_t base, const RvEntry& row) {
     safeReadU32(root + RAID_IN_COMBAT_OFF, &bstate);
     int egate = -1, esize = -1;
     readInputEnableStack(base, &egate, &esize);
-    logLine("targeting: commit \"%s\" -> actor=%p (%s slot %d) [battle state 0x%x, input stack %d]",
-            g_tsSkillName, (void*)row.actor, row.enemy ? "enemy" : "party", row.slot, bstate, esize);
+    uint32_t logMask = 0;
+    if (row.actor) safeReadU32(row.actor + ACTOR_RANK_MASK_OFF, &logMask);
+    logLine("targeting: commit \"%s\" -> actor=%p (%s slot %d, rank mask 0x%x) [battle state 0x%x, "
+            "input stack %d]", g_tsSkillName, (void*)row.actor, row.enemy ? "enemy" : "party",
+            row.slot, logMask, bstate, esize);
 
     g_abCommitTgtActor = row.actor;
     g_abCommitTgtTick  = GetTickCount();
@@ -4002,7 +4210,10 @@ static void tsConfirm(uintptr_t base, const RvEntry& row) {
 
     // ---- A FRIENDLY TARGET IS CLICKED, NOT CALLED ----
     // ---- AND NOW THE FAR SIDE IS CLICKED TOO ----
-    if (row.enemy && row.actor && !isMove && !g_tsSweepSkip) {
+    uint32_t tgtMask = 0;
+    if (row.enemy && row.actor) safeReadU32(row.actor + ACTOR_RANK_MASK_OFF, &tgtMask);
+    const bool wholeLine = (tgtMask & 0xFu) == 0xFu;
+    if (row.enemy && row.actor && !isMove && !g_tsSweepSkip && wholeLine) {
         uintptr_t hov = 0; int htype = -1;
         if (!tsGameHovers(base, row.actor, &hov, &htype)) {
             const bool armedOk = g_tsArmed &&
@@ -4082,25 +4293,7 @@ bool routeTargetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) 
             return true;
         }
         int back = g_tsReturnCursor;
-        if (g_tsArmed && !clickQueued()) {
-            float cx = 0, cy = 0;
-            bool got = false;
-            RvEntry rows[RV_MAX_ROWS];
-            const int n = tsBuildTargets(base, rows, RV_MAX_ROWS);
-            if (g_tsCursor >= 0 && g_tsCursor < n)
-                got = tsRowClickPoint(base, rows[g_tsCursor], &cx, &cy);
-            if (!got) {
-                uintptr_t el = g_tsSkillElemId ? feGetElementById(g_tsSkillElemId) : 0;
-                got = el && elemCenter(el, &cx, &cy);
-            }
-            if (got) {
-                enqueueSynthAt(SDL_EVT_MOUSEBUTTONDOWN, SDL_BUTTON_RIGHT, 1, 0, cx, cy, 1);
-                enqueueSynthAt(SDL_EVT_MOUSEBUTTONUP,   SDL_BUTTON_RIGHT, 0, 0, cx, cy, 2);
-                logLine("targeting: cancelling an ARMED skill -- right-click at (%.0f,%.0f)", cx, cy);
-            } else {
-                logLine("targeting: cancelling an ARMED skill but no point to right-click");
-            }
-        }
+        if (g_tsArmed) tsClickSkillButton(base, g_tsSkillElemId, "cancelling the ARMED skill");
         tsCloseToBar(base);
         logLine("targeting: cancelled, back to action bar item %d", back);
         postSpeech(axs(AXS_CANCELLED));
@@ -4156,7 +4349,7 @@ bool routeTargetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) 
         return true;
     }
 
-    if (g_tsCursor < 0) g_tsCursor = 0;       // unplaced (a MOVE starts so): first press lands
+    if (g_tsCursor < 0) g_tsCursor = 0;
     else axStepCursor(&g_tsCursor, n, dir);
     g_rvTipLine = 0;                      // a new row rewinds the shared tooltip buffer
     g_rvTipCol  = 0;

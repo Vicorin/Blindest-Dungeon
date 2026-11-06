@@ -92,8 +92,8 @@ static bool townEventInteractionLabel(uintptr_t base, uintptr_t entry, char* out
 static const uintptr_t TE_SYS_OFF         = 0x1808;   // Campaign+: the town-event system (was 0x1768)
 static const uintptr_t TE_SYS_BONUS_BEG   = 0x38;     // sys+: vector<RecruitEntry> BY VALUE, begin
 static const uintptr_t TE_SYS_BONUS_END   = 0x40;     // sys+: ... end
-static const uintptr_t TE_RECRUIT_STRIDE  = 0x1540;
-static const uintptr_t TE_RECRUIT_LIVE    = 0x1538;   // entry+: nonzero = still UNCLAIMED (was 0x14b8)
+static const uintptr_t TE_RECRUIT_STRIDE  = 0x15b0;
+static const uintptr_t TE_RECRUIT_LIVE    = 0x15a8;
 static const uintptr_t TE_SYS_DEAD_BEG    = 0x68;     // sys+: dead-hero grants ("From Beyond"),
 static const uintptr_t TE_SYS_DEAD_END    = 0x70;     //       guid+flag pairs
 static const uintptr_t TE_DEAD_STRIDE     = 0x08;
@@ -719,7 +719,10 @@ bool routeTownEventHeroKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t r
         teReleaseReadHold("Escape");
         g_teRecArm = 0;
         logLine("townevent: recruit cancelled (slot %d)", g_teRecIndex);
-        teSpeakHeroRow(base, g_teHeroRow, n, "Cancelled. ");
+        char pre[96];                                // the shared CANCELLED line, translated
+        _snprintf(pre, sizeof pre, "%s ", axs(AXS_CANCELLED));
+        pre[sizeof pre - 1] = 0;
+        teSpeakHeroRow(base, g_teHeroRow, n, pre);
         return true;
     }
 
@@ -794,7 +797,7 @@ bool routeTownEventEnter(uintptr_t base) {
             logLine("townevent enter: clicking '  et' elem id=0x%llx at (%.0f,%.0f)",
                     (unsigned long long)id, cx, cy);
             char line[300];
-            _snprintf(line, sizeof line, "%s.", g_teActLabel[0] ? g_teActLabel : "Interacting");
+            _snprintf(line, sizeof line, "%s.", g_teActLabel[0] ? g_teActLabel : axs(AXS_TE_INTERACTING));
             line[sizeof line - 1] = 0;
             postSpeech(line, true, SPK_EVENT);
             return true;

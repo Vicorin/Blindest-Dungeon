@@ -10,7 +10,7 @@ static const uintptr_t PANEL_SCOUT_SHOW_OFF = 0xafd;
 static const char* const SCOUT_WORD_KEY = "str_scouting";
 
 static volatile void* g_mapPanel = nullptr;
-enum MapReq { MR_NONE = 0, MR_TOGGLE, MR_MOVE, MR_HOME };
+enum MapReq { MR_NONE = 0, MR_TOGGLE, MR_MOVE, MR_HOME, MR_ROUTE };
 static volatile int   g_mapReq    = MR_NONE;
 static volatile int   g_moveDir   = 0;      // 0=up 1=down 2=left 3=right
 static volatile bool  g_moveArea  = false;
@@ -18,6 +18,7 @@ volatile bool  g_mapReview = false;
 static volatile bool  g_mapSuspended = false;
 static int            g_mrArea    = 0;       // cursor: index into the area vector
 static int            g_mrTile    = 0;       // cursor: tile index within the current area
+static void mapAppendRouteAuto(uintptr_t base, uintptr_t root, char* buf, int bufsz);
 
 static volatile bool  g_moveActivateReq = false;  // Enter pressed in the map layer
 static bool     g_movePending      = false;       // the move fn was called; awaiting the result
@@ -847,6 +848,7 @@ static bool mapTryCrossHiddenDoor(uintptr_t base, uintptr_t root, uintptr_t cur,
     g_mrArea = (int)si;
     g_mrTile = 0;
     mapDescribeArea(base, root, g_mrArea, buf, bufsz);
+    mapAppendRouteAuto(base, root, buf, bufsz);
     logLine("mapnav cross-hidden-door dir=%d -> area=%d", dir, g_mrArea);
     return true;
 }
@@ -859,6 +861,9 @@ static void mapHomeGateLogOnce(uintptr_t base) {
     logLine("mapnav: Home -> %s",
             kbActionForKey(base, (int)SDLK_HOME, owner, sizeof owner)
                 ? owner : "not bound in the game table");
+    logLine("mapnav: End -> %s",
+            kbActionForKey(base, (int)SDLK_END, owner, sizeof owner)
+                ? owner : "not bound in the game table");
 }
 
 static bool mapTravelAvailable(uintptr_t base, uintptr_t root, long areaIdx);
@@ -867,15 +872,141 @@ static void mapAppendTravelHint(uintptr_t base, uintptr_t root, char* buf, int b
     if (mapTravelAvailable(base, root, g_mrArea)) axAppendHint(buf, bufsz, AXS_MAP_TRAVEL_HINT);
 }
 
+// ---- THE ROUTE ----
+static const int MAP_ROUTE_MAX_AREAS = 512;
+
+static bool mapRouteLine(uintptr_t base, uintptr_t root, long target, char* out, int outsz) {
+    (void)base;
+    out[0] = 0;
+    long n = mapAreaCount(root);
+    if (n <= 0 || target < 0 || target >= n) return false;
+    if (n > MAP_ROUTE_MAX_AREAS) {
+        logLine("maproute: %ld areas exceeds the route's table; refusing", n);
+        return false;
+    }
+    int pArea = 0, pTile = 0;
+    mapFindParty(root, &pArea, &pTile);
+    if ((long)pArea == target) {
+        _snprintf(out, outsz, "%s", axs(AXS_MAP_ROUTE_HERE));
+        out[outsz - 1] = 0;
+        return true;
+    }
+    uintptr_t tgtArea = mapAreaAt(root, target);
+    int32_t tgtKind = -1;
+    if (tgtArea) safeReadU32(tgtArea + AREA_KIND_OFF, (uint32_t*)&tgtKind);
+
+    static short       prev[MAP_ROUTE_MAX_AREAS];     // -2 = unvisited, -1 = the start
+    static signed char pdir[MAP_ROUTE_MAX_AREAS];     // the arrow that enters this node from prev
+    static short       entry[MAP_ROUTE_MAX_AREAS];    // a hallway node: the tile it was entered at
+    static short       queue[MAP_ROUTE_MAX_AREAS];
+    for (long i = 0; i < n; i++) prev[i] = -2;
+    int head = 0, tail = 0;
+    prev[pArea] = -1; entry[pArea] = (short)pTile; queue[tail++] = (short)pArea;
+
+    bool found = false;
+    long endNode = target;          // the last node of the walked chain
+    int  hallDir = -1;
+    while (head < tail && !found) {
+        long a = queue[head++];
+        uintptr_t area = mapAreaAt(root, a);
+        if (!area) continue;
+        int32_t kind = -1;
+        safeReadU32(area + AREA_KIND_OFF, (uint32_t*)&kind);
+        if (kind == 0) {
+            MapExit exits[AREA_EXIT_SLOTS];
+            int m = roomExits(root, a, exits, AREA_EXIT_SLOTS);
+            for (int s = 0; s < m && !found; s++) {
+                if (tgtKind == 1 && exits[s].corIdx >= 0 && exits[s].corIdx == target) {
+                    endNode = a; hallDir = exits[s].dir; found = true; break;
+                }
+                long d = exits[s].farRoomIdx;
+                if (d < 0 || d >= n || prev[d] != -2 || exits[s].dir < 0) continue;
+                prev[d]  = (short)a;
+                pdir[d]  = (signed char)exits[s].dir;
+                entry[d] = (short)((d == exits[s].corIdx) ? exits[s].mouthTile : 0);
+                if (d == target) { found = true; break; }
+                queue[tail++] = (short)d;
+            }
+        } else {
+            long tiles = mapAreaTiles(area);
+            uint32_t r0 = 0, r1 = 0;
+            corridorEnds(area, tiles, &r0, &r1);
+            const int      endT[2] = { 0, (int)tiles - 1 };
+            const uint32_t endR[2] = { r0, r1 };
+            for (int e = 0; e < 2 && !found; e++) {
+                if (!endR[e]) continue;
+                long ri = mapAreaIndexById(root, endR[e]);
+                if (ri < 0 || ri >= n || prev[ri] != -2) continue;
+                int dir = corridorDirToEnd(root, a, entry[a], endT[e], tiles);
+                if (dir < 0) continue;
+                prev[ri] = (short)a; pdir[ri] = (signed char)dir; entry[ri] = 0;
+                if (ri == target) { found = true; break; }
+                queue[tail++] = (short)ri;
+            }
+        }
+    }
+    if (!found) {
+        logLine("maproute: no path from area %d to area %ld (%d areas reached)", pArea, target, tail);
+        _snprintf(out, outsz, "%s", axs(AXS_MAP_ROUTE_NONE));
+        out[outsz - 1] = 0;
+        return true;
+    }
+
+    int dirs[MAP_ROUTE_MAX_AREAS]; int steps = 0;
+    for (long c = endNode; c != pArea && steps < MAP_ROUTE_MAX_AREAS; c = prev[c]) dirs[steps++] = pdir[c];
+    char acc[320]; acc[0] = 0;
+    for (int i = steps - 1; i >= 0; i--) {
+        if (!acc[0]) { _snprintf(acc, sizeof acc, "%s", dirName(dirs[i])); }
+        else {
+            char tmp[320];
+            _snprintf(tmp, sizeof tmp, axs(AXS_MAP_ROUTE_THEN_FMT), acc, dirName(dirs[i]));
+            tmp[sizeof tmp - 1] = 0;
+            _snprintf(acc, sizeof acc, "%s", tmp);
+        }
+        acc[sizeof acc - 1] = 0;
+    }
+    if (hallDir >= 0) {
+        if (steps == 0) _snprintf(out, outsz, axs(AXS_MAP_ROUTE_HALL_NEXT_FMT), dirName(hallDir));
+        else            _snprintf(out, outsz, axs(AXS_MAP_ROUTE_HALL_FMT), steps, acc, dirName(hallDir));
+    } else {
+        _snprintf(out, outsz, axs(AXS_MAP_ROUTE_FMT), steps, acc);
+    }
+    out[outsz - 1] = 0;
+    logLine("maproute: area %d -> area %ld: %d steps%s -> \"%s\"", pArea, target, steps,
+            hallDir >= 0 ? " + hallway" : "", out);
+    return true;
+}
+
+static void mapAppendRouteAuto(uintptr_t base, uintptr_t root, char* buf, int bufsz) {
+    if (!axMapRouteAuto()) return;
+    int pArea = 0, pTile = 0;
+    mapFindParty(root, &pArea, &pTile);
+    if (pArea == g_mrArea) return;
+    char route[320];
+    if (!mapRouteLine(base, root, g_mrArea, route, sizeof route) || !route[0]) return;
+    axAppendHintText(buf, bufsz, route);
+}
+
 void serviceMapReq(uintptr_t base) {                                        // exported (OurPoll)
     int req = g_mapReq;
     if (req == MR_NONE) return;
     g_mapReq = MR_NONE;
 
     uintptr_t root = mapRoot(base);
-    if (req != MR_MOVE && req != MR_HOME) return;
+    if (req != MR_MOVE && req != MR_HOME && req != MR_ROUTE) return;
     if (!g_mapReview) return;                       // movement only acts while the map is active
     if (!root) { g_mapReview = false; return; }     // raid ended: close silently
+
+    if (req == MR_ROUTE) {
+        mapHomeGateLogOnce(base);
+        char rbuf[320];
+        if (!mapRouteLine(base, root, g_mrArea, rbuf, sizeof rbuf) || !rbuf[0]) {
+            postSpeech(axs(AXS_MAP_NO_MAP));
+            return;
+        }
+        postSpeech(rbuf);
+        return;
+    }
 
     if (req == MR_HOME) {
         mapHomeGateLogOnce(base);
@@ -952,7 +1083,10 @@ void serviceMapReq(uintptr_t base) {                                        // e
                           _snprintf(buf + strlen(buf), sizeof buf - strlen(buf), axs(AXS_MAP_VIA_HALLWAY_FMT), viaTiles); }
         else              _snprintf(buf, sizeof buf, "%s.", adesc);
         buf[sizeof buf - 1] = 0;
-        if (landTile < 0) mapAppendTravelHint(base, root, buf, sizeof buf);   // a room, not a door tile
+        if (landTile < 0) {                                                   // a room, not a door tile
+            mapAppendRouteAuto(base, root, buf, sizeof buf);                  // the F10 row's "With every room"
+            mapAppendTravelHint(base, root, buf, sizeof buf);
+        }
         postSpeech(buf);
         logLine("mapnav room-step dir=%d -> area=%d tile=%d", dir, g_mrArea, g_mrTile);
         return;
@@ -996,6 +1130,7 @@ void serviceMapReq(uintptr_t base) {                                        // e
         g_mrArea = (int)ri;
         g_mrTile = 0;
         mapDescribeArea(base, root, g_mrArea, buf, sizeof buf);
+        mapAppendRouteAuto(base, root, buf, sizeof buf);
         mapAppendTravelHint(base, root, buf, sizeof buf);
         postSpeech(buf);
         logLine("mapnav exit-hall dir=%d -> area=%d", dir, g_mrArea);
@@ -1017,6 +1152,11 @@ bool routeMapKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {  
         if (mod & (KMOD_LALT | KMOD_RALT)) return false;   // Alt+Home isn't ours
         if (!repeat) g_mapReq = MR_HOME;                   // serviced on the main thread
         return true;                                       // swallow the repeat too
+    }
+    if (sym == SDLK_END) {
+        if (mod & (KMOD_LALT | KMOD_RALT)) return false;   // Alt+End isn't ours
+        if (!repeat) g_mapReq = MR_ROUTE;                  // serviced on the main thread
+        return true;
     }
     int dir;
     switch (sym) {

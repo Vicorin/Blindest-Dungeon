@@ -62,6 +62,7 @@ bool        axSpeechHasSpeech();
 const char* axSpeechErrName(int prismError); // PrismError int -> loggable text
 // ---- The debug log (core/speech.cpp) ----
 void logLine(const char* fmt, ...);
+extern "C" void axVersionProxyReport(char* out, size_t cap);
 void logDump(const char* fmt, ...);
 bool        axDebugLogEnabled();
 const char* axDebugLogPath();          // "" if the exe directory could not be resolved
@@ -87,6 +88,8 @@ bool axControlHints();
 void axSetControlHints(bool on);
 bool axAutoTooltips();
 void axSetAutoTooltips(bool on);
+bool axMapRouteAuto();
+void axSetMapRouteAuto(bool on);
 enum { AX_KEYWORDS_SPOKEN = 0, AX_KEYWORDS_BUFFER = 1, AX_KEYWORDS_OFF = 2, AX_KEYWORDS_MODES = 3 };
 int  axKeywordsMode();
 void axSetKeywordsMode(int mode);      // out of range is refused (logged)
@@ -119,6 +122,9 @@ bool axModTutorials();
 void axSetModTutorials(bool on);
 bool axExpandAbbreviations();
 void axSetExpandAbbreviations(bool on);
+static const char AX_NOEXPAND_OPEN  = '\x02';
+static const char AX_NOEXPAND_CLOSE = '\x03';
+bool axIsAbbreviation(const char* word);   // core/speech.cpp: would the expander rewrite it?
 bool axTutorialSeen(const char* id);
 void axMarkTutorialSeen(const char* id);
 // ---- Speech OUTPUT settings ----
@@ -229,8 +235,11 @@ void checkPreamble(uintptr_t base, uintptr_t display);
 void checkLoadingScreen(uintptr_t base);
 void lsReannounce(uintptr_t base);        // AX_LOADING's re-introduce hook (the / key, and a
                                           //   modal closing over it) — title + tip, read live
+bool preambleReannounce(uintptr_t base);
 extern volatile bool g_preambleHold;
 extern DWORD         g_preambleHoldUntil;
+extern volatile bool g_preambleRehold;
+                                          //   the ',' that just re-armed the hold
 extern volatile bool g_lsSuppressFocus;   // a loading screen is up -> frameCheck stays quiet
 extern volatile bool g_titlePrefixPending;
 extern const char* const kTitleScreenName;
@@ -588,7 +597,7 @@ static const char* const PROV_SHARD_NAME_KEY = "str_inventory_title_shard";
 static const int       TL_WALK_KIDS_MAX    = 96;        // sanity cap on any children vector
 static const int       TL_WALK_NODES_MAX   = 1024;
 static const int       TL_LIST_CELLS_MAX   = 16384;     // cap on a top-level list's cell vector
-static const int       TL_ROW_MAX          = 384;       // bytes per collected row / fragment
+static const int       TL_ROW_MAX          = 1024;      // bytes per collected row / fragment
 static const int       TL_FRAGS_MAX        = 16;        // fragments gathered per entry
 
 // ---- Town module (town/estate.cpp): the ACTIVITY LOG + the RESOURCES BAR ----
@@ -747,6 +756,9 @@ void bldTrinketClassReq(uintptr_t base, uintptr_t rec, char* out, int outsz, boo
 int  bldTrinketEffects(uintptr_t base, uintptr_t item, char* out, int outsz, bool probe);
 uintptr_t bldTrinketRecordByHash(uintptr_t base, uint32_t idHash);
 int  bldTrinketEffectsRec(uintptr_t base, uintptr_t rec, char* out, int outsz, bool probe);
+bool bldTrinketSet(uintptr_t base, uintptr_t rec, char* out, int outsz, bool probe);   // the set block, "" for none
+bool bldTrinketSetEx(uintptr_t base, uintptr_t rec, char* out, int outsz, bool probe, bool active);  // ...+ "Set Bonus active"
+bool bldTrinketSetWorn(uintptr_t base, uintptr_t hero, uintptr_t item);  // item worn by hero AND hero wears its set partner
 int  bldTrinketCharges(uintptr_t base, uintptr_t item, uintptr_t rec, char* out, int outsz, bool probe);
 int  bldTrinketTriggers(uintptr_t base, uintptr_t rec, char* out, int outsz, bool probe);
 bool bldTrinketTriggerLine(uintptr_t base, uintptr_t item, uintptr_t rec, char* out, int outsz);
@@ -1036,6 +1048,7 @@ int  spBuffPolarityAny(uintptr_t base, const unsigned char* rec);// ...any stat 
                                                                  // direction byte; the combat popup's matcher
 bool spBuffTextFromRecord(uintptr_t base, uintptr_t actor, const unsigned char* rec,
                           char* out, int outsz);
+bool spBuffIsInstantSkill(uintptr_t base, const unsigned char* rec);
 bool spConditionsInto(uintptr_t base, uintptr_t actor, int want, char* out, int outsz);
 int  spConditionLines(uintptr_t base, uintptr_t actor, int want,
                       char lines[][AB_TIP_LINE_SZ], int n, int maxLines);
@@ -1086,11 +1099,13 @@ bool rvCursorOnDoor(uintptr_t base);
 void serviceRvMovePend(uintptr_t base);
 uintptr_t abCurrentTurnActor(uintptr_t root);   // whose turn the battle says it is
 void abNoteSwapInput();
+bool routeSkillKey(uintptr_t base, AxContext ctx, int slot, uint8_t repeat);   // raid/actionbar.cpp:
 bool abBattleLive(uintptr_t root);               // is a battle actually running (raid root's
 bool abMoveWatchArmed();
 bool abWasRecentCommitTarget(uintptr_t actor);   // was this actor the explicit target of the
 bool abToggleCharSheet(uintptr_t base);          // DungeonController::ToggleCharacterDisplay --
                                                 //   argument-less: it shows the SELECTED hero
+bool abOpenSheetByRightClick(uintptr_t base, uintptr_t hero);  // ANY party member's sheet: the sighted
 bool abHeroLabel(uintptr_t base, char* out, int outsz);      // the SELECTED hero, named
 int  abSkillList(uintptr_t base, uintptr_t* skills, int maxSkills);   // the equipped-skill walk
 bool abSkillName(uintptr_t base, uintptr_t skill, char* out, int outsz);
@@ -1168,8 +1183,10 @@ struct InvCard {
     char fx[768];
     char trig[1536];
     char desc[512];
+    char set[1024];
     char value[128];
 };
+const char* invCardTrigSet(const InvCard* c, char* buf, int bufsz);
 bool invItemUnitValue(uintptr_t base, uintptr_t item, bool* isGold, int32_t* value);
 void invItemValueText(uintptr_t base, uintptr_t item, char* out, int outsz);
 void invCardRead(uintptr_t base, uintptr_t item, InvCard* c);
@@ -1231,6 +1248,7 @@ void checkRaidResults(uintptr_t base);        // appearance, page change, and a 
 bool routeResultsKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat);
 void rrReannounce(uintptr_t base);            // AX_RESULTS' re-introduce hook (the / key)
 uintptr_t rrResults(uintptr_t base);
+bool      rrXpProgress(uintptr_t base, uint32_t xp, int* intoOut, int* spanOut, bool* maxOut);
 int       rrState(uintptr_t base);            // the display's page-state int (-1 = screen gone)
 
 // ---- DLC modules (src/dlc/<dlc>/) ----
@@ -1434,12 +1452,18 @@ int  csCampSelList(uintptr_t base, int out[CAMP_SEL_MAX]);
 int  csCampSkillSlot(uintptr_t base, int i);
 void csDumpSheet(uintptr_t base, uintptr_t panel);
 bool spTraitName(uintptr_t base, uint32_t hash, bool virtue, char* out, int outsz);  // affliction/virtue name
+bool spTraitDescription(uintptr_t base, uint32_t hash, bool virtue, char* out, int outsz);  // ...its description
 uintptr_t abHeroClass(uintptr_t base);          // the selected hero's HeroClass (0 = unreadable)
 bool abHeroNameClass(uintptr_t base, char* name, int namesz, char* cls, int clssz);
 void abSkillTitled(uintptr_t base, uintptr_t skill, const char* fallbackName,
                    char* out, int outsz,
                    bool withLevel = true);      // the default lives HERE, not at the definition
 bool ruBeginFromSheet(uintptr_t base, uintptr_t hero);      // raid sheet Enter-on-trinket -> the bag
+bool ruUnequipRefused(uintptr_t base);
+void ruBeginUnequip(uintptr_t base, uintptr_t hero, int slot, const char* name);
+bool ruUnequipBusy();
+void serviceRaidUnequip(uintptr_t base);
+void serviceRaidSwap(uintptr_t base);
 extern char g_typed[64];                        // reconstructed box contents (seed + keystrokes)
 extern char g_lastName[64];                     // last contents spoken (de-dup)
 extern bool g_nameModeHero;                     // while set, Enter/Escape do NOT end the session

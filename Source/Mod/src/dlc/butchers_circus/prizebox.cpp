@@ -263,7 +263,8 @@ bool pbRewardCard(uintptr_t base, int kind, uintptr_t e, int idx, int total, boo
             logLine("prizebox: no trinket record for hash 0x%x (\"%s\") -- name and condition only",
                     hash, name);
         const char* rarity = c.rarity;  const char* clsreq = c.clsreq;
-        const char* fx     = c.fx;      const char* trig   = c.trig;
+        const char* fx     = c.fx;
+        char trigSet[2600]; const char* trig = invCardTrigSet(&c, trigSet, sizeof trigSet);
         char head[256];
         _snprintf(head, sizeof head, axs(AXS_PB_REWARD_FMT), name, axs(AXS_PB_KIND_TRINKET));
         head[sizeof head - 1] = 0;

@@ -232,6 +232,10 @@ static bool bldRegistryId(uintptr_t base, uint32_t hash, char* out, int outsz) {
     return false;
 }
 
+// ---- A STEP'S COST: THE LIVE REGISTRY FIRST ----
+struct BldCostBuf { BldStepCost c; char cur1[40]; char cur2[40]; bool live; };
+static bool bldStepCostFor(uintptr_t base, uint32_t hash, const BldTreeDef* def, int k, BldCostBuf* b);
+
 static void bldCostText(uintptr_t base, const BldStepCost* c, char* out, int outsz) {
     out[0] = 0;
     if (!c || !c->cur1[0]) return;
@@ -378,8 +382,9 @@ static void bldTrackRowLabel(uintptr_t base, int i, char* out, int outsz) {
         bool freeUp = buyable && townEventFreeUpgrades(base, "building") > 0;
         char cost[96];
         cost[0] = 0;
-        if (!freeUp && t->def && k < t->def->steps)
-            bldCostText(base, &t->def->cost[k], cost, sizeof cost);
+        BldCostBuf cb;
+        if (!freeUp && bldStepCostFor(base, t->hash, t->def, k, &cb))
+            bldCostText(base, &cb.c, cost, sizeof cost);
         const char* curFx  = (t->fx && k <= 6 && t->fx->cur[k] >= 0) ? axs((AxStrId)t->fx->cur[k]) : "";
         const char* nextFx = (t->fx && k <  6 && t->fx->nxt[k] >= 0) ? axs((AxStrId)t->fx->nxt[k]) : "";
         char next[224];                               // "costs X, effect" / "costs X" / "effect"
@@ -451,13 +456,29 @@ static void bldTrackFxTexts(int i, const char** cur, const char** nxt) {
     }
 }
 
+// ---- THE TREE'S OWN DESCRIPTION ----
+static bool bldTreeDescription(uintptr_t base, const BldTrack* t, char* out, int outsz) {
+    out[0] = 0;
+    if (!t->id[0]) return false;
+    char key[96], raw[320];
+    _snprintf(key, sizeof key, "upgrade_tree_tooltip_description_%s", t->id);
+    key[sizeof key - 1] = 0;
+    if (!resolveKey(base, key, raw, sizeof raw) || !raw[0]) return false;
+    stripMarkup(raw, out, outsz);
+    return out[0] != 0;
+}
+
 static void bldSpeakTrackRow(uintptr_t base, uintptr_t root, uintptr_t panel, const char* prefix) {
     int n = bldCollectTracks(base, root, panel, false);
     if (n <= 0) { postSpeech(axs(AXS_BLD_NO_TRACKS)); return; }
     if (g_bldUpRow >= n) g_bldUpRow = n - 1;
     if (g_bldUpRow < 0)  g_bldUpRow = 0;
-    char row[768], utter[MAILBOX_SZ];
+    char row[1024], utter[MAILBOX_SZ];
     bldTrackRowText(base, g_bldUpRow, row, sizeof row);
+    char desc[320];
+    if ((axTipWanted() || !g_bldTracks[g_bldUpRow].fx) &&
+        bldTreeDescription(base, &g_bldTracks[g_bldUpRow], desc, sizeof desc))
+        axTipGlue(row, sizeof row, desc);
     if (axTipWanted()) {
         const char* cur; const char* nxt;
         bldTrackFxTexts(g_bldUpRow, &cur, &nxt);
@@ -577,14 +598,14 @@ static const uintptr_t BLD_TDEF_ID_OFF    = 0x84;     // rec+: ID hash (== item+
 static const uintptr_t BLD_TDEF_VALUE_OFF = 0x9c;
 static const uintptr_t BLD_ITEM_CLASS_OFF = 0x598;
 static const uintptr_t BLD_ITEM_TRECORD_OFF = 0x5a0;
-static const uintptr_t BLD_TREC_STRIDE    = 0x428;
+static const uintptr_t BLD_TREC_STRIDE    = 0x488;
 static const uintptr_t BLD_TREC_ID_STR_OFF = 0x00;     // char[0x40] the trinket's own id ("jar_of_ash")
 static const uintptr_t BLD_TREC_HASH_OFF  = 0x40;      // trinket id hash (== item+0x88)
 static const uintptr_t BLD_TREC_BUFFS_BEG = 0x48;      // vector<u32 buff key> begin
 static const uintptr_t BLD_TREC_BUFFS_END = 0x50;      // ... end
-static const uintptr_t BLD_TREC_CLSREQ_BEG = 0x278;    // vector<u32 class-id hash> begin (was 0x1b8)
-static const uintptr_t BLD_TREC_CLSREQ_END = 0x280;    // ... end (hero_class_requirements) (was 0x1c0)
-static const uintptr_t BLD_TREC_RARITY_OFF = 0x324;
+static const uintptr_t BLD_TREC_CLSREQ_BEG = 0x2d8;
+static const uintptr_t BLD_TREC_CLSREQ_END = 0x2e0;
+static const uintptr_t BLD_TREC_RARITY_OFF = 0x384;
 static const uintptr_t BLD_TREC_RARITY_ID  = 0x2e4;    // ... and its ID STRING, char[0x40] (was 0x224)
 static const uintptr_t BLD_CLASS_IDHASH_OFF= 0xd4;      // HeroClass+: gameHash(class id)
 static const uint32_t  BLD_ELEM_RCT_BASE  = 0x737467; // recruit slot element family
@@ -1149,9 +1170,9 @@ bool bldClassNameByHash(uintptr_t base, uint32_t want, char* out, int outsz) {
         }
     }
     static const char* const kClassIds[] = {
-        "abomination", "antiquarian", "arbalest", "bounty_hunter", "crusader", "flagellant",
-        "grave_robber", "hellion", "highwayman", "houndmaster", "jester", "leper", "man_at_arms",
-        "musketeer", "occultist", "plague_doctor", "shieldbreaker", "vestal",
+        "abomination", "antiquarian", "arbalest", "bounty_hunter", "crusader", "duelist",
+        "flagellant", "grave_robber", "hellion", "highwayman", "houndmaster", "jester", "leper",
+        "man_at_arms", "musketeer", "occultist", "plague_doctor", "runaway", "shieldbreaker", "vestal",
     };
     for (int i = 0; i < (int)(sizeof kClassIds / sizeof kClassIds[0]); i++) {
         if (resHash(kClassIds[i]) != want) continue;
@@ -1347,6 +1368,7 @@ int bldTrinketEffects(uintptr_t base, uintptr_t item, char* out, int outsz, bool
     return bldTrinketEffectsRec(base, rec, out, outsz, probe);
 }
 
+static int bldBuffKeysText(uintptr_t base, uintptr_t kb, uintptr_t ke, char* out, int outsz, bool probe);
 int bldTrinketEffectsRec(uintptr_t base, uintptr_t rec, char* out, int outsz, bool probe) {
     out[0] = 0;
     if (!rec) return 0;
@@ -1356,9 +1378,14 @@ int bldTrinketEffectsRec(uintptr_t base, uintptr_t rec, char* out, int outsz, bo
         if (probe) logLine("bldrows: trinket record %p buff vector unreadable", (void*)rec);
         return 0;
     }
+    return bldBuffKeysText(base, kb, ke, out, outsz, probe);
+}
+
+static int bldBuffKeysText(uintptr_t base, uintptr_t kb, uintptr_t ke, char* out, int outsz, bool probe) {
+    if (!kb || ke < kb || (ke - kb) % 4) return 0;
     int nkeys = (int)((ke - kb) / 4);
     if (nkeys > 12) {
-        if (probe) logLine("bldrows: trinket record %p implausible buff count %d", (void*)rec, nkeys);
+        if (probe) logLine("bldrows: implausible buff count %d", nkeys);
         return 0;
     }
     int written = 0;
@@ -1379,15 +1406,98 @@ int bldTrinketEffectsRec(uintptr_t base, uintptr_t rec, char* out, int outsz, bo
     return written;
 }
 
-static const uintptr_t BLD_TREC_TRIGLIM_OFF   = 0x334;  // int, -1 = no trigger limit
-static const uintptr_t BLD_TREC_DESTROYEXH_OFF= 0x339;  // bool destroy_on_triggers_exhausted
-static const uintptr_t BLD_TREC_BLOCKTRIG_OFF = 0x33a;  // bool blocks_other_slot_trigger_expend
-static const uintptr_t BLD_TREC_BLOCKQUEST_OFF= 0x33b;  // bool blocks_other_slot_quest_uses_expend
-static const uintptr_t BLD_TREC_QUESTUSES_OFF = 0x33c;  // int, -1 = no quest uses
-static const uintptr_t BLD_TREC_XFORM_QUEST_OFF = 0x344;  // char[0x40] transform_on_quest_complete
-static const uintptr_t BLD_TREC_XFORM_KILLED_OFF= 0x388;
-static const uintptr_t BLD_TREC_XFORM_EXH_OFF   = 0x3c8;
-static const uintptr_t BLD_TREC_QUESTXP_OFF   = 0x408;
+// ---- THE TRINKET SET ----
+static const uintptr_t BLD_TREC_SET_OFF  = 0x2d0;
+static const uintptr_t TRKSET_NODE_KEY   = 0x10;
+static const uintptr_t TRKSET_NODE_VAL   = 0x18;
+static const uintptr_t TRKSET_BUFFS_BEG  = 0x48;    // value+: vector<u32 buff key>
+static const uintptr_t TRKSET_BUFFS_END  = 0x50;
+// ---- THE SET BONUS IS ACTIVE ----
+static bool bldTrinketSetHash(uintptr_t base, uintptr_t item, uint32_t* out) {
+    *out = 0;
+    uintptr_t rec = bldTrinketRecord(base, item);
+    return rec && safeReadU32(rec + BLD_TREC_SET_OFF, out) && *out != 0;
+}
+bool bldTrinketSetWorn(uintptr_t base, uintptr_t hero, uintptr_t item) {
+    uint32_t mine = 0;
+    if (!hero || !item || !bldTrinketSetHash(base, item, &mine)) return false;
+    uintptr_t beg = 0; int slots = 0;
+    if (!invItemVectorAt(hero + HERO_TRINKET_SYSTEM_OFF, &beg, &slots) || slots > 8) return false;
+    bool isWorn = false, other = false;
+    for (int j = 0; j < slots; j++) {
+        uintptr_t it = beg + (uintptr_t)j * ITEM_STRIDE;
+        if (it == item) { isWorn = true; continue; }
+        uint32_t amount = 0, h = 0;
+        if (!safeReadU32(it + ITEM_AMOUNT_OFF, &amount) || (int32_t)amount < 1) continue;
+        if (bldTrinketSetHash(base, it, &h) && h == mine) other = true;
+    }
+    return isWorn && other;
+}
+bool bldTrinketSet(uintptr_t base, uintptr_t rec, char* out, int outsz, bool probe) {
+    return bldTrinketSetEx(base, rec, out, outsz, probe, false);
+}
+bool bldTrinketSetEx(uintptr_t base, uintptr_t rec, char* out, int outsz, bool probe, bool active) {
+    out[0] = 0;
+    uint32_t setHash = 0;
+    if (!rec || !safeReadU32(rec + BLD_TREC_SET_OFF, &setHash) || !setHash) return false;
+    uintptr_t head = 0, node = 0, val = 0;
+    if (!safeReadPtr(base + TRK_SETMAP_HEAD_RVA, &head) || head <= 0x10000 ||
+        !safeReadPtr(head, &node)) return false;
+    int walked = 0;
+    for (; node > 0x10000 && node != head && walked < 4096; walked++) {
+        uint32_t k = 0;
+        if (safeReadU32(node + TRKSET_NODE_KEY, &k) && k == setHash) { val = node + TRKSET_NODE_VAL; break; }
+        if (!safeReadPtr(node, &node)) break;
+    }
+    if (walked >= 4096) logLine("bldset: set map walk hit its 4096 cap -- set 0x%08x not found", setHash);
+    if (!val) {
+        if (probe) logLine("bldset: set 0x%08x not in the set map (%d nodes walked)", setHash, walked);
+        return false;
+    }
+    char id[0x41] = { 0 };
+    if (!safeReadCStr(val, id, 0x40) || !abPlausibleName(id)) return false;
+    char key[128], title[256];
+    _snprintf(key, sizeof key, "str_inventory_set_title_%s", id);
+    key[sizeof key - 1] = 0;
+    if (!abTipPlain(base, key, title, sizeof title)) {
+        if (probe) logLine("bldset: \"%s\" did not resolve", key);
+        return false;
+    }
+    char label[96];
+    if (!abTipPlain(base, "buff_bsrc_trinket_set", label, sizeof label)) label[0] = 0;
+    if (label[0]) _snprintf(out, outsz, axs(AXS_TRK_SET_FMT), label, title);
+    else          _snprintf(out, outsz, "%s", title);
+    out[outsz - 1] = 0;
+    if (active) {                                          // "Set Bonus active", before the bonus
+        char term[96], line[160];
+        if (!abTipPlain(base, "str_glossary_term_1006", term, sizeof term))
+            _snprintf(term, sizeof term, "%s", label[0] ? label : "");
+        term[sizeof term - 1] = 0;
+        if (term[0]) {
+            _snprintf(line, sizeof line, axs(AXS_TRK_SET_ACTIVE_FMT), term);
+            line[sizeof line - 1] = 0;
+            axAppendHintText(out, outsz, line);
+        }
+    }
+    uintptr_t kb = 0, ke = 0;
+    char bonus[1024];
+    bonus[0] = 0;
+    if (safeReadPtr(val + TRKSET_BUFFS_BEG, &kb) && safeReadPtr(val + TRKSET_BUFFS_END, &ke) &&
+        bldBuffKeysText(base, kb, ke, bonus, sizeof bonus, probe) > 0)
+        axAppendHintText(out, outsz, bonus);              // the sentence join, not a hint
+    if (probe) logLine("bldset: set \"%s\" -> \"%s\"", id, out);
+    return out[0] != 0;
+}
+
+static const uintptr_t BLD_TREC_TRIGLIM_OFF   = 0x394;
+static const uintptr_t BLD_TREC_DESTROYEXH_OFF= 0x399;
+static const uintptr_t BLD_TREC_BLOCKTRIG_OFF = 0x39a;
+static const uintptr_t BLD_TREC_BLOCKQUEST_OFF= 0x39b;
+static const uintptr_t BLD_TREC_QUESTUSES_OFF = 0x39c;
+static const uintptr_t BLD_TREC_XFORM_QUEST_OFF = 0x3a4;
+static const uintptr_t BLD_TREC_XFORM_KILLED_OFF= 0x3e8;
+static const uintptr_t BLD_TREC_XFORM_EXH_OFF   = 0x428;
+static const uintptr_t BLD_TREC_QUESTXP_OFF   = 0x468;
 static const int       BLD_TRK_GROUPS      = 22;
 static const uintptr_t BLD_TRK_GROUP_BASE  = 4 * 0x18;
 static const uintptr_t BLD_TRK_GROUP_STRIDE= 0x18;
@@ -1649,7 +1759,8 @@ static bool bldStoreRowText(uintptr_t base, uintptr_t sys, int kind, int slot, i
     if (invCardWanted(card)) invCardRead(base, item, &c);
     else                     memset(&c, 0, sizeof c);
     const char* rarity = c.rarity;  const char* clsreq = c.clsreq;  const char* charges = c.charges;
-    const char* trig   = c.trig;    const char* fx     = c.fx;      const char* desc    = c.desc;
+    char trigSet[2600]; const char* trig = invCardTrigSet(&c, trigSet, sizeof trigSet);
+    const char* fx     = c.fx;      const char* desc    = c.desc;
     bool hasDesc = desc[0] != 0;
     char head[1024];
     _snprintf(head, sizeof head, "%s%s%s%s%s%s%s", name,
@@ -2253,7 +2364,7 @@ static const uintptr_t ACT_RL_ROWS_BEG      = 0xa0;
 static const uintptr_t ACT_RL_ROWS_END      = 0xa8;
 static const uintptr_t ACT_RL_ROW_ENTRY     = 0x90;
 static const uintptr_t ACT_ENTRY_HERO_OFF   = 0x08;
-static const uintptr_t ACT_ENTRY_STATE_OFF  = 0x1540;
+static const uintptr_t ACT_ENTRY_STATE_OFF  = 0x15b0;
 
 // ---- ROUND 9: the SANITARIUM (QuirkTreatmentActivityDisplay) ----
 static const uintptr_t QT_SLOTDATA_BEG       = 0x190;    // activity+: vector<TreatmentSlotData>
@@ -3634,6 +3745,52 @@ static int haRegSteps(uintptr_t base, uint32_t hash, uint8_t* out, int max) {
     return n;
 }
 
+static bool bldStepCostFor(uintptr_t base, uint32_t hash, const BldTreeDef* def, int k, BldCostBuf* b) {
+    memset(b, 0, sizeof *b);
+    b->c.cur1 = b->cur1; b->c.cur2 = b->cur2;
+    uintptr_t req = (k >= 0 && k < 20) ? haRequirement(base, hash, (uint8_t)('a' + k)) : 0;
+    uintptr_t cb = 0, ce = 0;
+    if (req && safeReadPtr(req + HA_REQ_COST_BEG, &cb) && safeReadPtr(req + HA_REQ_COST_END, &ce) &&
+        cb && ce > cb && (ce - cb) % HA_COST_STRIDE == 0 && (ce - cb) / HA_COST_STRIDE <= 8) {
+        int nc = (int)((ce - cb) / HA_COST_STRIDE), kept = 0;
+        for (int c = 0; c < nc && kept < 2; c++) {
+            uintptr_t cost = cb + (uintptr_t)c * HA_COST_STRIDE;
+            uint32_t amt = 0;
+            char type[40] = { 0 };
+            if (!safeReadU32(cost + HA_COST_AMOUNT, &amt) || (int)amt <= 0) continue;
+            if (!safeReadCStr(cost + HA_COST_TYPE, type, sizeof type) || !type[0]) continue;
+            if (kept == 0) { strncpy(b->cur1, type, sizeof b->cur1 - 1); b->c.amt1 = (int)amt; }
+            else           { strncpy(b->cur2, type, sizeof b->cur2 - 1); b->c.amt2 = (int)amt; }
+            kept++;
+        }
+        if (kept > 0) {
+            b->live = true;
+            if (def && k < def->steps && def->cost[k].cur1[0] &&
+                (def->cost[k].amt1 != b->c.amt1 || strcmp(def->cost[k].cur1, b->cur1) != 0 ||
+                 def->cost[k].amt2 != b->c.amt2 || strcmp(def->cost[k].cur2, b->cur2) != 0)) {
+                static uint32_t s_noted[32]; static int s_nnoted = 0;
+                uint32_t keyv = hash ^ (uint32_t)k;
+                bool seen = false;
+                for (int i = 0; i < s_nnoted; i++) if (s_noted[i] == keyv) seen = true;
+                if (!seen && s_nnoted < 32) {
+                    s_noted[s_nnoted++] = keyv;
+                    logLine("bldcost: tree %s step %c -- live %d %s + %d %s, table %d %s + %d %s",
+                            def->id, 'a' + k, b->c.amt1, b->cur1, b->c.amt2, b->cur2,
+                            def->cost[k].amt1, def->cost[k].cur1, def->cost[k].amt2, def->cost[k].cur2);
+                }
+            }
+            return true;
+        }
+    }
+    if (def && k >= 0 && k < def->steps && def->cost[k].cur1[0]) {
+        strncpy(b->cur1, def->cost[k].cur1, sizeof b->cur1 - 1);
+        strncpy(b->cur2, def->cost[k].cur2, sizeof b->cur2 - 1);
+        b->c.amt1 = def->cost[k].amt1; b->c.amt2 = def->cost[k].amt2;
+        return true;
+    }
+    return false;
+}
+
 bool haPurchased(uintptr_t base, uint32_t hash, uint8_t code, uint32_t guid) {
     uint32_t all = 0;
     if (safeReadU32(base + HA_ALLBOUGHT_RVA, &all) && (all & 0xff)) return true;
@@ -4241,6 +4398,7 @@ static bool haStepRefused(uintptr_t base, uintptr_t hero, const HaTree* t, const
         }
     }
     if (flag && why) return true;
+    if (why && !st->armedKnown) return false;
     reason[0] = 0;
     return false;
 }
@@ -4315,6 +4473,10 @@ static void haColumnText(uintptr_t base, uintptr_t hero, const HaTree* t,
             _snprintf(next, sizeof next, " %s",
                       axs(tier ? AXS_HA_NEXT_TIER_FREE
                                : learn ? AXS_HA_LEARN_FREE : AXS_HA_NEXT_RANK_FREE));
+        }
+        if (lock[0]) {
+            size_t len = strlen(next);
+            if (len < sizeof next - 1) _snprintf(next + len, sizeof next - len, " %s", lock);
         }
     }
     next[sizeof next - 1] = 0;
@@ -5459,6 +5621,42 @@ bool routeBldKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
         }
     }
 
+    // ---- THE UPGRADE TRACK'S TOOLTIP ON REQUEST ----
+    if ((mod & (KMOD_LCTRL | KMOD_RCTRL)) && !(mod & (KMOD_LALT | KMOD_RALT)) &&
+        (sym == SDLK_UP || sym == SDLK_DOWN) && g_bldMode == 1) {
+        if (repeat) return true;
+        uintptr_t uRoot = resTownRoot(base);
+        uintptr_t uPanel = uRoot ? bldOpenPanel(uRoot) : 0;
+        if (!uPanel) return false;
+        int n = bldCollectTracks(base, uRoot, uPanel, false);
+        if (n <= 0) { postSpeech(axs(AXS_BLD_NO_TRACKS)); return true; }
+        axStepCursor(&g_bldUpRow, n, 0);                     // re-clamp: live tracks
+        static int s_upLine = 0, s_upRow = -1;
+        static uint32_t s_upHash = 0;
+        if (s_upRow != g_bldUpRow || s_upHash != g_bldTracks[g_bldUpRow].hash) {
+            s_upRow = g_bldUpRow; s_upHash = g_bldTracks[g_bldUpRow].hash; s_upLine = 0;
+        }
+        static char lines[2][AB_TIP_LINE_SZ];
+        bldTrackRowText(base, g_bldUpRow, lines[0], AB_TIP_LINE_SZ);
+        int ln = 1;
+        if (bldTreeDescription(base, &g_bldTracks[g_bldUpRow], lines[1], AB_TIP_LINE_SZ)) ln = 2;
+        const char* cur; const char* nxt;
+        bldTrackFxTexts(g_bldUpRow, &cur, &nxt);
+        char extra[1024];
+        _snprintf(extra, sizeof extra, "%s %s", cur, nxt);
+        extra[sizeof extra - 1] = 0;
+        int total = ln + axTipKeywordCount(&lines[0][0], AB_TIP_LINE_SZ, ln, 1, extra);
+        if (total <= 1) { s_upLine = 0; postSpeech(axs(AXS_NO_MORE_INFO)); return true; }
+        const char* note = nullptr;
+        s_upLine = axTipWrapStep(s_upLine, sym == SDLK_UP ? 1 : -1, total, &note);
+        if (s_upLine < ln) { axPostWrapped(note, lines[s_upLine]); return true; }
+        char def[AB_TIP_LINE_SZ];
+        if (axTipKeywordLine(&lines[0][0], AB_TIP_LINE_SZ, ln, 1, extra, s_upLine - ln, def, sizeof def))
+            axPostWrapped(note, def);
+        else { s_upLine = 0; postSpeech(lines[0]); }      // the text changed under the cursor
+        return true;
+    }
+
     if (mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL)) return false;
     uintptr_t root = resTownRoot(base);
     uintptr_t panel = root ? bldOpenPanel(root) : 0;
@@ -5506,9 +5704,10 @@ bool routeBldKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
             postSpeech(axs(AXS_BLD_TRACK_NOTHING_NOW));
             return true;
         }
-        if (t->def && t->nextIdx < t->def->steps &&
-            townEventFreeUpgrades(base, "building") <= 0) {
-            const BldStepCost* c = &t->def->cost[t->nextIdx];
+        BldCostBuf cbuf;
+        if (townEventFreeUpgrades(base, "building") <= 0 &&
+            bldStepCostFor(base, t->hash, t->def, t->nextIdx, &cbuf)) {
+            const BldStepCost* c = &cbuf.c;
             int have1 = 0, have2 = 0;               // an absent wallet entry counts as zero
             if (c->cur1[0]) resWalletAmount(base, resHash(c->cur1), &have1);
             if (c->cur2[0]) resWalletAmount(base, resHash(c->cur2), &have2);

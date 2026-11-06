@@ -27,7 +27,7 @@ static const uintptr_t QUIRK_IS_DISEASE_OFF  = 0x51;
 
 static const uintptr_t QUIRK_BUFF_BEGIN_OFF = 0xa8;   // Quirk::Class+: -> first buff record
 static const uintptr_t QUIRK_BUFF_END_OFF   = 0xb0;   // Quirk::Class+: -> one past the last
-static const uintptr_t QUIRK_BUFF_STRIDE    = 0x1d0;  // = sizeof(Buff) (was 0x154)
+static const uintptr_t QUIRK_BUFF_STRIDE    = 0x410;
 static const int       QUIRK_BUFF_MAX       = 32;     // sanity cap on the per-quirk buff walk
 
 static const uintptr_t QUIRK_TAG_BEGIN_OFF = 0x110;  // Quirk::Class+: -> first tag hash
@@ -46,10 +46,10 @@ static const uintptr_t CS_QUIRK_DESC_EXTRA = 0;
 
 static const int       CS_QUIRK_DESC_MODE = 0;
 
-static const uintptr_t ACTOR_HEALTH_BLOCKS_OFF = 0x11cc;  // Hero+: uint, "health_damage_blocks" (was 0x114c;
+static const uintptr_t ACTOR_HEALTH_BLOCKS_OFF = 0x123c;
 static const uint32_t  ACTOR_HEALTH_BLOCKS_MAX = 99;
 
-static const uintptr_t HEROCLASS_CANSELECT_OFF = 0x11e4;
+static const uintptr_t HEROCLASS_CANSELECT_OFF = 0x11ec;
 
 // ---- CAMPING skills ----
 static const uintptr_t CAMP_SKILL_ID_OFF   = 0x08;    // SkillClass+: inline C-string id ("encourage")
@@ -109,9 +109,9 @@ static const int STAT_TYPE_STRESS_DOT  = 0x22;
 static const int STAT_TYPE_SHUFFLE_DOT = 0x23;
 static const int STAT_TYPE_HEAL_DOT    = 0x24;
 
-static const uintptr_t ACTOR_STUN_OFF    = 0x1020;  // float, > 0 while stunned (was 0xfa4)
-static const uintptr_t ACTOR_IMMOB_OFF   = 0x1024;  // byte                     (was 0xfa8)
-static const uintptr_t ACTOR_DAZE_OFF    = 0x129c;  // float, rounds of daze remaining (was 0x121c)
+static const uintptr_t ACTOR_STUN_OFF    = 0x1090;
+static const uintptr_t ACTOR_IMMOB_OFF   = 0x1094;
+static const uintptr_t ACTOR_DAZE_OFF    = 0x130c;
 
 static const uintptr_t TRAIT_REG_ALT_OFF  = 0x18;
 static const int       TRAIT_REC_STRIDE   = 0x100;
@@ -551,7 +551,7 @@ bool csHeroIsCursed(uintptr_t hero) {
     return false;
 }
 
-static const uintptr_t HERO_DD_QUESTS_OFF = 0x13dc;
+static const uintptr_t HERO_DD_QUESTS_OFF = 0x144c;  // (was 0x13dc; 6ae4c882 Actor +112)
 
 bool csHeroIsNeverAgain(uintptr_t hero) {
     uint32_t n = 0;
@@ -568,7 +568,7 @@ void csNeverAgainWord(uintptr_t base, char* out, int outsz) {
     out[outsz - 1] = 0;
 }
 
-static const uintptr_t QUIRK_CLASS_ROSTER_LIMIT_OFF = 0x1b0;
+static const uintptr_t QUIRK_CLASS_ROSTER_LIMIT_OFF = 0x1b8;
 
 uintptr_t csHeroRosterLimitQuirk(uintptr_t hero) {
     if (!hero) return 0;
@@ -801,6 +801,7 @@ static bool csQuirkRowAt(uintptr_t base, int i, CsQuirkFilter f, bool consume,
     bool replSpoken = false, newSpoken = false;
     if (!csQuirkRowCompose(base, quirk, entry, false, false, &replSpoken, &newSpoken, out, outsz))
         return false;
+    if (g_fdComposingLabel) consume = false;
     if (consume && replSpoken && entry) {
         if (safeWriteU8(entry + QUIRK_ENTRY_REPLVIEW_OFF, 1))
             logLine("charsheet quirk: row %d replaced clause spoken — entry marked viewed", i);
@@ -1348,7 +1349,7 @@ static const uintptr_t CBURN_ROUNDS_OFF   = 0x08;    // int rounds left; <= 0 me
 static const uintptr_t CBURN_ACTORID_OFF  = 0x0c;    // int: the actor standing in the burning rank
 static const int       CBURN_MAX          = 64;      // sanity cap; four ranks a side is the reality
 
-static const uintptr_t MONSTER_ID_OFF     = 0x12b0;
+static const uintptr_t MONSTER_ID_OFF     = 0x1320;  // (was 0x12b0; 6ae4c882 Actor +112)
 
 static bool spActorId(uintptr_t base, uintptr_t actor, uint32_t* out) {
     uintptr_t vft = 0;
@@ -1958,7 +1959,15 @@ static bool spDurTypeName(uintptr_t base, int idx, char* out, int outsz) {
     return true;
 }
 
+static bool spTraitKey(uintptr_t base, uint32_t hash, const char* family, char* out, int outsz);
 bool spTraitName(uintptr_t base, uint32_t hash, bool virtue, char* out, int outsz) {
+    return spTraitKey(base, hash, virtue ? "str_virtue_name_%s" : "str_affliction_name_%s", out, outsz);
+}
+// ---- THE TRAIT DESCRIPTION ----
+bool spTraitDescription(uintptr_t base, uint32_t hash, bool virtue, char* out, int outsz) {
+    return spTraitKey(base, hash, virtue ? "str_virtue_description_%s" : "str_affliction_description_%s", out, outsz);
+}
+static bool spTraitKey(uintptr_t base, uint32_t hash, const char* family, char* out, int outsz) {
     if (!hash) return false;
     uint8_t alt = 0;
     safeReadU8(base + CAMP_BUFFREG_FLAG_RVA, &alt);
@@ -1979,7 +1988,7 @@ bool spTraitName(uintptr_t base, uint32_t hash, bool virtue, char* out, int outs
             if (!((*p >= 'a' && *p <= 'z') || (*p >= 'A' && *p <= 'Z') ||
                   (*p >= '0' && *p <= '9') || *p == '_')) return false;
         char key[96];
-        _snprintf(key, sizeof key, virtue ? "str_virtue_name_%s" : "str_affliction_name_%s", id);
+        _snprintf(key, sizeof key, family, id);
         key[sizeof key - 1] = 0;
         if (!resolveKey(base, key, out, outsz) || !out[0]) return false;
         abStripMarkup(out);
@@ -2092,6 +2101,42 @@ static void spCondEmit(SpCondSink* s, const char* frag) {
         s->lines[s->n][len] = '.'; s->lines[s->n][len + 1] = 0;
     }
     s->n++;
+}
+
+// ---- GUARD PARTNERS, NAMED ON EITHER SIDE ----
+static bool spGuardRowName(uintptr_t base, const RvEntry& e, char* out, int outsz) {
+    out[0] = 0;
+    if (!e.enemy) {
+        char cls[80];
+        return abHeroNameClassOf(base, e.actor, out, outsz, cls, sizeof cls) && out[0];
+    }
+    char name[96];
+    if (!rvMonsterName(base, e.actor, name, sizeof name) || !name[0]) return false;
+    char fmt[128];
+    if (resolveKey(base, "tray_icon_tooltip_guard_name_with_rank_format", fmt, sizeof fmt) &&
+        fmt[0] && abFormatMatches(fmt, "sd")) {
+        _snprintf(out, outsz, fmt, name, e.slot);
+        out[outsz - 1] = 0;
+        abStripMarkup(out);
+        if (out[0]) return true;
+    }
+    _snprintf(out, outsz, "%s", name);
+    out[outsz - 1] = 0;
+    return true;
+}
+
+static bool spGuardNameOf(uintptr_t base, uintptr_t self, uint32_t gid, char* out, int outsz) {
+    out[0] = 0;
+    if (!gid) return false;
+    RvEntry room[RV_MAX_ROWS];
+    const int nr = rvBuildRoom(base, room, RV_MAX_ROWS);
+    for (int r = 0; r < nr; r++) {
+        uint32_t pid = 0;
+        if (room[r].kind != RV_ACTOR || !room[r].actor || room[r].actor == self) continue;
+        if (safeReadU32(room[r].actor + ACTOR_ID_OFF, &pid) && pid == gid)
+            return spGuardRowName(base, room[r], out, outsz);
+    }
+    return false;
 }
 
 static void spCondWalk(uintptr_t base, uintptr_t actor, int want, SpCondSink* s) {
@@ -2208,22 +2253,49 @@ static void spCondWalk(uintptr_t base, uintptr_t actor, int want, SpCondSink* s)
             safeReadU32(actor + ACTOR_ID_OFF, &own);
             logLine("status: guard relation on actor=%p own_id=%u guarded_guid=%u", (void*)actor, own, gid);
             if (!abTipPlain(base, "tray_icon_tooltip_guard_title", frag, sizeof frag)) break;
-            uintptr_t party[RV_MAX_MEMBERS];
-            int np = rvPartyList(base, party, RV_MAX_MEMBERS);
-            for (int k = 0; k < np; k++) {
-                uint32_t pid = 0;
-                if (party[k] != actor && safeReadU32(party[k] + ACTOR_ID_OFF, &pid) && pid == gid) {
-                    char pname[80], pcls[80];
-                    if (abHeroNameClassOf(base, party[k], pname, sizeof pname, pcls, sizeof pcls) && pname[0]) {
-                        size_t len = strlen(frag);
-                        _snprintf(frag + len, sizeof frag - len, ": %s", pname);
-                        frag[sizeof frag - 1] = 0;
-                    }
-                    break;
-                }
+            char pname[128];
+            if (spGuardNameOf(base, actor, gid, pname, sizeof pname)) {
+                size_t len = strlen(frag);
+                _snprintf(frag + len, sizeof frag - len, ": %s", pname);
+                frag[sizeof frag - 1] = 0;
             }
             spCondEmit(s, frag);
             break;
+        }
+    }
+
+    if (want & SP_COND_POS) {
+        uint32_t own = 0;
+        if (safeReadU32(actor + ACTOR_ID_OFF, &own) && own) {
+            char names[256] = "";
+            RvEntry room[RV_MAX_ROWS];
+            const int nr = rvBuildRoom(base, room, RV_MAX_ROWS);
+            for (int r = 0; r < nr; r++) {
+                const uintptr_t other = room[r].actor;
+                if (room[r].kind != RV_ACTOR || !other || other == actor) continue;
+                uintptr_t begin = 0;
+                const int n = spBuffCount(other, &begin);
+                for (int i = 0; i < n; i++) {
+                    uintptr_t rec = begin + (uintptr_t)i * ACTOR_BUFF_STRIDE + ACTOR_BUFF_RECORD_OFF;
+                    uint32_t st = 0, gid = 0;
+                    if (!safeReadU32(rec + BUFFREC_STAT_TYPE_OFF, &st) || (int)st != STAT_TYPE_GUARDED) continue;
+                    if (!safeReadU32(rec + BUFFREC_GUARD_GUID_OFF, &gid) || gid != own) continue;
+                    logLine("status: guarding -- actor=%p own_id=%u is the partner of a guard relation on %p",
+                            (void*)actor, own, (void*)other);
+                    char who[128];
+                    if (spGuardRowName(base, room[r], who, sizeof who)) {
+                        size_t len = strlen(names);
+                        _snprintf(names + len, sizeof names - len, "%s%s", len ? ", " : "", who);
+                        names[sizeof names - 1] = 0;
+                    }
+                    break;   // one mention per guarded actor
+                }
+            }
+            if (names[0]) {
+                _snprintf(frag, sizeof frag, axs(AXS_CS_GUARDING_FMT), names);
+                frag[sizeof frag - 1] = 0;
+                spCondEmit(s, frag);
+            }
         }
     }
 
@@ -2359,6 +2431,13 @@ static bool spBuffIsQuirkSourced(uintptr_t base, const unsigned char* rec) {
     return strcmp(src, BSRC_QUIRK_NAME) == 0 || strcmp(src, "bsrc_disease") == 0;
 }
 
+// ---- INSTANT-SKILL RECORDS: a skill's own attack modifier, not a buff ----
+bool spBuffIsInstantSkill(uintptr_t base, const unsigned char* rec) {
+    char src[0x44];
+    if (!spBuffSourceName(base, rec, src, sizeof src)) return false;   // unreadable: speak it
+    return strcmp(src, "bsrc_instantSkill") == 0;
+}
+
 static bool spDmgHighTwinInVector(uintptr_t begin, int count, int self,
                                   const unsigned char* rec) {
     char sub[0x41];
@@ -2398,6 +2477,8 @@ static bool spResistSubShownForMonster(uintptr_t base, const char* sub) {
 static bool spRecCountedElsewhere(uintptr_t base, uintptr_t actor, uintptr_t live,
                                   const unsigned char* rec, bool monster,
                                   int healIdx, int sTakeIdx, int sHealIdx) {
+    float amt = *(const float*)(rec + BUFFREC_AMOUNT_OFF);
+    if (rec[BUFFREC_DESCTIP_OFF] != 0 && amt > -1e-6f && amt < 1e-6f) return false;
     int32_t stat = *(int32_t*)(rec + BUFFREC_STAT_TYPE_OFF);
     bool pairShown = false;
     char sub[0x41];
@@ -2458,6 +2539,7 @@ int spUnvoicedBuffLines(uintptr_t base, uintptr_t actor, bool monster,
         uint32_t stat = *(uint32_t*)(rec + BUFFREC_STAT_TYPE_OFF);
         if (spCondHasOwnVoice(stat)) continue;              // a condition line already says it
         if (spBuffIsQuirkSourced(base, rec)) continue;      // the sheet's rows, not the tooltip's
+        if (spBuffIsInstantSkill(base, rec)) continue;
         if (spRecCountedElsewhere(base, actor, live, rec, monster, healIdx, sTakeIdx, sHealIdx)) continue;
         if (spDmgHighTwinInVector(begin, count, i, rec)) continue;
         if (!spBuffTextFromRecord(base, actor, rec, buf, sizeof buf) || !buf[0]) continue;

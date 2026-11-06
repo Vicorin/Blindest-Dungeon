@@ -11,7 +11,7 @@ static const uintptr_t CS_LIST_BEGIN_OFF  = 0x18;      // list owner+: vector be
 static const uintptr_t CS_LIST_END_OFF    = 0x20;      // list owner+: vector end
 static const uintptr_t CS_PANEL_STRIDE    = 8;         // the entries are pointers
 static const int       CS_MAX_PANELS      = 32;        // sanity cap on the panel-vector walk
-static const uintptr_t HEROCLASS_MAXSELECT_OFF = 0x11e8; // HeroClass+: uint, max selected combat
+static const uintptr_t HEROCLASS_MAXSELECT_OFF = 0x11f0;
                                                        // skills -- where the familiar 4 comes from (was 0x11d8)
 
 // ---- CHARACTER SHEET: is it open, and what is on it? ----
@@ -58,6 +58,17 @@ static bool csSehUnequipTrinket(uintptr_t base, uintptr_t hero, int slot) {
     uint32_t s = (uint32_t)slot;
     __try { ((CsTrkUnequipFn)(base + CS_TRK_UNEQUIP_RVA))(&c, &s); return true; }
     __except (EXCEPTION_EXECUTE_HANDLER) { return false; }
+}
+
+static void csTrkAskUnequip(int slot, const char* name) {
+    g_csTrkConfirmSlot = slot;
+    strncpy(g_csTrkConfirmName, name, sizeof g_csTrkConfirmName - 1);
+    g_csTrkConfirmName[sizeof g_csTrkConfirmName - 1] = 0;
+    char utter[320];
+    _snprintf(utter, sizeof utter, axs(AXS_CS_TRK_UNEQUIP_CONFIRM_FMT), name);
+    utter[sizeof utter - 1] = 0;
+    axAppendHint(utter, sizeof utter, AXS_CS_TRK_UNEQUIP_CONFIRM_HINT);   // "" when Off
+    postSpeech(utter);
 }
 
 int csResolveLevel(uintptr_t base, uintptr_t hero) {
@@ -128,7 +139,21 @@ static bool csTitleLine(uintptr_t base, char* out, int outsz) {
     else                   _snprintf(title, sizeof title, "%s", rank[0] ? rank : cls);
     title[sizeof title - 1] = 0;
 
-    char resolveFrag[160] = { 0 };
+    char xpFrag[192] = { 0 };
+    if (hero) {
+        uint32_t xp = 0; int into = 0, span = 0; bool maxed = false;
+        if (safeReadU32(hero + HERO_RESOLVE_XP_OFF, &xp) &&
+            rrXpProgress(base, xp, &into, &span, &maxed)) {
+            xpFrag[0] = ' ';
+            if (maxed) _snprintf(xpFrag + 1, sizeof xpFrag - 1, "%s", axs(AXS_RR_RANK_MAXED));
+            else       _snprintf(xpFrag + 1, sizeof xpFrag - 1, axs(AXS_RR_XP_TOWARD_FMT), into, span);
+            xpFrag[sizeof xpFrag - 1] = 0;
+        } else {
+            logLine("charsheet: XP bar unreadable for hero=%p", (void*)hero);
+        }
+    }
+
+    char resolveFrag[512] = { 0 };
     if (hero) {
         uint32_t th = 0;
         char tname[128] = { 0 };
@@ -152,18 +177,49 @@ static bool csTitleLine(uintptr_t base, char* out, int outsz) {
         naFrag[sizeof naFrag - 1] = 0;
     }
 
-    if (name[0] && title[0]) _snprintf(out, outsz, "%s, %s.%s%s", name, title, naFrag, resolveFrag);
-    else                     _snprintf(out, outsz, "%s.%s%s", name[0] ? name : title, naFrag, resolveFrag);
+    if (name[0] && title[0]) _snprintf(out, outsz, "%s, %s.%s%s%s", name, title, xpFrag, naFrag, resolveFrag);
+    else                     _snprintf(out, outsz, "%s.%s%s%s", name[0] ? name : title, xpFrag, naFrag, resolveFrag);
     out[outsz - 1] = 0;
     return true;
 }
 
+// ---- THE TITLE'S TOOLTIP ----
+static bool csTitleDescription(uintptr_t base, char* out, int outsz) {
+    out[0] = 0;
+    uintptr_t hero = abSelectedHero(base);
+    if (!hero) return false;
+    char deadWord[96];
+    if (rvCorpseWord(base, hero, deadWord, sizeof deadWord)) return false;
+    uint32_t th = 0;
+    if (safeReadU32(hero + ACTOR_TRAIT_OFF, &th) && th)
+        return spTraitDescription(base, th, false, out, outsz) && out[0];
+    if (safeReadU32(hero + ACTOR_VIRTUE_OFF, &th) && th)
+        return spTraitDescription(base, th, true, out, outsz) && out[0];
+    return false;
+}
+
+static int csTitleTipLines(uintptr_t base, int i, char lines[AB_TIP_MAX_LINES][AB_TIP_LINE_SZ]) {
+    if (i != 0) return 0;
+    if (!csTitleLine(base, lines[0], AB_TIP_LINE_SZ)) return 0;
+    if (!csTitleDescription(base, lines[1], AB_TIP_LINE_SZ)) return 1;
+    return 2;
+}
+
 static void csSpeakTitle(uintptr_t base, const char* why) {
-    char out[512];
+    char out[MAILBOX_SZ];
     if (!csTitleLine(base, out, sizeof out)) {
         logLine("charsheet title (%s): no label", why);
         return;
     }
+    if (axTipWanted()) {
+        char desc[AB_TIP_LINE_SZ];
+        if (csTitleDescription(base, desc, sizeof desc)) {
+            axTipGlue(out, sizeof out, desc);
+            axTipGlueKeywords(out, sizeof out);   // the glossary terms it names (core/keywords.cpp)
+        }
+    }
+    g_csRow     = 0;
+    g_csTipLine = 0;
     logLine("charsheet title (%s): \"%s\"", why, out);
     postSpeech(out);
 }
@@ -525,7 +581,7 @@ static int64_t csCampCellId(int i) {
 // ---- THE DESELECT PROBE ----
 static const uintptr_t CS_PANEL_EDITABLE_OFF = 0x14d;   // CharacterDisplay+: the cell closure's gate
 static const uintptr_t CS_TOWN_SHEET_STATE_OFF = 0x3918; // townRoot+: the sheet's show state (0 = down)
-static const uintptr_t CS_HERO_BACKER_OFF = 0x13b8;     // Hero+: backer_hero (was 0x1338)
+static const uintptr_t CS_HERO_BACKER_OFF = 0x1428;
 static void csCampProbe(uintptr_t base, const char* when) {
     uintptr_t panel = csTownSheetPanel(base);
     uintptr_t root  = resTownRoot(base);
@@ -794,14 +850,12 @@ bool csTrinketRowText(uintptr_t base, int i, char* out, int outsz) {
     uint32_t amount = 0;
     if (!safeReadU32(item + ITEM_AMOUNT_OFF, &amount)) return false;
 
-    bool town = csTownSheetPanel(base) != 0;
     if ((int32_t)amount < 1) {                     // the game's own empty test
         _snprintf(out, outsz, axs(AXS_CS_TRK_EMPTY_FMT), i + 1, TRINKET_SLOT_COUNT);
         out[outsz - 1] = 0;
         logLine("charsheet trinket[%d] empty", i);
         return true;
     }
-    (void)town;
 
     char type[64] = { 0 }, itemId[64] = { 0 }, key[192] = { 0 }, name[256] = { 0 };
     bool resolved = invItemName(base, item, type, itemId, key, name);
@@ -828,7 +882,8 @@ int csTrinketTipLines(uintptr_t base, int i, char lines[AB_TIP_MAX_LINES][AB_TIP
     if (!safeReadU32(item + ITEM_AMOUNT_OFF, &amount) || (int32_t)amount < 1) return 1;
     InvCard c;
     invCardRead(base, item, &c);
-    c.desc[0] = 0;
+    if (c.set[0] && bldTrinketSetWorn(base, hero, item))
+        bldTrinketSetEx(base, bldTrinketRecord(base, item), c.set, sizeof c.set, false, true);
     return invCardLines(&c, lines, 1, AB_TIP_MAX_LINES);
 }
 
@@ -840,8 +895,8 @@ void csTrinketAppendHint(uintptr_t base, int i, char* out, int outsz) {
     if (!safeReadU32(beg + (uintptr_t)i * ITEM_STRIDE + ITEM_AMOUNT_OFF, &amount)) return;
     bool town = csTownSheetPanel(base) != 0;
     bool filled = (int32_t)amount >= 1;
-    axAppendHint(out, outsz, filled ? (town ? AXS_CS_TRK_HINT_UNEQUIP : AXS_CS_TRK_HINT_REPLACE)
-                                    : (town ? AXS_CS_TRK_HINT_TOWN    : AXS_CS_TRK_HINT_RAID));
+    axAppendHint(out, outsz, filled ? AXS_CS_TRK_HINT_UNEQUIP
+                                    : (town ? AXS_CS_TRK_HINT_TOWN : AXS_CS_TRK_HINT_RAID));
 }
 
 // ------------------------------------------------------------
@@ -888,15 +943,20 @@ bool csItemsPanelRow(uintptr_t base, uintptr_t hero, int i, char* out, int outsz
     }
     char fx[768] = { 0 };
     bldTrinketEffects(base, item, fx, sizeof fx, false);
+    char set[1024] = { 0 };
+    if (rec) bldTrinketSetEx(base, rec, set, sizeof set, false, bldTrinketSetWorn(base, hero, item));
 
-    _snprintf(out, outsz, "%s: %s%s%s%s%s%s%s%s%s%s%s.",
+    _snprintf(out, outsz, "%s: %s%s%s%s%s%s%s%s%s%s%s%s%s.",
               label, name,
               rarity[0]  ? ", " : "", rarity,
               clsreq[0]  ? ", " : "", clsreq,
               charges[0] ? ". " : "", charges,
               fx[0]      ? ". " : "", fx,
-              trig[0]    ? ". " : "", trig);
+              trig[0]    ? ". " : "", trig,
+              set[0]     ? ". " : "", set);
     out[outsz - 1] = 0;
+    size_t on = strlen(out);
+    if (set[0] && on >= 2 && out[on - 1] == '.' && axEndsSentence(out, on - 1)) out[on - 1] = 0;
     return true;
 }
 
@@ -919,6 +979,7 @@ static const CsOutfitDescs kCsOutfits[] = {
     { "arbalest",      { AXS_OUTFIT_ARBALEST_A,      AXS_OUTFIT_ARBALEST_B,      AXS_OUTFIT_ARBALEST_C,      AXS_OUTFIT_ARBALEST_D      } },
     { "bounty_hunter", { AXS_OUTFIT_BOUNTY_HUNTER_A, AXS_OUTFIT_BOUNTY_HUNTER_B, AXS_OUTFIT_BOUNTY_HUNTER_C, AXS_OUTFIT_BOUNTY_HUNTER_D } },
     { "crusader",      { AXS_OUTFIT_CRUSADER_A,      AXS_OUTFIT_CRUSADER_B,      AXS_OUTFIT_CRUSADER_C,      AXS_OUTFIT_CRUSADER_D      } },
+    { "duelist",       { AXS_OUTFIT_DUELIST_A,       AXS_OUTFIT_DUELIST_B,       AXS_OUTFIT_DUELIST_C,       AXS_OUTFIT_DUELIST_D       } },
     { "flagellant",    { AXS_OUTFIT_FLAGELLANT_A,    AXS_OUTFIT_FLAGELLANT_B,    AXS_OUTFIT_FLAGELLANT_C,    AXS_OUTFIT_FLAGELLANT_D    } },
     { "grave_robber",  { AXS_OUTFIT_GRAVE_ROBBER_A,  AXS_OUTFIT_GRAVE_ROBBER_B,  AXS_OUTFIT_GRAVE_ROBBER_C,  AXS_OUTFIT_GRAVE_ROBBER_D  } },
     { "hellion",       { AXS_OUTFIT_HELLION_A,       AXS_OUTFIT_HELLION_B,       AXS_OUTFIT_HELLION_C,       AXS_OUTFIT_HELLION_D       } },
@@ -930,6 +991,7 @@ static const CsOutfitDescs kCsOutfits[] = {
     { "musketeer",     { AXS_OUTFIT_MUSKETEER_A,     AXS_OUTFIT_MUSKETEER_B,     AXS_OUTFIT_MUSKETEER_C,     AXS_OUTFIT_MUSKETEER_D     } },
     { "occultist",     { AXS_OUTFIT_OCCULTIST_A,     AXS_OUTFIT_OCCULTIST_B,     AXS_OUTFIT_OCCULTIST_C,     AXS_OUTFIT_OCCULTIST_D     } },
     { "plague_doctor", { AXS_OUTFIT_PLAGUE_DOCTOR_A, AXS_OUTFIT_PLAGUE_DOCTOR_B, AXS_OUTFIT_PLAGUE_DOCTOR_C, AXS_OUTFIT_PLAGUE_DOCTOR_D } },
+    { "runaway",       { AXS_OUTFIT_RUNAWAY_A,       AXS_OUTFIT_RUNAWAY_B,       AXS_OUTFIT_RUNAWAY_C,       AXS_OUTFIT_RUNAWAY_D       } },
     { "shieldbreaker", { AXS_OUTFIT_SHIELDBREAKER_A, AXS_OUTFIT_SHIELDBREAKER_B, AXS_OUTFIT_SHIELDBREAKER_C, AXS_OUTFIT_SHIELDBREAKER_D } },
     { "vestal",        { AXS_OUTFIT_VESTAL_A,        AXS_OUTFIT_VESTAL_B,        AXS_OUTFIT_VESTAL_C,        AXS_OUTFIT_VESTAL_D        } },
 };
@@ -1088,7 +1150,7 @@ static bool csTitleRowText(uintptr_t base, int i, char* out, int outsz) {
 }
 
 static const CsSectionDef kCsSections[] = {
-    { nullptr,                         csTitleCount,    csTitleRowText,    nullptr,             "hero"          },
+    { nullptr,                         csTitleCount,    csTitleRowText,    csTitleTipLines,     "hero"          },
     { nullptr, csQuirkPosSectionCount, csQuirkPosRowText, csQuirkPosTipLines, "positive quirks", false, AXS_CS_SECTION_POS_QUIRKS },
     { nullptr, csQuirkNegSectionCount, csQuirkNegRowText, csQuirkNegTipLines, "negative quirks", false, AXS_CS_SECTION_NEG_QUIRKS },
     { "character_title_base_stats",    csStatCount,     csStatRowText,     csStatTipLines,      "base stats"    },
@@ -1216,7 +1278,7 @@ static void csSpeakSection(uintptr_t base) {
     g_csTrkConfirmSlot = -1;
 
     if (!s->titleKey && s->modTitle < 0) {   // row 0: the title line IS the announcement
-        csSpeakTitle(base, "section");
+        csSpeakTitle(base, "section");       // places the cursor on the title (its one item)
         return;
     }
     char title[128];
@@ -1557,7 +1619,27 @@ bool routeCharSheetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repea
             uintptr_t hero = abSelectedHero(base);
             if (!hero) return false;
             if (g_csRow < 0) { csMoveRow(base, 1); return true; }    // land + read first
-            return ruBeginFromSheet(base, hero);
+            if (g_csRow >= TRINKET_SLOT_COUNT) g_csRow = TRINKET_SLOT_COUNT - 1;
+            if (ruUnequipBusy()) { postSpeech(axs(AXS_STILL_WORKING)); return true; }
+            int slot = g_csRow;
+            uintptr_t beg = 0; int slots = 0;
+            uint32_t amount = 0;
+            if (invItemVectorAt(hero + HERO_TRINKET_SYSTEM_OFF, &beg, &slots) && slot < slots)
+                safeReadU32(beg + (uintptr_t)slot * ITEM_STRIDE + ITEM_AMOUNT_OFF, &amount);
+            if ((int32_t)amount < 1) {                              // EMPTY: choose from the bag
+                g_csTrkConfirmSlot = -1;
+                return ruBeginFromSheet(base, hero);
+            }
+            if (g_csTrkConfirmSlot != slot) {                       // first press: ask...
+                if (ruUnequipRefused(base)) return true;
+                char type[64], itemId[64], key[192], name[256];
+                invItemName(base, beg + (uintptr_t)slot * ITEM_STRIDE, type, itemId, key, name);
+                csTrkAskUnequip(slot, name);
+                return true;
+            }
+            g_csTrkConfirmSlot = -1;                                // second press: do it
+            ruBeginUnequip(base, hero, slot, g_csTrkConfirmName);  // speaks its own outcome
+            return true;
         }
 
         if (kCsSections[g_csSection].row == csTrinketRowText && csTownSheetPanel(base)) {
@@ -1582,14 +1664,7 @@ bool routeCharSheetKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repea
                 char type[64], itemId[64], key[192], name[256];
                 invItemName(base, beg + (uintptr_t)slot * ITEM_STRIDE, type, itemId, key, name);
                 if (g_csTrkConfirmSlot != slot) {                   // first press: ask
-                    g_csTrkConfirmSlot = slot;
-                    strncpy(g_csTrkConfirmName, name, sizeof g_csTrkConfirmName - 1);
-                    g_csTrkConfirmName[sizeof g_csTrkConfirmName - 1] = 0;
-                    char utter[320];
-                    _snprintf(utter, sizeof utter, axs(AXS_CS_TRK_UNEQUIP_CONFIRM_FMT), name);
-                    utter[sizeof utter - 1] = 0;
-                    axAppendHint(utter, sizeof utter, AXS_CS_TRK_UNEQUIP_CONFIRM_HINT);   // "" when Off
-                    postSpeech(utter);
+                    csTrkAskUnequip(slot, name);
                     return true;
                 }
                 g_csTrkConfirmSlot = -1;                            // second press: do it

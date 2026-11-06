@@ -178,7 +178,7 @@ void resolveLabel(uintptr_t base, uintptr_t tbwVtbl, int64_t id,
     if (owner != 0) {
         char via[32]; via[0] = 0;
         bool got = extractWidgetText(owner, tbwVtbl, text, textsz, via, sizeof via);
-        if (!got) { strncpy(text, "unlabeled", textsz - 1); text[textsz - 1] = 0; }
+        if (!got) { strncpy(text, axs(AXS_FE_UNLABELED_BUTTON), textsz - 1); text[textsz - 1] = 0; }
         logLine("ingame id=0x%llx ascii=\"%s\" vcount=%ld owner=0x%llx via=%s text=\"%s\"",
                 (unsigned long long)id, idasc, vcount, (unsigned long long)owner,
                 got ? via : "(none)", text);
@@ -835,7 +835,13 @@ static bool routeInputEventInner(uintptr_t base, void* ev) {
             return routeActionToggle(base, sym, rep);
     }
 
-    // ---- 1..5 ARE THE GAME'S OWN KEYS AND THE MOD NO LONGER TAKES THEM ----
+    // ---- 1..5 IN A FIGHT ARE ENTER ON THAT BAR SLOT AGAIN ----
+    if (sym >= SDLK_1 && sym <= SDLK_1 + 4 && !g_textInputActive &&
+        !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL)) &&
+        routeSkillKey(base, ctx, (int)(sym - SDLK_1), rep))
+        return true;
+
+    // ---- (HISTORY) 1..5 ARE THE GAME'S OWN KEYS AND THE MOD NO LONGER TAKES THEM ----
 
     if (sym == SDLK_m && !(mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL))) {
         if (ctx == AX_ACTIONS || ctx == AX_ROOM || ctx == AX_MAP || ctx == AX_INV ||
@@ -1139,7 +1145,9 @@ int OurPoll(void* ev) {
                     g_inputIsController = true;
                 else if (et == SDL_EVT_KEYDOWN)
                     g_inputIsController = false;
-                if (g_preambleHold) {
+                if (g_preambleRehold) {
+                    g_preambleRehold = false;   // the ',' that re-read the preamble keeps its hold
+                } else if (g_preambleHold) {
                     g_preambleHold = false;
                     logLine("preamble hold released by input type=0x%x", et);
                 }
@@ -1180,6 +1188,8 @@ int OurPoll(void* ev) {
         serviceTrkPick(g_base);
         serviceRaidTrinket(g_base);
         serviceRaidTrinketConfirm(g_base);
+        serviceRaidUnequip(g_base);
+        serviceRaidSwap(g_base);
         checkGlossary(g_base);
         checkHelp(g_base);
         checkControls(g_base);
@@ -1223,6 +1233,7 @@ static void axSayAgain(uintptr_t base) {
     if (tutPopupActive())     { tutReannounce(base); return; }
     if (axIsTownEvent())      { teReannounce(base); return; }   // not under C's preview sheet
     if (clogClearAskActive()) { clogReannounceClearAsk(base); return; }
+    if (preambleReannounce(base)) return;
 
     for (int i = 0; i < kAxContextCount; i++) {
         const AxContextDef* d = &kAxContexts[i];

@@ -5,9 +5,9 @@
 #include "internal.h"
 #include "game/offsets.h"
 
-static const uintptr_t SUB_TEXT_OFF    = 0x193c;
+static const uintptr_t SUB_TEXT_OFF    = 0x19c4;
 static const uintptr_t SUB_TEXT_MAX    = 0x200;   // the game's own strncpy_s bound
-static const uintptr_t SUB_VISIBLE_OFF = 0x1bd8;
+static const uintptr_t SUB_VISIBLE_OFF = 0x1c60;
 
 static char s_subLast[MAILBOX_SZ];
 
@@ -17,7 +17,7 @@ static bool subIsMissSentinel(const char* s) {
     return (s[0] == '[' && s[1] == '<') || strstr(s, "error_not_localized") != nullptr;
 }
 
-static const uintptr_t SUB_MOVIE_OFF = 0x1cf0;
+static const uintptr_t SUB_MOVIE_OFF = 0x1d78;
 static const uintptr_t MOVIE_RANGES_BEGIN_OFF = 0x00;   // track+0x00/+0x08: vector<{uint start, uint end}>
 static const uintptr_t MOVIE_RANGES_END_OFF   = 0x08;
 static const uintptr_t MOVIE_NAME_OFF         = 0x64;   // inline track name (log only)
@@ -73,7 +73,7 @@ bool routeMovieKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
 
 void serviceSubtitles(uintptr_t base) {
     if (!base) return;
-    if (!axReadSubtitles()) { s_subLast[0] = 0; return; }
+    const bool speak = axReadSubtitles();
 
     uintptr_t app = base + DARKEST_APP_RVA;
 
@@ -101,5 +101,8 @@ void serviceSubtitles(uintptr_t base) {
                 movie ? "present" : "none", line);
     }
 
+    if (mapRoot(base)) clogAdd(line);
+
+    if (!speak) return;
     postSpeech(line, false, SPK_EVENT);
 }

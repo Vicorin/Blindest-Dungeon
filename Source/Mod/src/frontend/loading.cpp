@@ -78,6 +78,24 @@ void checkPreamble(uintptr_t base, uintptr_t display) {
     speakPreamble(base);
 }
 
+// ---- Preamble re-read (the ',' key) ----
+volatile bool g_preambleRehold = false;
+
+bool preambleReannounce(uintptr_t base) {
+    uintptr_t disp = frontEndDisplay(base);
+    int st = disp ? frontEndState(disp) : -1;
+    if (st != FE_STATE_PREAMBLE && !g_preambleHold) return false;
+    char full[MAILBOX_SZ];
+    int got = buildPreamble(base, full, sizeof full);
+    logLine("preamble: re-read on request (state=%d hold=%d lines=%d)", st, (int)g_preambleHold, got);
+    if (got <= 0) return false;
+    postSpeech(full);
+    g_preambleHold = true;
+    g_preambleHoldUntil = GetTickCount() + 90000;
+    g_preambleRehold = true;
+    return true;
+}
+
 // ---- Loading screen reader (main thread) ----
 
 static void lsReadText(uintptr_t ls, char* title, int tsz, char* tip, int psz) {

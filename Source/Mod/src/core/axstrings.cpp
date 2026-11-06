@@ -65,7 +65,9 @@ void axAppendHintText(char* buf, int bufsz, const char* hint) {
     buf[bufsz - 1] = 0;
 }
 bool axEndsSentence(const char* s, size_t n) {
-    if (!s || n == 0) return false;
+    if (!s) return false;
+    while (n > 0 && s[n - 1] == AX_NOEXPAND_CLOSE) n--;   // a fence closing after the stop
+    if (n == 0) return false;
     char last = s[n - 1];
     if ((last == ')' || last == ']' || last == '"' || last == '\'') && n >= 2) n--;
     if (s[n - 1] == '.' || s[n - 1] == '?' || s[n - 1] == '!') return true;

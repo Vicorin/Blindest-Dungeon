@@ -122,7 +122,7 @@ static const uintptr_t PROV_CLS_GOLD_OFF    = 0x9c;     // ItemClass+: purchase 
 static const uintptr_t PROV_CLS_SHARD_OFF   = 0xa0;
 static const uintptr_t PROV_CLS_EVTFLAG_OFF = 0x156;    // ItemClass+: events-may-reprice flag (was 0x146)
 static const uintptr_t PROV_ITEM_TAGMAP_OFF = 0x90;     // ItemStack+: map<tag hash, granted count>
-static const uintptr_t PROV_ENTRY_STATE_OFF = 0x1540;   // Roster::Entry+: 1 = in party (was 0x14c0)
+static const uintptr_t PROV_ENTRY_STATE_OFF = 0x15b0;
 static const uint32_t  PROV_EVTDATA_COST_TYPE = 10;     // record+0x00: provision cost change
 
 // ---- THE SECOND CURRENCY ----
@@ -237,6 +237,8 @@ static const ProvGrant kProvGrants[] = {
     { "leper",         "medicinal_herbs" },
     { "jester",        "medicinal_herbs" },
     { "antiquarian",   "skeleton_key"    },
+    { "musketeer",     "bandage"         },
+    { "runaway",       "torch"           },
 };
 static void provFreeHint(uintptr_t base, const char* rawItemId, int freeCount,
                          char* out, int outsz) {

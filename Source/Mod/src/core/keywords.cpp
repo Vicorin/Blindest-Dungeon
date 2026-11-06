@@ -144,8 +144,29 @@ bool axKeywordTerm(int id, char* out, int outsz) {
     return false;
 }
 
+static size_t kwFirstSentenceEnd(const char* d) {
+    const unsigned char* s = reinterpret_cast<const unsigned char*>(d);
+    for (size_t i = 0; s[i]; i++) {
+        if ((s[i] == '.' || s[i] == '!' || s[i] == '?') && (s[i + 1] == ' ' || !s[i + 1])) return i + 1;
+        if (s[i] == 0xE3 && s[i + 1] == 0x80 && s[i + 2] == 0x82) return i + 3;                        // 。
+        if (s[i] == 0xEF && s[i + 1] == 0xBC && (s[i + 2] == 0x81 || s[i + 2] == 0x9F)) return i + 3; // ！？
+    }
+    return strlen(d);
+}
+
 static void kwLine(int t, char* out, int outsz) {
-    _snprintf(out, outsz, axs(AXS_KW_DEF_FMT), g_kwTerms[t].term, g_kwTerms[t].def);
+    const KwTerm& k = g_kwTerms[t];
+    char term[KW_TERM_SZ + 4], def[KW_DEF_SZ + 4];
+    _snprintf(term, sizeof term, "%c%s%c", AX_NOEXPAND_OPEN, k.term, AX_NOEXPAND_CLOSE);
+    term[sizeof term - 1] = 0;
+    if (axIsAbbreviation(k.term)) {
+        size_t e = kwFirstSentenceEnd(k.def);
+        _snprintf(def, sizeof def, "%c%.*s%c%s", AX_NOEXPAND_OPEN, (int)e, k.def, AX_NOEXPAND_CLOSE, k.def + e);
+    } else {
+        _snprintf(def, sizeof def, "%s", k.def);
+    }
+    def[sizeof def - 1] = 0;
+    _snprintf(out, outsz, axs(AXS_KW_DEF_FMT), term, def);
     out[outsz - 1] = 0;
 }
 
@@ -186,7 +207,7 @@ void axTipGlueKeywords(char* buf, int bufsz) {
     if (axKeywordsMode() != AX_KEYWORDS_SPOKEN) return;
     if (g_fdComposingLabel) return;                 // a search label never carries a definition
     for (int h = 0; h < nh; h++) {
-        char line[KW_TERM_SZ + KW_DEF_SZ + 8];
+        char line[KW_TERM_SZ + KW_DEF_SZ + 12];      // + the four fence bytes
         kwLine(g_kwPend[h], line, sizeof line);
         axTipGlueKeywordLine(buf, bufsz, line);     // the glue that notes nothing back
     }

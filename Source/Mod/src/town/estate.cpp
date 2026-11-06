@@ -63,7 +63,7 @@ void tlGather(uintptr_t base, uintptr_t node, int depth, int* budget,
     safeReadPtr(node, &vft);
 
     if (vft == base + TBW_VFTABLE_RVA) {
-        char raw[512], clean[TL_ROW_MAX];
+        char raw[1536], clean[TL_ROW_MAX];           // raw still carries the colour codes
         if (readTbwText(node, raw, sizeof raw)) {
             stripMarkup(raw, clean, sizeof clean);
             if (clean[0]) {
@@ -645,6 +645,8 @@ bool g_rosActive = false;
 static int  g_resRow    = 0;                         // row cursor
 static char g_resRows[RES_MAX_ROWS][RES_ROW_MAX];    // the rendered rows, rebuilt live on every read
 static bool g_resIsTrade[RES_MAX_ROWS];              // this row is the Trade Heirlooms action
+static const int RES_TIP_MAX = 224;
+static char g_resTip[RES_MAX_ROWS][RES_TIP_MAX];
 static int  g_resCount  = 0;
 static bool g_resDumped  = false;
 
@@ -748,6 +750,43 @@ bool resWalletAmount(uintptr_t base, uint32_t idHash, int* amount) {
     return false;
 }
 
+// ---- THE CURRENCY HOVER TEXT ----
+static void resBarTip(uintptr_t base, uint32_t idHash, int amount, char* out, int outsz) {
+    out[0] = 0;
+    static const char* const kTipIds[] = { "bust", "portrait", "deed", "crest", "shard" };
+    const char* id = nullptr;
+    for (int i = 0; i < (int)(sizeof kTipIds / sizeof kTipIds[0]) && !id; i++)
+        if (resHash(kTipIds[i]) == idHash) id = kTipIds[i];
+    if (!id) return;
+    char key[96], raw[320];
+    _snprintf(key, sizeof key, "town_estate_bar_tooltip_%s", id);
+    key[sizeof key - 1] = 0;
+    if (!abTipPlain(base, key, raw, sizeof raw)) return;
+    const char* open = nullptr; const char* close = nullptr; int openLen = 0;
+    for (const char* q = raw; *q && !open; q++) {
+        if (*q == '(') { open = q; openLen = 1; }
+        else if ((unsigned char)q[0] == 0xEF && (unsigned char)q[1] == 0xBC && (unsigned char)q[2] == 0x88) { open = q; openLen = 3; }
+    }
+    if (open) {
+        for (const char* q = open + openLen; *q && !close; q++)
+            if (*q == ')' || ((unsigned char)q[0] == 0xEF && (unsigned char)q[1] == 0xBC && (unsigned char)q[2] == 0x89)) close = q;
+    }
+    if (open && close && close > open + openLen) {
+        const char* b = open + openLen;
+        while (*b == ' ') b++;
+        _snprintf(out, outsz, "%.*s", (int)(close - b), b);
+    } else if (abFormatMatches(raw, "d")) {
+        _snprintf(out, outsz, raw, amount);
+    } else if (!strchr(raw, '%')) {
+        _snprintf(out, outsz, "%s", raw);
+    }
+    out[outsz - 1] = 0;
+    if (out[0]) {                                          // "(servent à ...)" starts lower-case
+        unsigned char c0 = (unsigned char)out[0];
+        if (c0 >= 'a' && c0 <= 'z') out[0] = (char)(c0 - 32);
+    }
+}
+
 static int resCollect(uintptr_t base, bool probe) {
     g_resCount = 0;
     for (int c = 0; c < kResCurrencyCount && g_resCount < RES_MAX_ROWS - 1; c++) {
@@ -761,6 +800,7 @@ static int resCollect(uintptr_t base, bool probe) {
         _snprintf(g_resRows[g_resCount], RES_ROW_MAX, axs(AXS_RES_ROW_AMOUNT), disp, amount);
         g_resRows[g_resCount][RES_ROW_MAX - 1] = 0;
         g_resIsTrade[g_resCount] = false;
+        resBarTip(base, idHash, amount, g_resTip[g_resCount], RES_TIP_MAX);
         if (probe) logLine("resources probe: %s id-hash=%u found=%d amount=%d -> \"%s\"",
                            kResCurrencies[c].id, idHash, found ? 1 : 0, amount, g_resRows[g_resCount]);
         g_resCount++;
@@ -793,6 +833,7 @@ static int resCollect(uintptr_t base, bool probe) {
                               disp, amount);
                     g_resRows[g_resCount][RES_ROW_MAX - 1] = 0;
                     g_resIsTrade[g_resCount] = false;
+                    resBarTip(base, id, amount, g_resTip[g_resCount], RES_TIP_MAX);
                     if (probe) logLine("resources probe: registry row \"%s\" (id-hash=%u)",
                                        g_resRows[g_resCount], id);
                     g_resCount++;
@@ -808,6 +849,7 @@ static int resCollect(uintptr_t base, bool probe) {
     strncpy(g_resRows[g_resCount], trade, RES_ROW_MAX - 1);
     g_resRows[g_resCount][RES_ROW_MAX - 1] = 0;
     g_resIsTrade[g_resCount] = true;
+    g_resTip[g_resCount][0] = 0;
     g_resCount++;
     return g_resCount;
 }
@@ -825,6 +867,7 @@ static void resSpeakRow(uintptr_t base, const char* prefix) {
     _snprintf(utter, sizeof utter, "%s%s%s.%s", prefix ? prefix : "", prefix ? " " : "",
               g_resRows[g_resRow], pos);
     utter[sizeof utter - 1] = 0;
+    if (axTipWanted() && g_resTip[g_resRow][0]) axTipGlue(utter, sizeof utter, g_resTip[g_resRow]);
     if (g_resIsTrade[g_resRow]) axAppendHint(utter, sizeof utter, AXS_ENTER_ACTIVATE_HINT);
     postSpeech(utter);
 }
@@ -882,6 +925,26 @@ bool routeResourcesToggle(uintptr_t base, uint32_t sym, uint8_t repeat) {
 }
 
 bool routeResourcesKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
+    // ---- THE ROW'S TOOLTIP ON REQUEST ----
+    if ((mod & (KMOD_LCTRL | KMOD_RCTRL)) && !(mod & (KMOD_LALT | KMOD_RALT)) &&
+        (sym == SDLK_UP || sym == SDLK_DOWN)) {
+        if (repeat) return true;
+        int n = resCollect(base, false);
+        if (n <= 0) { postSpeech(axs(AXS_RES_NONE)); return true; }
+        axStepCursor(&g_resRow, n, 0);           // re-clamp: the live count can change
+        static int s_tipLine = 0, s_tipRow = -1;
+        if (s_tipRow != g_resRow) { s_tipRow = g_resRow; s_tipLine = 0; }
+        char lines[2][AB_TIP_LINE_SZ];
+        _snprintf(lines[0], AB_TIP_LINE_SZ, "%s.", g_resRows[g_resRow]);
+        lines[0][AB_TIP_LINE_SZ - 1] = 0;
+        int ln = 1;
+        if (g_resTip[g_resRow][0]) {
+            _snprintf(lines[1], AB_TIP_LINE_SZ, "%s", g_resTip[g_resRow]);
+            lines[1][AB_TIP_LINE_SZ - 1] = 0;
+            ln = 2;
+        }
+        return axTipStep(&s_tipLine, sym == SDLK_UP ? 1 : -1, &lines[0][0], AB_TIP_LINE_SZ, ln);
+    }
     if (mod & (KMOD_LALT | KMOD_RALT | KMOD_LCTRL | KMOD_RCTRL)) return false;
 
     if (sym == SDLK_ESCAPE) {
@@ -1117,5 +1180,12 @@ void serviceInfestation(uintptr_t base) {
         if (!utter[0]) return;
     }
     utter[sizeof utter - 1] = 0;
+    char key[96], raw[320], verbose[320];
+    _snprintf(key, sizeof key, "infestation_level_verbose_%s", name);
+    key[sizeof key - 1] = 0;
+    if (resolveKey(base, key, raw, sizeof raw) && raw[0]) {
+        stripMarkup(raw, verbose, sizeof verbose);
+        axAppendHintText(utter, sizeof utter, verbose);
+    }
     postSpeech(utter);
 }

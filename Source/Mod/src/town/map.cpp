@@ -230,6 +230,7 @@ static bool  g_tmActive = false;     // maintained by checkTownMap (edge-announc
 static bool  g_tmDumped = false;     // the one-shot collect log has fired this session
 static int   g_tmLayer  = -1;        // last seen town layer; -1 = not in town / unknown
 static bool  g_tmArrivalHintDue = false;   // the first Locations landing of a town visit owes
+static bool  g_tmSpokeUnderModal = false;
 
 DWORD g_tmOpenWatchUntil = 0;        // 0 = idle
 char  g_tmOpenName[TM_NAME_MAX];
@@ -637,6 +638,11 @@ static void tmSurfacePrefix(uintptr_t base, uintptr_t root, char* out, int outsz
 
 void tmReannounce(uintptr_t base) {
     if (!g_tmActive) return;
+    if (g_tmSpokeUnderModal) {
+        g_tmSpokeUnderModal = false;
+        logLine("townmap: the entry line spoke under the modal that just closed -- not repeating it");
+        return;
+    }
     logLine("townmap: re-announcing after a modal closed");
     char prefix[TM_NAME_MAX + 16];
     tmSurfacePrefix(base, resTownRoot(base), prefix, sizeof prefix);
@@ -907,6 +913,8 @@ void checkTownMap(uintptr_t base) {
         if (!g_tjChainId[0] && !g_bnSwitchUntil) {
             tmSurfacePrefix(base, root, prefix, sizeof prefix);
             tmSpeakRow(base, prefix);                // land ON something, in one utterance
+            g_tmSpokeUnderModal = townEventPopupActive();   // the popup's close owes no repeat
+            if (g_tmSpokeUnderModal) logLine("townmap: landed under the town-event popup");
             if (g_tmArrivalHintDue) {
                 g_tmArrivalHintDue = false;
                 axAppendHintToLast(AXS_TM_ARRIVAL_HINT);

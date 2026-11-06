@@ -377,16 +377,16 @@ static bool evOpeningLine(uintptr_t base, char* out, int outsz) {
     int n = evBuildRows(base, rows, &skin, title, sizeof title, flavour, sizeof flavour);
     if (n <= 0) return false;
 
-    int at = (g_evRow >= g_evHeads && g_evRow < n) ? g_evRow : (n > g_evHeads ? g_evHeads : 0);
     char row[MAILBOX_SZ];
-    if (rows[at].isHead) row[0] = 0;                      // a scroll with no choice at all
-    else evRowLine(&rows[at], at, n, row, sizeof row);
+    row[0] = 0;
+    if (g_evRow >= g_evHeads && g_evRow < n && !rows[g_evRow].isHead)
+        evRowLine(&rows[g_evRow], g_evRow, n, row, sizeof row);
 
-    if (flavour[0])
-        _snprintf(out, outsz, "%s. %s. %s", title[0] ? title : axs(AXS_EV_TITLE_FALLBACK),
-                  flavour, row);
-    else
-        _snprintf(out, outsz, "%s. %s", title[0] ? title : axs(AXS_EV_TITLE_FALLBACK), row);
+    const char* ttl = title[0] ? title : axs(AXS_EV_TITLE_FALLBACK);
+    if (flavour[0] && row[0]) _snprintf(out, outsz, "%s. %s. %s", ttl, flavour, row);
+    else if (flavour[0])      _snprintf(out, outsz, "%s. %s", ttl, flavour);   // flavour ends its own sentence
+    else if (row[0])          _snprintf(out, outsz, "%s. %s", ttl, row);
+    else                      _snprintf(out, outsz, "%s", ttl);
     out[outsz - 1] = 0;
     return true;
 }
@@ -443,13 +443,13 @@ static const uintptr_t OE_RESULTS_END_OFF = 0xa0;    // Overlay_Event+: end
 static const uintptr_t OE_RESULT_STRIDE   = 0x170;   // from the apply's push cursor (+0x2e qwords)
 static const uintptr_t OE_RESULT_TEXT_OFF = 0x000;   // record+: char[0x100], the sentence
 static const uintptr_t OE_RESULT_TAG_OFF  = 0x100;   // record+: char[0x40], short; logged only
-static const int       OE_MAX_RESULTS     = 8;
+static const int       OE_MAX_RESULTS     = 16;
 static const uintptr_t OE_APPLIED_FLAG    = 0xe56;
 
 static bool evResultTextOk(const char* s) {
     if (!s || !s[0]) return false;
     int n = (int)strlen(s);
-    if (n < 2 || n > 250) return false;
+    if (n < 2 || n > 255) return false;
     int letters = 0;
     for (int i = 0; i < n; i++) {
         unsigned char c = (unsigned char)s[i];

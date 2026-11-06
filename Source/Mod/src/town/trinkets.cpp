@@ -286,7 +286,8 @@ static bool riTrinketRowText(uintptr_t base, uintptr_t sys, int slot, int pos, i
     if (invCardWanted(card)) invCardRead(base, item, &c);
     else                     memset(&c, 0, sizeof c);
     const char* rarity = c.rarity;  const char* clsreq = c.clsreq;  const char* charges = c.charges;
-    const char* trig   = c.trig;    const char* fx     = c.fx;      const char* desc    = c.desc;
+    char trigSet[2600]; const char* trig = invCardTrigSet(&c, trigSet, sizeof trigSet);
+    const char* fx     = c.fx;      const char* desc    = c.desc;
     bool hasDesc = !brief && desc[0];
     char head[1120];
     if (amount > 1)
@@ -578,6 +579,42 @@ static const float RI_BAND_TOP     = 380.0f;
 static const float RI_BAND_BOT     = 730.0f;
 static const float RI_WHEEL_PARK_Y = 560.0f;  // mid-band: always over the grid viewport
 
+// ---- THE WHEEL STEP (2026-11-04, a player's report: "a noticeable delay equipping when there ----
+static float g_riPxPerNotch   = 30.0f;
+static bool  g_riNotchLearned = false;  // false = the 30 is a guess: step single notches
+static float g_riStepFromY    = 0;      // the cell's y when the last step went out
+static int   g_riStepNotches  = 0;      // notches in that step (0 = none outstanding)
+static const int RI_STEP_MAX_NOTCHES = 60;   // 60 * 30 px = 1800 px, deeper than any grid
+
+static int riWheelStep(float sy) {
+    float dist = sy - RI_WHEEL_PARK_Y;
+    float adist = dist < 0 ? -dist : dist;
+    int n = 1;                                 // unlearned: one notch, and measure it
+    if (g_riNotchLearned && g_riPxPerNotch > 0) {
+        n = (int)(adist / g_riPxPerNotch + 0.5f);
+        if (n < 1) n = 1;
+        if (n > RI_STEP_MAX_NOTCHES) n = RI_STEP_MAX_NOTCHES;
+    }
+    int signedN = dist > 0 ? -n : n;           // SDL: negative wheels the content down
+    enqueueSynthWheel(signedN);
+    g_riStepFromY   = sy;
+    g_riStepNotches = n;
+    return signedN;
+}
+
+static void riWheelSettled(float sy) {
+    if (g_riStepNotches <= 0) return;
+    float moved = sy - g_riStepFromY;
+    if (moved < 0) moved = -moved;
+    if (g_riStepNotches == 1 && moved >= 4.0f && moved <= 400.0f) {
+        if (moved != g_riPxPerNotch)
+            logLine("realminv: wheel step measured %.0f px per notch (was %.0f)", moved, g_riPxPerNotch);
+        g_riPxPerNotch = moved;
+        g_riNotchLearned = true;
+    }
+    g_riStepNotches = 0;
+}
+
 static bool riFireEquipDrag(uintptr_t base, float sx, float sy, const char* which) {
     uint32_t targetId = g_riEquipForSlot == 0 ? CS_ELEM_TRINKET_0 : CS_ELEM_TRINKET_1;
     uintptr_t dst = feGetElementById((int64_t)targetId);
@@ -685,6 +722,7 @@ static void riServiceEquipServo(uintptr_t base) {
         return;
     }
     if (++g_riServoStable < 3) return;         // just stopped: let it prove it stays stopped
+    riWheelSettled(sy);                        // a step landed: measure what one notch moves
     if (sy >= RI_BAND_TOP && sy <= RI_BAND_BOT) {
         g_riServoSrcId = 0;
         logLine("realminv: wheel servo settled in band (y=%.0f, %d still frames) -- firing "
@@ -702,7 +740,9 @@ static void riServiceEquipServo(uintptr_t base) {
         g_riEquipWatchUntil = now;
         return;
     }
-    enqueueSynthWheel(sy > RI_BAND_BOT ? -1 : 1);   // SDL: negative wheels the content down
+    int sent = riWheelStep(sy);                // the whole remaining distance in one event
+    logLine("realminv: wheel servo step %+d notches (cell y=%.0f, %.0f px/notch)",
+            sent, sy, g_riPxPerNotch);
     g_riServoQuiet++;
     g_riServoStable = 0;                       // a step is in flight; require fresh stillness
 }
@@ -739,10 +779,12 @@ static void riServiceHoverTrack(uintptr_t base) {
     g_riHoverLastY = sy;
     if (moved) { g_riHoverStable = 0; g_riHoverQuiet = 0; return; }
     if (++g_riHoverStable < 2) return;                 // let the ease finish before acting
+    riWheelSettled(sy);                                // a step landed: measure what one notch moves
     if (sy >= RI_BAND_TOP && sy <= RI_BAND_BOT) {
         if (!g_riHoverWarped) {
             g_riHoverWarped = true;
             moveCursorTo(sx, sy);                      // hover-enter: the game's own cue fires
+            logLine("realminv: hover track settled in band (cell y=%.0f) -- cursor on the cell", sy);
         }
         return;
     }
@@ -751,7 +793,9 @@ static void riServiceHoverTrack(uintptr_t base) {
         g_riHoverParked = true;
         moveCursorTo(sx, RI_WHEEL_PARK_Y);             // the wheel goes to the hovered panel
     }
-    enqueueSynthWheel(sy > RI_BAND_BOT ? -1 : 1);
+    int sent = riWheelStep(sy);                        // the whole remaining distance at once
+    logLine("realminv: hover track step %+d notches (cell y=%.0f, %.0f px/notch)",
+            sent, sy, g_riPxPerNotch);
     g_riHoverQuiet++;
     g_riHoverStable = 0;
 }
@@ -971,6 +1015,7 @@ void checkRealmInv(uintptr_t base) {
         g_riBackSlot = -1;
         g_riServoSrcId = 0;                            // no servo survives a close/open edge
         g_riHoverSrcId = 0;
+        g_riStepNotches = 0;                           // an outstanding step is not measured
         if (g_trkPhase == 2 || g_trkPhase == 3) {
             logLine("realminv: opened behind the sheet for the trinket pick (phase %d) — silent",
                     g_trkPhase);
@@ -1034,6 +1079,7 @@ void checkRealmInv(uintptr_t base) {
         g_riSheetCloseUntil = 0;
         g_riServoSrcId = 0;                            // a pending scroll dies with the panel
         g_riHoverSrcId = 0;
+        g_riStepNotches = 0;                           // an outstanding step is not measured
         g_riEquipForHero = 0;                          // a pending equip dies with the panel
         g_riEquipForSlot = -1;
         g_riEquipCloseSheet = false;                   // ... and so does its "close the sheet after"

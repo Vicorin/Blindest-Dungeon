@@ -561,7 +561,19 @@ static bool feFocusStep(int dir, bool forceSeed, bool withSurface) {
     return true;
 }
 
-void frontEndFocusMove(int dir) { feFocusStep(dir, false, false); }
+void frontEndFocusMove(int dir) {
+    if (feFocusStep(dir, false, false)) return;
+    int64_t cur = feCurrentFocusId();
+    if (isNoFocus(cur)) return;
+    char text[512];
+    resolveLabelForSpeech(g_base, g_tbwVtbl, cur, text, sizeof text);   // the label + its control hint
+    if (!text[0]) return;
+    g_axSpokenId = cur;
+    strncpy(g_axLastSpoken, text, sizeof g_axLastSpoken - 1);
+    g_axLastSpoken[sizeof g_axLastSpoken - 1] = 0;
+    postSpeech(text);
+    logLine("fe-move dir=%d: hard stop, re-read 0x%llx", dir, (unsigned long long)cur);
+}
 
 void feReannounce(uintptr_t base) {
     (void)base;
@@ -1004,6 +1016,7 @@ static float    g_felLastY    = 0.0f;
 static int      g_felCtx      = -1;
 static int      g_felState    = -999;
 static uint32_t g_felPage     = 0;
+static bool     g_felOptUp    = false;
 static bool     g_felBlocked  = true;
 static bool     g_felClaimed  = false;
 
@@ -1029,8 +1042,11 @@ void serviceFrontEndLanding(uintptr_t base) {
     uint32_t page = landable ? optPageId() : 0;
 
     DWORD now = GetTickCount();
-    if (blocked != g_felBlocked || (int)ctx != g_felCtx || st != g_felState || page != g_felPage) {
+    const bool optUp = g_axOptionsUp;
+    if (blocked != g_felBlocked || (int)ctx != g_felCtx || st != g_felState || page != g_felPage ||
+        optUp != g_felOptUp) {
         g_felCtx = (int)ctx; g_felState = st; g_felPage = page; g_felBlocked = blocked;
+        g_felOptUp = optUp;
         bool claimed = g_felClaimed; g_felClaimed = false;
         if (blocked) {
             feLandingCancel("screen not landable");
@@ -1040,8 +1056,8 @@ void serviceFrontEndLanding(uintptr_t base) {
         } else {
             g_felArmed = true; g_felArmedAt = now; g_felNextAt = now + FEL_MIN_MS;
             g_felLastPick = 0;
-            logLine("fe-land: armed (ctx=%s state=%d page=0x%x)",
-                    ctx == AX_PAUSE ? "pause" : "title", st, page);
+            logLine("fe-land: armed (ctx=%s state=%d page=0x%x options=%d)",
+                    ctx == AX_PAUSE ? "pause" : "title", st, page, optUp ? 1 : 0);
             parkCursor("front-end screen edge");
         }
     }

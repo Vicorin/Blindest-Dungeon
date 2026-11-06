@@ -143,7 +143,7 @@ static const KmFunc kFuncs[] = {
         AXS_SM_SLOT_RANK_1, AXS_SM_SLOT_RANK_2, AXS_SM_SLOT_RANK_3, AXS_SM_SLOT_RANK_4,
         K(SDLK_KEY_1 + 4, KM_ALT), K(SDLK_KEY_1 + 5, KM_ALT), K(SDLK_KEY_1 + 6, KM_ALT), K(SDLK_KEY_1 + 7, KM_ALT),
         P0, P0, P0, P0),
-    // ---- DUNGEON -> skill hotkeys (submenu). The game's own keys since 2026-08-29 (the mod ----
+    // ---- DUNGEON -> skill hotkeys (submenu). The game's own keys since 2026-08-29, so FWD: a moved ----
     F1("dungeon.skill_1",    KMG_DUNGEON_SKILLS, KMS_DUNGEON, KMX_ANY, KMF_FWD, AXS_FN_SKILL1,    K(SDLK_KEY_1, 0),     P0),
     F1("dungeon.skill_2",    KMG_DUNGEON_SKILLS, KMS_DUNGEON, KMX_ANY, KMF_FWD, AXS_FN_SKILL2,    K(SDLK_KEY_1 + 1, 0), P0),
     F1("dungeon.skill_3",    KMG_DUNGEON_SKILLS, KMS_DUNGEON, KMX_ANY, KMF_FWD, AXS_FN_SKILL3,    K(SDLK_KEY_1 + 2, 0), P0),
