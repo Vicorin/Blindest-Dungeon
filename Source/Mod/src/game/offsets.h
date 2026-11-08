@@ -2,6 +2,7 @@
 
 #pragma once
 #include <cstdint>
+#include "game/resolver.h"
 
 // ---- THE BINARY EVERY VALUE BELOW BELONGS TO ----
 static const uint32_t GAME_PE_TIMESTAMP   = 0x6ae4c882;
@@ -18,15 +19,26 @@ static const uint32_t GAME_PE_SIZEOFIMAGE_DRMFREE_PREV = 0x2f98000;
 enum AxGameBuild { AX_BUILD_UNKNOWN = -1, AX_BUILD_STEAM = 0, AX_BUILD_DRMFREE = 1, AX_BUILD_DRMFREE_PREV = 2 };
 AxGameBuild axGameBuild();
 const char* axGameBuildName();
+bool axExeImportsSteam();
 inline bool axIsDrmFree() {
     AxGameBuild b = axGameBuild();
+    if (b == AX_BUILD_UNKNOWN) return !axExeImportsSteam();
     return b == AX_BUILD_DRMFREE || b == AX_BUILD_DRMFREE_PREV;
+}
+inline uintptr_t axLay(int id, uintptr_t value);
+inline uintptr_t axLayCap(int id, uintptr_t value, uintptr_t cap) {
+    uintptr_t v = axLay(id, value);
+    return v > cap ? cap : v;
+}
+inline uintptr_t axLay(int id, uintptr_t value) {
+    return axGameBuild() == AX_BUILD_UNKNOWN ? axResolvedLayout(id, value) : value;
 }
 inline uintptr_t axRva(uintptr_t steam, uintptr_t drmfree, uintptr_t drmfreePrev) {
     switch (axGameBuild()) {
+        case AX_BUILD_STEAM:        return steam;
         case AX_BUILD_DRMFREE:      return drmfree;
         case AX_BUILD_DRMFREE_PREV: return drmfreePrev;
-        default:                    return steam;
+        default:                    return axResolvedRva(steam, !drmfree || !drmfreePrev);
     }
 }
 
@@ -34,7 +46,7 @@ inline uintptr_t axRva(uintptr_t steam, uintptr_t drmfree, uintptr_t drmfreePrev
 inline const uintptr_t FOCUS_ID_RVA = axRva(0x1096f70, 0x1073f70, 0x1071f70);
 inline const uintptr_t VEC_BEGIN_RVA = axRva(0x2c38c48, 0x2c11708, 0x2c12a58);
 inline const uintptr_t VEC_END_RVA = axRva(0x2c38c50, 0x2c11710, 0x2c12a60);
-static const uintptr_t ELEM_STRIDE      = 0x108;      // bytes per FocusElement
+static const uintptr_t ELEM_STRIDE      = axLay(AXL_ELEM_STRIDE, 0x108);      // bytes per FocusElement
 static const uintptr_t ELEM_ID_OFF      = 0x00;       // int64 id (matches FOCUS_ID)
 static const uintptr_t ELEM_OWNER_OFF   = 0x08;       // ptr to owning widget
 static const uintptr_t ELEM_POS_OFF       = 0x10;     // vec2 position (x,y floats)
@@ -81,7 +93,7 @@ static const uintptr_t TM_CAMP_DISTRICTS_ENABLED  = 0x11f1; // Campaign+: char, 
 inline const uintptr_t TM_DDIS_OVERRIDE_RVA = axRva(0x2a6e70b, 0x2a471cb, 0x2a4851b);
 
 // ---- ItemStack layout ----
-static const uintptr_t ITEM_STRIDE        = 0x5a8;  // bytes per ItemStack (was 0xe0)
+static const uintptr_t ITEM_STRIDE        = axLay(AXL_ITEM_STRIDE, 0x5a8);  // bytes per ItemStack (was 0xe0)
 static const uintptr_t ITEM_AMOUNT_OFF    = 0x00;   // int32 stack amount (<1 = empty slot)
 static const uintptr_t INV_ITEMS_BEG_OFF  = 0x08;   // System+: ItemStack vector begin
 static const uintptr_t INV_ITEMS_END_OFF  = 0x10;   // System+: ItemStack vector end
@@ -102,14 +114,14 @@ static const uintptr_t RBNODE_VALUE_OFF   = 0x28;   // the effects map's value: 
 
 // ---- HeroClass naming fields ----
 static const uintptr_t HEROCLASS_ID_OFF   = 0x08;    // HeroClass+: class id C-string (the %s)
-static const uintptr_t HEROCLASS_DISP_OFF = 0x89;    // HeroClass+: cached localized display name
-static const uintptr_t HEROCLASS_DISP_LATCH_OFF = 0xdd;  // HeroClass+: byte, display name resolved
+static const uintptr_t HEROCLASS_DISP_OFF = axLay(AXL_HEROCLASS_DISP_OFF, 0x89);    // HeroClass+: cached localized display name
+static const uintptr_t HEROCLASS_DISP_LATCH_OFF = axLay(AXL_HEROCLASS_DISP_LATCH_OFF, 0xdd);  // HeroClass+: byte, display name resolved
 
 // ---- TOWN-EVENT registry layout ----
 inline const uintptr_t PROV_EVTREG_RVA = axRva(0x118e0c0, 0x1168450, 0x1167f00);
 static const uintptr_t PROV_EVTREG_BEG_OFF  = 0x18;     // reg+: vector<Event> begin (BY VALUE)
 static const uintptr_t PROV_EVTREG_END_OFF  = 0x20;     // reg+: vector end
-static const uintptr_t PROV_EVT_STRIDE      = 0x2f8;    // (was 0x2f0)
+static const uintptr_t PROV_EVT_STRIDE      = axLay(AXL_PROV_EVT_STRIDE, 0x2f8);    // (was 0x2f0)
 static const uintptr_t PROV_EVT_IDHASH_OFF  = 0x40;     // event+: id hash
 static const uintptr_t PROV_EVT_DATA_BEG    = 0x1a8;    // event+: data records begin (was 0x1a0)
 static const uintptr_t PROV_EVT_DATA_END    = 0x1b0;    // event+: data records end   (was 0x1a8)
@@ -206,18 +218,18 @@ static const uintptr_t BLD_RCT_IFACE_HERO = 0x28;     // iface+: Hero*  — shap
 // ---- Hero / HeroClass / skill / quirk / equipment layout ----
 static const uint32_t  INV_FOURCC_BASE    = 0x696e7620;    // "inv " — focus id = base + slotIndex
 static const uintptr_t HERO_NAME_OFF      = 0x08;    // Hero+: inline C-string, <=0x40 ("hero_name")
-static const uintptr_t HERO_TRINKET_SYSTEM_OFF = 0x1280;
-static const uintptr_t ACTOR_HEROCLASS_OFF = 0x1320;
-static const uintptr_t ACTOR_ID_OFF       = 0x137c;
+static const uintptr_t HERO_TRINKET_SYSTEM_OFF = axLay(AXL_HERO_TRINKET_SYSTEM_OFF, 0x1280);
+static const uintptr_t ACTOR_HEROCLASS_OFF = axLay(AXL_ACTOR_HEROCLASS_OFF, 0x1320);
+static const uintptr_t ACTOR_ID_OFF       = axLay(AXL_ACTOR_ID_OFF, 0x137c);
 inline const uintptr_t HERO_VFT = axRva(0xe8a288, 0xe6ca08, 0xe690d8);
 inline const uintptr_t MONSTER_VFT = axRva(0xea9480, 0xe8bfe8, 0xe882c8);
 static const float     CS_PERCENT_SCALE   = 100.0f;
-static const uintptr_t HERO_WEAPON_LEVEL_OFF = 0x132c;
-static const uintptr_t HERO_ARMOUR_LEVEL_OFF = 0x1330;
+static const uintptr_t HERO_WEAPON_LEVEL_OFF = axLay(AXL_HERO_WEAPON_LEVEL_OFF, 0x132c);
+static const uintptr_t HERO_ARMOUR_LEVEL_OFF = axLay(AXL_HERO_ARMOUR_LEVEL_OFF, 0x1330);
 static const uintptr_t HEROCLASS_WEAPON_VEC  = 0xba0;   // HeroClass+: ptr to weapon array
 static const uintptr_t HEROCLASS_ARMOUR_VEC  = 0xbb8;   // HeroClass+: ptr to armour array (3000 dec)
-static const uintptr_t EQUIP_WEAPON_STRIDE   = 0x130;
-static const uintptr_t EQUIP_ARMOUR_STRIDE   = 0x128;
+static const uintptr_t EQUIP_WEAPON_STRIDE   = axLay(AXL_EQUIP_WEAPON_STRIDE, 0x130);
+static const uintptr_t EQUIP_ARMOUR_STRIDE   = axLay(AXL_EQUIP_ARMOUR_STRIDE, 0x128);
 static const uintptr_t EQUIP_NAME_OFF        = 0x40;    // inline C string: the item's name/id
 static const uintptr_t EQUIP_SLOT_OFF        = 0x114;   // int: 0 = weapon, 1 = armour
 static const uintptr_t EQUIP_W_DMG_LO_OFF    = 0x11c;   // int   str_stat_base_damage, low
@@ -226,49 +238,49 @@ static const uintptr_t EQUIP_W_CRIT_OFF      = 0x124;   // float str_stat_base_c
 static const uintptr_t EQUIP_W_SPD_OFF       = 0x128;   // int   str_stat_base_speed
 static const uintptr_t EQUIP_A_DEF_OFF       = 0x118;   // float str_stat_base_defense (x scale)
 static const uintptr_t EQUIP_A_HP_OFF        = 0x120;   // int   str_stat_base_health_points
-static const uintptr_t HERO_QUIRK_BEGIN_OFF  = 0x1380;
-static const uintptr_t HERO_QUIRK_END_OFF    = 0x1388;
+static const uintptr_t HERO_QUIRK_BEGIN_OFF  = axLay(AXL_HERO_QUIRK_BEGIN_OFF, 0x1380);
+static const uintptr_t HERO_QUIRK_END_OFF    = axLay(AXL_HERO_QUIRK_END_OFF, 0x1388);
 static const uintptr_t QUIRK_ENTRY_STRIDE    = 0x38;   // (was 0x30)
 static const uintptr_t QUIRK_ENTRY_CLASS_OFF = 0x00;   // entry+: Quirk::Class const*
 static const uintptr_t QUIRK_ID_OFF          = 0x00;   // Quirk::Class+: inline C-string id
 inline const uintptr_t QUIRK_REGISTRY_RVA = axRva(0x118e108, 0x1168498, 0x1167f48);
-static const uintptr_t QUIRK_REGISTRY_STRIDE = 0x220;
-static const uintptr_t ACTOR_SEL_BEG_OFF  = 0x13c8;
-static const uintptr_t ACTOR_SEL_END_OFF  = 0x13d0;
-static const uintptr_t ACTOR_SLOTMAP_OFF  = 0x13e0;
-static const uintptr_t ACTOR_SLOTMAP_END_OFF = 0x13e8;
-static const uintptr_t HEROCLASS_SKILLVEC_OFF = 0xbd0;
-static const uintptr_t HEROCLASS_SKILLVEC_END_OFF = 0xbd8; // HeroClass+: end of that outer vector
-static const uintptr_t SKILL_STRIDE       = 0x510;
+static const uintptr_t QUIRK_REGISTRY_STRIDE = axLay(AXL_QUIRK_REGISTRY_STRIDE, 0x220);
+static const uintptr_t ACTOR_SEL_BEG_OFF  = axLay(AXL_ACTOR_SEL_BEG_OFF, 0x13c8);
+static const uintptr_t ACTOR_SEL_END_OFF  = axLay(AXL_ACTOR_SEL_END_OFF, 0x13d0);
+static const uintptr_t ACTOR_SLOTMAP_OFF  = axLay(AXL_ACTOR_SLOTMAP_OFF, 0x13e0);
+static const uintptr_t ACTOR_SLOTMAP_END_OFF = axLay(AXL_ACTOR_SLOTMAP_END_OFF, 0x13e8);
+static const uintptr_t HEROCLASS_SKILLVEC_OFF = axLay(AXL_HEROCLASS_SKILLVEC_OFF, 0xbd0);
+static const uintptr_t HEROCLASS_SKILLVEC_END_OFF = axLay(AXL_HEROCLASS_SKILLVEC_END_OFF, 0xbd8); // HeroClass+: end of that outer vector
+static const uintptr_t SKILL_STRIDE       = axLay(AXL_SKILL_STRIDE, 0x510);
 static const uintptr_t SKILL_ID_OFF       = 0x08;    // ActorCombatSkill+: inline C-string skill id
 inline const uintptr_t RAID_SCREEN_RVA = axRva(0x118e570, 0x1168900, 0x1168308);
 static const uintptr_t CS_PANEL_OPEN_OFF  = 0x58;
-static const uintptr_t ACTOR_IS_MONSTER_OFF = 0x1306;
-static const uintptr_t ACTOR_TRAIT_OFF    = 0x1250;
-static const uintptr_t ACTOR_VIRTUE_OFF   = 0x1254;
-static const uintptr_t HERO_RESOLVE_XP_OFF  = 0x1328;
+static const uintptr_t ACTOR_IS_MONSTER_OFF = axLay(AXL_ACTOR_IS_MONSTER_OFF, 0x1306);
+static const uintptr_t ACTOR_TRAIT_OFF    = axLay(AXL_ACTOR_TRAIT_OFF, 0x1250);
+static const uintptr_t ACTOR_VIRTUE_OFF   = axLay(AXL_ACTOR_VIRTUE_OFF, 0x1254);
+static const uintptr_t HERO_RESOLVE_XP_OFF  = axLay(AXL_HERO_RESOLVE_XP_OFF, 0x1328);
 inline const uintptr_t RESOLVE_TABLE_RVA = axRva(0x118e0b8, 0x1168448, 0x1167ef8);
 static const uintptr_t RESOLVE_VEC_BEGIN    = 0x00;
 static const uintptr_t RESOLVE_VEC_END      = 0x08;
 static const int       RESOLVE_MAX_LEVELS   = 16;     // sanity cap (the ladder ships 7: 0..6)
 static const int       EQUIP_SLOT_COUNT     = 2;      // weapon + armour; the game draws exactly two
 static const int       TRINKET_SLOT_COUNT   = 2;
-static const uintptr_t SKILL_LAUNCH_MASK_OFF = 0x3a4; // uint launch-rank bitmask (.launch)   (was 0x398)
-static const uintptr_t SKILL_TGTMASK_OFF  = 0x3a8;
-static const uintptr_t SKILL_NONATTACK_OFF = 0x90;    // != 0 -> no preview (heals, buffs, moves)
+static const uintptr_t SKILL_LAUNCH_MASK_OFF = axLay(AXL_SKILL_LAUNCH_MASK_OFF, 0x3a4); // uint launch-rank bitmask (.launch)   (was 0x398)
+static const uintptr_t SKILL_TGTMASK_OFF  = axLay(AXL_SKILL_TGTMASK_OFF, 0x3a8);
+static const uintptr_t SKILL_NONATTACK_OFF = axLay(AXL_SKILL_NONATTACK_OFF, 0x90);    // != 0 -> no preview (heals, buffs, moves)
 // ---- Skill USE GATES: the two things that make a drawn button refuse the click ----
-static const uintptr_t SKILL_USE_KEY_OFF   = 0x4c;
-static const uintptr_t SKILL_PER_TURN_LIMIT_OFF   = 0x94;
-static const uintptr_t SKILL_PER_BATTLE_LIMIT_OFF = 0x98;
-static const uintptr_t SKILL_HP_RANGE_SET_OFF = 0x439;
-static const uintptr_t SKILL_HP_RANGE_MIN_OFF = 0x43c;
-static const uintptr_t SKILL_HP_RANGE_MAX_OFF = 0x440;
-static const uintptr_t ACTOR_BATTLE_USES_MAP_OFF  = 0x1228;
-static const uintptr_t ACTOR_BATTLE_USES_SIZE_OFF = 0x1230;
-static const uintptr_t HEROCLASS_CAMPVEC_OFF     = 0x10f8;
-static const uintptr_t HEROCLASS_CAMPVEC_END_OFF = 0x1100;
-static const uintptr_t ACTOR_CAMP_KNOWN_OFF      = 0x13b0;
-static const uintptr_t ACTOR_CAMP_KNOWN_END_OFF  = 0x13b8;
+static const uintptr_t SKILL_USE_KEY_OFF   = axLay(AXL_SKILL_USE_KEY_OFF, 0x4c);
+static const uintptr_t SKILL_PER_TURN_LIMIT_OFF   = axLay(AXL_SKILL_PER_TURN_LIMIT_OFF, 0x94);
+static const uintptr_t SKILL_PER_BATTLE_LIMIT_OFF = axLay(AXL_SKILL_PER_BATTLE_LIMIT_OFF, 0x98);
+static const uintptr_t SKILL_HP_RANGE_SET_OFF = axLay(AXL_SKILL_HP_RANGE_SET_OFF, 0x439);
+static const uintptr_t SKILL_HP_RANGE_MIN_OFF = axLay(AXL_SKILL_HP_RANGE_MIN_OFF, 0x43c);
+static const uintptr_t SKILL_HP_RANGE_MAX_OFF = axLay(AXL_SKILL_HP_RANGE_MAX_OFF, 0x440);
+static const uintptr_t ACTOR_BATTLE_USES_MAP_OFF  = axLay(AXL_ACTOR_BATTLE_USES_MAP_OFF, 0x1228);
+static const uintptr_t ACTOR_BATTLE_USES_SIZE_OFF = axLay(AXL_ACTOR_BATTLE_USES_SIZE_OFF, 0x1230);
+static const uintptr_t HEROCLASS_CAMPVEC_OFF     = axLay(AXL_HEROCLASS_CAMPVEC_OFF, 0x10f8);
+static const uintptr_t HEROCLASS_CAMPVEC_END_OFF = axLay(AXL_HEROCLASS_CAMPVEC_END_OFF, 0x1100);
+static const uintptr_t ACTOR_CAMP_KNOWN_OFF      = axLay(AXL_ACTOR_CAMP_KNOWN_OFF, 0x13b0);
+static const uintptr_t ACTOR_CAMP_KNOWN_END_OFF  = axLay(AXL_ACTOR_CAMP_KNOWN_END_OFF, 0x13b8);
 inline const uintptr_t CAMP_REGISTRY_RVA = axRva(0x118e0e8, 0x1168478, 0x1167f28);
 static const uintptr_t CAMP_REGISTRY_STRIDE = 0x18;
 static const uintptr_t CAMP_SKILL_HASH_OFF = 0x48;    // SkillClass+: hash of the id (h = h*0x35 + c)
@@ -286,7 +298,7 @@ static const uintptr_t PTY_IFACE_HERO_OFF    = 0x28;     // slot interface -> He
 static const uintptr_t PTY_SLOTS_BEG_OFF     = 0x36c8;
 static const uintptr_t PTY_SLOTS_END_OFF     = 0x36d0;
 static const uintptr_t PTY_SLOT_IFACE_OFF    = 0x158;    // slot widget -> slot interface
-static const uintptr_t ACTOR_STRESS_OFF      = 0x12fc;
+static const uintptr_t ACTOR_STRESS_OFF      = axLay(AXL_ACTOR_STRESS_OFF, 0x12fc);
 inline const uintptr_t RI_TOGGLE_RVA = axRva(0x6801c0, 0x66bd10, 0x6718c0);
 typedef void (*RiToggleFn)(void);
 
@@ -310,7 +322,7 @@ static const uintptr_t AREA_EXIT_STRIDE = 0x10;      // 16 bytes per Door
 static const int       AREA_EXIT_SLOTS  = 8;         // 8 fixed slots (+0x28 .. +0xa8)
 static const uintptr_t DOOR_DEST_OFF    = 0x00;      // door+: int destination area id (FourCC)
 static const uintptr_t DOOR_TILE_OFF    = 0x04;      // door+: int tile index within that area
-static const uintptr_t TILE_STRIDE      = 0xc8;      // 200 bytes per Tile
+static const uintptr_t TILE_STRIDE      = axLay(AXL_TILE_STRIDE, 0xc8);      // 200 bytes per Tile
 static const uintptr_t TILE_TYPE_OFF    = 0x00;      // tile+: int type (1 normal/2 junction/3 door)
 static const uintptr_t TILE_SUB_OFF     = 0x04;      // tile+: int sub/direction candidate
 static const uintptr_t TILE_OWNER_ID_OFF= 0x14;      // tile+: int owner area id
@@ -364,19 +376,20 @@ static const uintptr_t PROP_TYPE_OFF           = 0xc8;  // Prop+: PropType* (Pro
 static const uintptr_t PROP_INTERACT_TABLE_OFF = 0xd0;  // Prop+: interaction table ptr
 static const uintptr_t PROP_TYPE_ENUM_OFF      = 0x0c;  // Prop+: int32 kind (0/1 curio, 2 trap, 3 door)
 static const uintptr_t PROP_INLINE_NAME_OFF    = 0x125; // Prop+: inline C-string id
-static const uintptr_t MONSTER_SKILL_STRIDE = 0x500;    // (was 0x4f8; 6ae4c882 Skill +8) (was 0x4e8)
+static const uintptr_t MONSTER_SKILL_STRIDE = axLay(AXL_MONSTER_SKILL_STRIDE, 0x500);    // (was 0x4f8; 6ae4c882 Skill +8) (was 0x4e8)
 static const uintptr_t MONSTER_SKILL_ID_OFF = 0x08;     // inline char[0x40]
 static const char* const MT_SKILL_KEY_FMT   = "str_monster_skill_%s";
 // ---- THE SEEN-SKILLS STORE ----
 inline const uintptr_t MONSTER_SKILL_SEEN_MAP_RVA = axRva(0x118e160, 0x11684f0, 0x1167f98);
-static const uintptr_t ACTOR_CUR_HP_OFF      = 0x10a8;
-static const uintptr_t ACTOR_RANK_MASK_OFF   = 0x1088;
-static const uintptr_t ACTOR_SCREEN_X_OFF    = 0x48;   // float: WORLD x (camera-relative), both sides
+static const uintptr_t ACTOR_CUR_HP_OFF      = axLay(AXL_ACTOR_CUR_HP_OFF, 0x10a8);
+static const uintptr_t ACTOR_RANK_MASK_OFF   = axLay(AXL_ACTOR_RANK_MASK_OFF, 0x1088);
+static const uintptr_t ACTOR_SCREEN_X_OFF    = axLay(AXL_ACTOR_SCREEN_X_OFF, 0x48);   // float: WORLD x (camera-relative), both sides
 
-static const uintptr_t ACTOR_GUID_VFT_OFF    = 0x28;   // vtable slot: uint32 guid
-static const int       ACTOR_BUFF_STRIDE     = 0x418;
+static const uintptr_t ACTOR_GUID_VFT_OFF    = axLay(AXL_ACTOR_GUID_VFT_OFF, 0x28);   // vtable slot: uint32 guid
+static const int       ACTOR_BUFF_STRIDE     = axLay(AXL_ACTOR_BUFF_STRIDE, 0x418);
 static const uintptr_t ACTOR_BUFF_RECORD_OFF = 0x08;   // the Buff the describer takes (was 0x04)
-static const int       CAMP_BUFF_REC_SZ      = 0x410;
+static const int       CAMP_BUFF_REC_CAP     = 0x1000;
+static const int       CAMP_BUFF_REC_SZ      = (int)axLayCap(AXL_CAMP_BUFF_REC_SZ, 0x410, CAMP_BUFF_REC_CAP);
 static const uintptr_t BATTLE_OBJ_OFF      = 0x4898;  // raid root+: the Battle object (was 0x4848)
 static const uintptr_t BATTLE_SURPRISE_OFF = 0x12c;   // Battle+: int tri-state  (was 0x114)
 static const uintptr_t BATTLE_ROUND_OFF    = 0xa8;
@@ -397,20 +410,20 @@ static const int BS_BEFORE_TURN_START = 0x11;
 #define PIT_HOLD_BANNER_KEY "hold_to_activate_hero"
 // ---- TELLING THE OPPONENT WHAT YOUR HERO DID ----
 inline const uintptr_t MP_SEND_TURN_RVA = axRva(0x76c9f0, 0x757f00, 0x75e060);
-static const uintptr_t ACTOR_CHOSEN_SKILL_OFF = 0x8e0;
-static const uintptr_t ACTOR_TARGETS_OFF      = 0x8f0;   // {begin, end, cap}
+static const uintptr_t ACTOR_CHOSEN_SKILL_OFF = axLay(AXL_ACTOR_CHOSEN_SKILL_OFF, 0x8e0);
+static const uintptr_t ACTOR_TARGETS_OFF      = axLay(AXL_ACTOR_TARGETS_OFF, 0x8f0);   // {begin, end, cap}
 inline const uintptr_t MP_VEC_ASSIGN_RVA = axRva(0x477120, 0x4652f0, 0x468170);
 // ---- Battle::SetSingleTarget -- WHERE THE MISSING RNG DRAW LIVES ----
 inline const uintptr_t SET_SINGLE_TARGET_RVA = axRva(0x5abae0, 0x599760, 0x59d080);
 static const int BS_TURN_CHOOSING_LO = 0x1c;
 static const int BS_TURN_CHOOSING_HI = 0x1e;
 static const int BS_TURN_DO_SKILL    = 0x20;
-static const uintptr_t CS_STAT_MAXHP_OFF = 0x768;   // (was 0x708)
-static const uintptr_t CS_STAT_DEF_OFF   = 0x560;   // (was 0x500)
-static const uintptr_t CS_STAT_PROT_OFF  = 0x5c8;   // (was 0x568)
-static const uintptr_t CS_STAT_SPD_OFF   = 0x630;   // (was 0x5d0)
+static const uintptr_t CS_STAT_MAXHP_OFF = axLay(AXL_CS_STAT_MAXHP_OFF, 0x768);   // (was 0x708)
+static const uintptr_t CS_STAT_DEF_OFF   = axLay(AXL_CS_STAT_DEF_OFF, 0x560);   // (was 0x500)
+static const uintptr_t CS_STAT_PROT_OFF  = axLay(AXL_CS_STAT_PROT_OFF, 0x5c8);   // (was 0x568)
+static const uintptr_t CS_STAT_SPD_OFF   = axLay(AXL_CS_STAT_SPD_OFF, 0x630);   // (was 0x5d0)
 static const int       CS_RESIST_COUNT   = 8;
-static const uintptr_t SKILL_EFFECTS_OFF = 0x3c8;   // ActorCombatSkill+: vector<Effect*> (was 0x3b8)
+static const uintptr_t SKILL_EFFECTS_OFF = axLay(AXL_SKILL_EFFECTS_OFF, 0x3c8);   // ActorCombatSkill+: vector<Effect*> (was 0x3b8)
 static const uint32_t  SKILL_RANK_BITS   = 0xf;
 static const uintptr_t RD_EVENT_OFF      = 0x20b8;
 static const uintptr_t OE_STATE_OFF      = 0xd88;
@@ -421,15 +434,15 @@ static const uintptr_t PT_CATEGORY_OFF = 0x108;     // inline C-string, e.g. "cu
 static const uintptr_t PT_UINAME_OFF   = 0x4c8;     // inline C-string, e.g. "travellers_tent"
 
 // ---- Phase 3 round 23: what the ACTION BAR and dllmain.cpp both read ----
-const uintptr_t CS_STAT_ATT_OFF    = 0x698;   // str_ui_ATT_MOD          (was 0x638)
-const uintptr_t CS_STAT_CRIT_OFF   = 0x700;   // str_ui_CRIT             (was 0x6a0)
-const uintptr_t CS_STAT_DMGLO_OFF  = 0x490;   // str_ui_DMG, low end     (was 0x430)
-const uintptr_t CS_STAT_DMGHI_OFF  = 0x4f8;   // str_ui_DMG, high end    (was 0x498)
+const uintptr_t CS_STAT_ATT_OFF    = axLay(AXL_CS_STAT_ATT_OFF, 0x698);   // str_ui_ATT_MOD          (was 0x638)
+const uintptr_t CS_STAT_CRIT_OFF   = axLay(AXL_CS_STAT_CRIT_OFF, 0x700);   // str_ui_CRIT             (was 0x6a0)
+const uintptr_t CS_STAT_DMGLO_OFF  = axLay(AXL_CS_STAT_DMGLO_OFF, 0x490);   // str_ui_DMG, low end     (was 0x430)
+const uintptr_t CS_STAT_DMGHI_OFF  = axLay(AXL_CS_STAT_DMGHI_OFF, 0x4f8);   // str_ui_DMG, high end    (was 0x498)
 const int CS_RESIST_DEATHBLOW_IDX = 6;
 const int CS_RESIST_TRAP_IDX      = 7;
-const uintptr_t ACTOR_CLASS_OFF    = 0x1320;
-const uintptr_t ACTOR_STAT_OFF     = 0x768;
-const uintptr_t ACTOR_HP_MASK_OFF  = 0x790;
+const uintptr_t ACTOR_CLASS_OFF    = axLay(AXL_ACTOR_CLASS_OFF, 0x1320);
+const uintptr_t ACTOR_STAT_OFF     = axLay(AXL_ACTOR_STAT_OFF, 0x768);
+const uintptr_t ACTOR_HP_MASK_OFF  = axLay(AXL_ACTOR_HP_MASK_OFF, 0x790);
 const float     ACTOR_MAX_STRESS   = 200.0f;
 const uintptr_t STAT_FLAT_BEG_OFF  = 0x30;    // stat+: float* begin, the flat contributions
 const uintptr_t STAT_FLAT_END_OFF  = 0x38;    // stat+: float* end
@@ -441,51 +454,51 @@ const int       STAT_MAX_ENTRIES   = 128;     // sanity cap on a vector length r
 const char* const HEALTH_FMT_KEY = "tray_status_bar_tooltip_health_format";
 const char* const STRESS_FMT_KEY = "tray_status_bar_tooltip_stress_format";
 const char* const TURNS_FMT_KEY  = "tray_status_bar_tooltip_turns_remaining_format";
-const uintptr_t ACTOR_MODE_ID_OFF  = 0x1248;
-const uintptr_t HEROCLASS_MOVESKILL_OFF = 0xbe8;
+const uintptr_t ACTOR_MODE_ID_OFF  = axLay(AXL_ACTOR_MODE_ID_OFF, 0x1248);
+const uintptr_t HEROCLASS_MOVESKILL_OFF = axLay(AXL_HEROCLASS_MOVESKILL_OFF, 0xbe8);
 const uint32_t  REST_FOURCC      = 0x72657374; // "rest" — the respite screen's finish button
 inline const uintptr_t CAMP_BUFFREG_FLAG_RVA = axRva(0x2a6d4bb, 0x2a45f7b, 0x2a472cb);
 inline const uintptr_t CAMP_BUFF_HASDESC_RVA = axRva(0x7c6290, 0x7b1710, 0x7b7910);
 inline const uintptr_t EFF_BUFFLIST_BUILD_RVA = axRva(0x4c48d0, 0x4b2a40, 0x4b5920);
 inline const uintptr_t EFF_BUFFLIST_FREE_RVA = axRva(0x4cc9a0, 0x4baab0, 0x4bd9f0);
 inline const uintptr_t BUFF_RENDER_ONE_RVA = axRva(0x7c63b0, 0x7b1830, 0x7b7a30);
-const uintptr_t EFF_BUFFLIST_STRIDE    = 0x410;
+const uintptr_t EFF_BUFFLIST_STRIDE    = axLay(AXL_EFF_BUFFLIST_STRIDE, 0x410);
 const int       EFF_BUFFLIST_MAX       = 32;       // sanity cap, same spirit as AB_EFF_MAX_PER_VEC
-const uintptr_t EFF_SUMMON_BEG_OFF   = 0x228;
-const uintptr_t EFF_SUMMON_END_OFF   = 0x230;      // (was 0x1b8; 6ae4c882 Effect +120) (was 0x1b0)
+const uintptr_t EFF_SUMMON_BEG_OFF   = axLay(AXL_EFF_SUMMON_BEG_OFF, 0x228);
+const uintptr_t EFF_SUMMON_END_OFF   = axLay(AXL_EFF_SUMMON_END_OFF, 0x230);      // (was 0x1b8; 6ae4c882 Effect +120) (was 0x1b0)
 const uintptr_t EFF_SUMMON_STRIDE    = 0x14;       // the game steps piVar10 + 5 ints
 const int       EFF_SUMMON_MAX       = 8;          // sanity cap on one effect's summon list
 inline const uintptr_t MONCLASS_VEC_RVA = axRva(0x2c3c3c0, 0x2c14e30, 0x2c169d0);
 inline const uintptr_t MONCLASS_VEC_ALT_RVA = axRva(0x2c3c3d8, 0x2c14e48, 0x2c169e8);
 const uintptr_t MONCLASS_HASH_OFF    = 0xcc;       // int: the id hash the summon entry carries
 const int       MONCLASS_MAX         = 4096;       // sanity cap on the registry walk
-const uintptr_t SKILL_LEVEL_OFF    = 0x394;
-const uintptr_t SKILL_VALIDMODES_OFF      = 0x3b8;
-const uintptr_t SKILL_VALIDMODES_SIZE_OFF = 0x3c0;
+const uintptr_t SKILL_LEVEL_OFF    = axLay(AXL_SKILL_LEVEL_OFF, 0x394);
+const uintptr_t SKILL_VALIDMODES_OFF      = axLay(AXL_SKILL_VALIDMODES_OFF, 0x3b8);
+const uintptr_t SKILL_VALIDMODES_SIZE_OFF = axLay(AXL_SKILL_VALIDMODES_SIZE_OFF, 0x3c0);
 const char* const SKILL_NAME_FMT   = "combat_skill_name_%s_%s";  // % (class id, skill id)
 inline const uintptr_t MOVE_SKILL_RVA = axRva(0x5b9540, 0x5a6e70, 0x5aaae0);
 inline const uintptr_t SKILL_PCT_MULT_RVA = axRva(0xee640c, 0xec8a38, 0xec52d8);
 inline const uintptr_t EFF_ONE_RVA = axRva(0xee62c0, 0xec88f0, 0xec51a0);
 
 // ---- Phase 3 round 24: what THE CAMP and dllmain.cpp both read ----
-const uintptr_t ACTOR_CAMP_SEL_BEG_OFF    = 0x1398;
-const uintptr_t ACTOR_CAMP_SEL_END_OFF    = 0x13a0;
+const uintptr_t ACTOR_CAMP_SEL_BEG_OFF    = axLay(AXL_ACTOR_CAMP_SEL_BEG_OFF, 0x1398);
+const uintptr_t ACTOR_CAMP_SEL_END_OFF    = axLay(AXL_ACTOR_CAMP_SEL_END_OFF, 0x13a0);
 const int       CAMP_SEL_MAX              = 4;      // lambda_5's own test: (end-beg)/4 < 4
 const uintptr_t CAMP_SKILL_USE_LIMIT_OFF = 0x54;  // always 1 in shipped data
 const uintptr_t CAMP_SKILL_EFFVEC_OFF     = 0x58;  // SkillClass+: first effect
 const uintptr_t CAMP_SKILL_EFFVEC_END_OFF = 0x60;  // SkillClass+: one past the last
-const uintptr_t CAMP_EFF_STRIDE           = 0xf8;
+const uintptr_t CAMP_EFF_STRIDE           = axLay(AXL_CAMP_EFF_STRIDE, 0xf8);
 const uintptr_t CAMP_EFF_SELECTION_OFF    = 0x00;  // inline id ("individual"), the header's stem
 
 // ---- Phase 3 round 27: what the STATUS PANEL and the LIVE COMBAT TEXT both read ----
 const int       ACTOR_BUFF_MAX        = 64;     // sanity cap on a corrupt/garbage buff vector
 const uintptr_t BUFFREC_STAT_TYPE_OFF = 0x00;   // int   "stat_type"
-const uintptr_t BUFFREC_AMOUNT_OFF    = 0x48;   // float "amount"
-const uintptr_t BUFFREC_ROUNDS_OFF    = 0x4c;
-const uintptr_t BUFFREC_DURTYPE_OFF   = 0x50;   // int   "duration_type"
+const uintptr_t BUFFREC_AMOUNT_OFF    = axLay(AXL_BUFFREC_AMOUNT_OFF, 0x48);   // float "amount"
+const uintptr_t BUFFREC_ROUNDS_OFF    = axLay(AXL_BUFFREC_ROUNDS_OFF, 0x4c);
+const uintptr_t BUFFREC_DURTYPE_OFF   = axLay(AXL_BUFFREC_DURTYPE_OFF, 0x50);   // int   "duration_type"
 const uintptr_t BUFFREC_STATSUB_OFF   = 0x04;   // string "stat_sub_type" (e.g. "unholy")
-const uintptr_t BUFFREC_DESCTIP_OFF   = 0x3c8;
-const uintptr_t BUFFREC_SOURCE_OFF    = 0x54;   // int   "source" -- a source-TYPE enum, named live
+const uintptr_t BUFFREC_DESCTIP_OFF   = axLay(AXL_BUFFREC_DESCTIP_OFF, 0x3c8);
+const uintptr_t BUFFREC_SOURCE_OFF    = axLay(AXL_BUFFREC_SOURCE_OFF, 0x54);   // int   "source" -- a source-TYPE enum, named live
 const int       STAT_TYPE_STEALTH     = 0x2b;   // the one condition stat_type the combat text
 
 // ---- dllmain.cpp ----
@@ -502,7 +515,7 @@ static const uintptr_t PB_BC_SECTION_STRIDE= 0x48;
 static const uintptr_t PB_BC_SECTION_NAME  = 0x10;
 static const uintptr_t PB_BC_PIECES_BEG    = 0x30;   // section+
 static const uintptr_t PB_BC_PIECES_END    = 0x38;
-static const uintptr_t PB_BC_PIECE_STRIDE  = 0xb8;
+static const uintptr_t PB_BC_PIECE_STRIDE  = axLay(AXL_PB_BC_PIECE_STRIDE, 0xb8);
 static const uintptr_t PB_BC_PIECE_NAME    = 0x38;   // piece+
 static const uintptr_t PB_BC_PIECE_UNLOCKED= 0x00;   // piece+ byte
 // ---- dlc\butchers_circus\rankings.cpp: THE RANKING BOARD ----
@@ -679,7 +692,7 @@ inline const uintptr_t QT_GOALDESC_RVA = axRva(0x815e90, 0x8013d0, 0x807480);
 inline const uintptr_t QT_LOGVEC_RVA = axRva(0x118e0b0, 0x1168440, 0x1167ef0);
 static const uintptr_t QT_LOGVEC_BEG       = 0x48;      // owner+: definition vector begin
 static const uintptr_t QT_LOGVEC_END       = 0x50;      // owner+: definition vector end
-static const uintptr_t QT_LOG_STRIDE       = 0x780;     // (was 0x730)
+static const uintptr_t QT_LOG_STRIDE       = axLay(AXL_QT_LOG_STRIDE, 0x780);     // (was 0x730)
 static const uintptr_t QT_LOG_QUESTID_OFF  = 0x40;      // def+0x40 == Quest+0x40 identifies the entry
 static const int       QT_LOG_MAX          = 256;       // sanity cap on the definition walk
 inline const uintptr_t QT_RETREAT_CONFIRM_RVA = axRva(0x74c080, 0x7375f0, 0x73d6f0);
@@ -700,7 +713,7 @@ inline const uintptr_t RR_PROFILE_GET_RVA = axRva(0x556520, 0x544470, 0x547570);
 inline const uintptr_t RR_GOLD_TYPEHASH_RVA = axRva(0x2a8c7c8, 0x2a66ec8, 0x2a66cf8);
 // ---- sheet\charsheet.cpp ----
 inline const uintptr_t CS_TRK_UNEQUIP_RVA = axRva(0x8050e0, 0x7f0650, 0x7f6760);
-inline const uintptr_t CS_COMSKILL_TOGGLE_RVA = axRva(0x5d4950, 0x5c2280, 0x5c5ef0);
+inline const uintptr_t CS_COMSKILL_TOGGLE_RVA = axRva(0x5d4f70, 0x5c28a0, 0x5c6510);
 inline const uintptr_t CS_CAMPSKILL_TOGGLE_RVA = axRva(0x5d3dd0, 0x5c1700, 0x5c5370);
 // ---- sheet\composers.cpp ----
 inline const uintptr_t CS_RESIST_TABLE_RVA = axRva(0x2ae5330, 0x2abddf0, 0x2abf140);

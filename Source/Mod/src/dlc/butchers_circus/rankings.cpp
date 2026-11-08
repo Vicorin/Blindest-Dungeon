@@ -44,7 +44,7 @@ static const uintptr_t RB_B_SEASON_OFF    = 0x428;  // current_season
 static const uintptr_t RB_B_HAS_NEXT_OFF  = 0x484;  // byte: a next league exists
 
 // ---- a match record (PlayFabAnalytics::API::MatchRecord) ----
-static const uintptr_t RB_REC_STRIDE      = 0x80;
+static const uintptr_t RB_REC_STRIDE      = axLay(AXL_RB_REC_STRIDE, 0x80);
 static const uintptr_t RB_REC_PLAYER_VEC  = 0x00;   // vector<HeroEntry> begin (+8 end)
 static const uintptr_t RB_REC_OPP_VEC     = 0x18;
 static const uintptr_t RB_REC_TIME_OFF    = 0x30;   // time_t

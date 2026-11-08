@@ -155,7 +155,7 @@ static const uintptr_t TSET_BURNDOWN_OFF = 0x101;    // byte: burn_down_enabled
 static const uintptr_t TSET_HEROBUFF_OFF = 0x108;    // vector<char[0x80]> begin/end: hero_buff_list
 static const uintptr_t TSET_MONBUFF_OFF  = 0x120;    // vector<char[0x80]>: monster_buff_list
 static const uintptr_t TSET_OVERLAYS_OFF = 0x168;    // vector<char[0x80]>: overlays
-static const int       TSET_STR_STRIDE   = 0x80;     // the vectors' element size (inline strings)
+static const int       TSET_STR_STRIDE   = axLay(AXL_TSET_STR_STRIDE, 0x80);     // the vectors' element size (inline strings)
 static const int       TSET_MAX_IDS      = 16;       // sanity bound; the shipped lists hold 1..3
 
 static void lightCat(char* out, int outsz, const char* frag) {
@@ -179,7 +179,7 @@ static bool lightHasOverlay(uintptr_t ts, const char* overlayId) {
     long n = (long)((e - b) / TSET_STR_STRIDE);
     if (n <= 0 || n > TSET_MAX_IDS) return false;
     for (long i = 0; i < n; i++) {
-        char id[TSET_STR_STRIDE];
+        char id[0x80];
         if (safeReadCStr(b + i * TSET_STR_STRIDE, id, sizeof id) &&
             strcmp(id, overlayId) == 0) return true;
     }
@@ -207,7 +207,7 @@ static void lightAmbientBuffs(uintptr_t base, uintptr_t ts, uintptr_t vecOff,
         }
     }
     for (long i = 0; i < n; i++) {
-        char id[TSET_STR_STRIDE];
+        char id[0x80];
         if (!safeReadCStr(b + i * TSET_STR_STRIDE, id, sizeof id) || !id[0]) continue;
         char line[CAMP_BUFF_DESC_BUF];
         if (!csBuffDescByKey(base, resHash(id), nullptr, 0, line, sizeof line)) {
@@ -242,7 +242,7 @@ static bool lightAmbient(uintptr_t base, uintptr_t root, bool withEffects, char*
     uintptr_t ts = lightSettings(root);
     if (!ts) return false;
 
-    char id[TSET_STR_STRIDE];
+    char id[0x80];
     id[0] = 0;
     safeReadCStr(ts + TSET_ID_OFF, id, sizeof id);
 

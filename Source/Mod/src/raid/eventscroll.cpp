@@ -19,7 +19,7 @@ static const uintptr_t PT_ANCESTOR_FLAG = 0x648;   // door prop: 1 => the ancest
 // ---- Activating a choice ----
 
 static const uintptr_t OE_EAT_COST_CAP_OFF = 0x10;     // capture+: float, the food cost
-static const uintptr_t ACTOR_HUNGER_OFF    = 0xbc4;    // Actor+: float, this hero's food need (was 0xb64)
+static const uintptr_t ACTOR_HUNGER_OFF    = axLay(AXL_ACTOR_HUNGER_OFF, 0xbc4);    // Actor+: float, this hero's food need (was 0xb64)
 static const uintptr_t RAID_HEROES_BEG_OFF = 0x08;     // raid root+: vector<Actor*> begin
 static const uintptr_t RAID_HEROES_END_OFF = 0x10;     // raid root+: vector<Actor*> end
 
@@ -440,7 +440,7 @@ void checkEventOverlay(uintptr_t base) {
 // ---- WHAT THE CURIO DID: the result list at Overlay_Event+0x98 ----
 static const uintptr_t OE_RESULTS_BEG_OFF = 0x98;    // Overlay_Event+: vector<Result> begin
 static const uintptr_t OE_RESULTS_END_OFF = 0xa0;    // Overlay_Event+: end
-static const uintptr_t OE_RESULT_STRIDE   = 0x170;   // from the apply's push cursor (+0x2e qwords)
+static const uintptr_t OE_RESULT_STRIDE   = axLay(AXL_OE_RESULT_STRIDE, 0x170);   // from the apply's push cursor (+0x2e qwords)
 static const uintptr_t OE_RESULT_TEXT_OFF = 0x000;   // record+: char[0x100], the sentence
 static const uintptr_t OE_RESULT_TAG_OFF  = 0x100;   // record+: char[0x40], short; logged only
 static const int       OE_MAX_RESULTS     = 16;

@@ -30,12 +30,12 @@ static const int CLOG_PAGE     = 10;
 // ---- the popup TYPE, and why it takes a second source ----
 static const uintptr_t RD_POPUP_Q_BEGIN_OFF = 0x3168;
 static const uintptr_t RD_POPUP_Q_END_OFF   = 0x3170;   // (was 0x2ce0; the vector triple after begin)
-static const int       CL_Q_STRIDE          = 200;    // 0xc8
+static const int       CL_Q_STRIDE          = axLay(AXL_CL_Q_STRIDE, 200);    // 0xc8
 static const uintptr_t CLQ_ACTOR_OFF = 0x00;
 static const uintptr_t CLQ_STR_OFF   = 0x08;
 static const uintptr_t CLQ_NUM_OFF   = 0x4c;
 static const uintptr_t CLQ_TYPE_OFF  = 0x58;
-static const int       POPUP_TYPE_STRIDE    = 0xdc;
+static const int       POPUP_TYPE_STRIDE    = axLay(AXL_POPUP_TYPE_STRIDE, 0xdc);
 static const uintptr_t PT_NAME_OFF      = 0x00;
 static const uintptr_t PT_HAS_STRING_OFF = 0x44;
 static const uintptr_t PT_HAS_NUMBER_OFF = 0x45;
@@ -373,7 +373,7 @@ struct ClBuffNew {
     DWORD         tick;
     int           polarity;                    // +1 buff, -1 debuff, 0 neither
     bool          spoken;
-    unsigned char rec[CAMP_BUFF_REC_SZ];
+    unsigned char rec[CAMP_BUFF_REC_CAP];
 };
 static ClBuffNew g_clBuffNew[CL_BUFFNEW_MAX];
 
@@ -479,7 +479,7 @@ static void clBuffScanActor(uintptr_t base, uintptr_t actor) {
     int nowN = 0;
     bool stealthNow = false;
     for (int i = 0; i < n && nowN < ACTOR_BUFF_MAX; i++) {
-        unsigned char rec[CAMP_BUFF_REC_SZ];
+        unsigned char rec[CAMP_BUFF_REC_CAP];
         if (!safeReadBlock(begin + (uintptr_t)i * ACTOR_BUFF_STRIDE + ACTOR_BUFF_RECORD_OFF,
                            rec, CAMP_BUFF_REC_SZ)) continue;
         uint32_t fp = clBuffFingerprint(rec);
@@ -968,7 +968,7 @@ void serviceCombatText(uintptr_t base) {
 // ---- CENTRE-SCREEN BANNERS (RaidDisplay::ShowAnnouncement) ----
 static const uintptr_t RD_ANN_BEGIN_OFF = 0x40e0;
 static const uintptr_t RD_ANN_END_OFF   = 0x40e8;
-static const uintptr_t ANN_REC_STRIDE   = 0x98;    // one record, per the lambda's append
+static const uintptr_t ANN_REC_STRIDE   = axLay(AXL_ANN_REC_STRIDE, 0x98);    // one record, per the lambda's append
 static const uintptr_t ANN_TEXT_OFF     = 0x00;    // record+: the display text
 static const int       ANN_TEXT_MAX     = 0x80;    // char[128] — FixedLengthString<128>
 

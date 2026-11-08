@@ -598,14 +598,14 @@ static const uintptr_t BLD_TDEF_ID_OFF    = 0x84;     // rec+: ID hash (== item+
 static const uintptr_t BLD_TDEF_VALUE_OFF = 0x9c;
 static const uintptr_t BLD_ITEM_CLASS_OFF = 0x598;
 static const uintptr_t BLD_ITEM_TRECORD_OFF = 0x5a0;
-static const uintptr_t BLD_TREC_STRIDE    = 0x488;
+static const uintptr_t BLD_TREC_STRIDE    = axLay(AXL_BLD_TREC_STRIDE, 0x488);
 static const uintptr_t BLD_TREC_ID_STR_OFF = 0x00;     // char[0x40] the trinket's own id ("jar_of_ash")
-static const uintptr_t BLD_TREC_HASH_OFF  = 0x40;      // trinket id hash (== item+0x88)
-static const uintptr_t BLD_TREC_BUFFS_BEG = 0x48;      // vector<u32 buff key> begin
-static const uintptr_t BLD_TREC_BUFFS_END = 0x50;      // ... end
-static const uintptr_t BLD_TREC_CLSREQ_BEG = 0x2d8;
-static const uintptr_t BLD_TREC_CLSREQ_END = 0x2e0;
-static const uintptr_t BLD_TREC_RARITY_OFF = 0x384;
+static const uintptr_t BLD_TREC_HASH_OFF  = axLay(AXL_BLD_TREC_HASH_OFF, 0x40);      // trinket id hash (== item+0x88)
+static const uintptr_t BLD_TREC_BUFFS_BEG = axLay(AXL_BLD_TREC_BUFFS_BEG, 0x48);      // vector<u32 buff key> begin
+static const uintptr_t BLD_TREC_BUFFS_END = axLay(AXL_BLD_TREC_BUFFS_END, 0x50);      // ... end
+static const uintptr_t BLD_TREC_CLSREQ_BEG = axLay(AXL_BLD_TREC_CLSREQ_BEG, 0x2d8);
+static const uintptr_t BLD_TREC_CLSREQ_END = axLay(AXL_BLD_TREC_CLSREQ_END, 0x2e0);
+static const uintptr_t BLD_TREC_RARITY_OFF = axLay(AXL_BLD_TREC_RARITY_OFF, 0x384);
 static const uintptr_t BLD_TREC_RARITY_ID  = 0x2e4;    // ... and its ID STRING, char[0x40] (was 0x224)
 static const uintptr_t BLD_CLASS_IDHASH_OFF= 0xd4;      // HeroClass+: gameHash(class id)
 static const uint32_t  BLD_ELEM_RCT_BASE  = 0x737467; // recruit slot element family
@@ -895,14 +895,14 @@ static int bldRecruitRows(uintptr_t base, uintptr_t panel, BldRecruit* out, int 
 // ---- STATUE (Ancestor's Memoirs) — the media browser (passes 49-51) ----
 static const uintptr_t ST_CAT_VEC_BEG = 0x288;
 static const uintptr_t ST_CAT_VEC_END = 0x290;
-static const uintptr_t ST_CAT_STRIDE  = 0x968;   // one category
+static const uintptr_t ST_CAT_STRIDE  = axLay(AXL_ST_CAT_STRIDE, 0x968);   // one category
 static const uintptr_t ST_CAT_ID_OFF  = 0x20;    // cat+: id string (0x80)
 static const uintptr_t ST_CAT_ENT_BEG = 0x928;   // cat+: vector<Entry> begin
 static const uintptr_t ST_CAT_ENT_END = 0x930;   // cat+: ... end
-static const uintptr_t ST_ENT_STRIDE  = 0x158;   // one entry
+static const uintptr_t ST_ENT_STRIDE  = axLay(AXL_ST_ENT_STRIDE, 0x158);   // one entry
 static const uintptr_t ST_ENT_REC_BEG = 0x140;   // entry+: vector<MediaRecord> begin
 static const uintptr_t ST_ENT_REC_END = 0x148;   // entry+: ... end
-static const uintptr_t ST_REC_STRIDE  = 0x450;   // one media record
+static const uintptr_t ST_REC_STRIDE  = axLay(AXL_ST_REC_STRIDE, 0x450);   // one media record
 static const uintptr_t ST_REC_TEXT_OFF = 0x44;   // record+: localized display text (0x200)
 static const uintptr_t ST_REC_TYPE_OFF = 0x248;  // record+: int type
 static const uintptr_t ST_REC_LOCK_OFF = 0x44c;  // record+: char (1 unlocked / 0 locked)
@@ -1407,7 +1407,7 @@ static int bldBuffKeysText(uintptr_t base, uintptr_t kb, uintptr_t ke, char* out
 }
 
 // ---- THE TRINKET SET ----
-static const uintptr_t BLD_TREC_SET_OFF  = 0x2d0;
+static const uintptr_t BLD_TREC_SET_OFF  = axLay(AXL_BLD_TREC_SET_OFF, 0x2d0);
 static const uintptr_t TRKSET_NODE_KEY   = 0x10;
 static const uintptr_t TRKSET_NODE_VAL   = 0x18;
 static const uintptr_t TRKSET_BUFFS_BEG  = 0x48;    // value+: vector<u32 buff key>
@@ -1489,15 +1489,15 @@ bool bldTrinketSetEx(uintptr_t base, uintptr_t rec, char* out, int outsz, bool p
     return out[0] != 0;
 }
 
-static const uintptr_t BLD_TREC_TRIGLIM_OFF   = 0x394;
-static const uintptr_t BLD_TREC_DESTROYEXH_OFF= 0x399;
-static const uintptr_t BLD_TREC_BLOCKTRIG_OFF = 0x39a;
-static const uintptr_t BLD_TREC_BLOCKQUEST_OFF= 0x39b;
-static const uintptr_t BLD_TREC_QUESTUSES_OFF = 0x39c;
-static const uintptr_t BLD_TREC_XFORM_QUEST_OFF = 0x3a4;
-static const uintptr_t BLD_TREC_XFORM_KILLED_OFF= 0x3e8;
-static const uintptr_t BLD_TREC_XFORM_EXH_OFF   = 0x428;
-static const uintptr_t BLD_TREC_QUESTXP_OFF   = 0x468;
+static const uintptr_t BLD_TREC_TRIGLIM_OFF   = axLay(AXL_BLD_TREC_TRIGLIM_OFF, 0x394);
+static const uintptr_t BLD_TREC_DESTROYEXH_OFF= axLay(AXL_BLD_TREC_DESTROYEXH_OFF, 0x399);
+static const uintptr_t BLD_TREC_BLOCKTRIG_OFF = axLay(AXL_BLD_TREC_BLOCKTRIG_OFF, 0x39a);
+static const uintptr_t BLD_TREC_BLOCKQUEST_OFF= axLay(AXL_BLD_TREC_BLOCKQUEST_OFF, 0x39b);
+static const uintptr_t BLD_TREC_QUESTUSES_OFF = axLay(AXL_BLD_TREC_QUESTUSES_OFF, 0x39c);
+static const uintptr_t BLD_TREC_XFORM_QUEST_OFF = axLay(AXL_BLD_TREC_XFORM_QUEST_OFF, 0x3a4);
+static const uintptr_t BLD_TREC_XFORM_KILLED_OFF= axLay(AXL_BLD_TREC_XFORM_KILLED_OFF, 0x3e8);
+static const uintptr_t BLD_TREC_XFORM_EXH_OFF   = axLay(AXL_BLD_TREC_XFORM_EXH_OFF, 0x428);
+static const uintptr_t BLD_TREC_QUESTXP_OFF   = axLay(AXL_BLD_TREC_QUESTXP_OFF, 0x468);
 static const int       BLD_TRK_GROUPS      = 22;
 static const uintptr_t BLD_TRK_GROUP_BASE  = 4 * 0x18;
 static const uintptr_t BLD_TRK_GROUP_STRIDE= 0x18;
@@ -2364,15 +2364,15 @@ static const uintptr_t ACT_RL_ROWS_BEG      = 0xa0;
 static const uintptr_t ACT_RL_ROWS_END      = 0xa8;
 static const uintptr_t ACT_RL_ROW_ENTRY     = 0x90;
 static const uintptr_t ACT_ENTRY_HERO_OFF   = 0x08;
-static const uintptr_t ACT_ENTRY_STATE_OFF  = 0x15b0;
+static const uintptr_t ACT_ENTRY_STATE_OFF  = axLay(AXL_ACT_ENTRY_STATE_OFF, 0x15b0);
 
 // ---- ROUND 9: the SANITARIUM (QuirkTreatmentActivityDisplay) ----
 static const uintptr_t QT_SLOTDATA_BEG       = 0x190;    // activity+: vector<TreatmentSlotData>
 static const uintptr_t QT_SLOTDATA_END       = 0x198;
-static const uintptr_t QT_SLOTDATA_STRIDE    = 0x1e0;    // = 3 x TreatmentListData
-static const uintptr_t QT_LIST_STRIDE        = 0xa0;
+static const uintptr_t QT_SLOTDATA_STRIDE    = axLay(AXL_QT_SLOTDATA_STRIDE, 0x1e0);    // = 3 x TreatmentListData
+static const uintptr_t QT_LIST_STRIDE        = axLay(AXL_QT_LIST_STRIDE, 0xa0);
 static const uintptr_t QT_LIST_SEL_OFF       = 0x18;     // list+: the chosen entry (a copy)
-static const uintptr_t QT_ENTRY_STRIDE       = 0x88;
+static const uintptr_t QT_ENTRY_STRIDE       = axLay(AXL_QT_ENTRY_STRIDE, 0x88);
 static const uintptr_t QT_ENTRY_ID_MAX       = 0x80;     // entry+0x00: the quirk id, inline
 static const uintptr_t QT_ENTRY_LOCKED_OFF   = 0x80;     // entry+: the hero already locked this one
 static const uintptr_t QT_ENTRY_CANLOCK_OFF  = 0x81;     // entry+: mode 1 (lock) is offered
@@ -3640,7 +3640,7 @@ static const uintptr_t HA_TREES2_BEG     = 0x288;
 static const uintptr_t HA_TREES2_END     = 0x290;
 static const uintptr_t HA_FAC_MAP_OFF    = 0x11f8;  // Campaign+: map<building id hash, Facility*>
 static const uintptr_t HA_FAC_HERO_OFF   = 0x128;   // Facility+: selected hero guid (0 = none)
-static const uintptr_t HA_URD_STRIDE     = 0x180;   // UTD+0xa0 vector: inline URDs
+static const uintptr_t HA_URD_STRIDE     = axLay(AXL_HA_URD_STRIDE, 0x180);   // UTD+0xa0 vector: inline URDs
 static const uintptr_t HA_URD_GUID_OFF   = 0x80;    // URD+: the hero guid this step belongs to
 static const uintptr_t HA_REG_INSTANCED  = 0x44;    // registry rec+: byte, tree is per-hero
 static const uintptr_t HA_REG_TAGS_BEG   = 0x48;    // registry rec+: vector<uint tag hash> begin

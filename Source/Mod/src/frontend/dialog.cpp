@@ -8,22 +8,39 @@
 // ---- Difficulty / game-mode ConfirmDialog (Radiant / Darkest / Stygian) ----
 
 static const uintptr_t FE_MODE_ARRAY_OFF   = 0x2640;
-static const uintptr_t MODE_STRIDE         = 0x548;      // bytes per mode entry
+static const uintptr_t MODE_STRIDE         = axLay(AXL_MODE_STRIDE, 0x548);      // bytes per mode entry
 static const uintptr_t MODE_NAME_OFF       = 0x00;       // mode-name C-string (<=0x80)
 static const char* kModeQuestionKey = "str_select_campaign";
 
 // ---- Generic ConfirmDialog reading (any yes/no/confirm popup) ----
-static const uintptr_t CD_ENTRIES_BEGIN_OFF = 0x00;     // System+0: entries vector begin
-static const uintptr_t CD_ENTRIES_END_OFF   = 0x08;     // System+8: entries vector end
+// ---- The dialog QUEUE ----
+static const uintptr_t CD_QUEUE_MAP_OFF     = 0x08;     // System+0x08: Entry*[] (the deque's map)
+static const uintptr_t CD_QUEUE_MAPSIZE_OFF = 0x10;     // System+0x10: map capacity, a power of two
+static const uintptr_t CD_QUEUE_FRONT_OFF   = 0x18;     // System+0x18: index of the front element
+static const uintptr_t CD_QUEUE_COUNT_OFF   = 0x20;     // System+0x20: how many dialogs are queued
 static const uintptr_t CD_ANSWERS_BEGIN_OFF = 0x208;    // Entry+0x208: answers vector begin
 static const uintptr_t CD_ANSWERS_END_OFF   = 0x210;    // Entry+0x210: answers vector end
-static const uintptr_t CD_ANSWER_STRIDE     = 0x148;    // bytes per answer
+static const uintptr_t CD_ANSWER_STRIDE     = axLay(AXL_CD_ANSWER_STRIDE, 0x148);    // bytes per answer
 static const uintptr_t CD_ANSWER_TEXT_OFF   = 0x00;     // answer: display-text C-string (<=0x40)
 static const uintptr_t CD_ANSWER_BTN_OFF    = 0x140;    // answer: int button-assignment code
                                                         // (ShowEntry checks it vs BUTTON_Primary2)
 static const uintptr_t CD_QUESTION_OFF      = 0x2a0;
 static const uintptr_t CD_QUESTION_TEXT_OFF = 0x08;     // Entry+0x08: question, plain C-string
 static const uintptr_t CD_QUESTION_TEXT_MAX = 0x200;
+
+static uintptr_t cdFrontEntry(uintptr_t base, uintptr_t* countOut) {
+    if (countOut) *countOut = 0;
+    uintptr_t sys = 0, count = 0, map = 0, mapSize = 0, front = 0, entry = 0;
+    if (!safeReadPtr(base + CD_SYSTEM_PTR_RVA, &sys) || sys <= 0x10000) return 0;
+    if (!safeReadPtr(sys + CD_QUEUE_COUNT_OFF, &count) || count == 0) return 0;
+    if (!safeReadPtr(sys + CD_QUEUE_MAP_OFF, &map) || map <= 0x10000) return 0;
+    if (!safeReadPtr(sys + CD_QUEUE_MAPSIZE_OFF, &mapSize) || mapSize == 0) return 0;
+    if (!safeReadPtr(sys + CD_QUEUE_FRONT_OFF, &front)) return 0;
+    if (!safeReadPtr(map + ((mapSize - 1) & front) * sizeof(uintptr_t), &entry) || entry <= 0x10000)
+        return 0;
+    if (countOut) *countOut = count;
+    return entry;
+}
 
 // ---- The ONE dialog whose own text cannot be spoken ----
 const char* kActFailKey      = "activity_assign_attempt_fail";
@@ -101,10 +118,8 @@ bool resolveGenericConfirm(uintptr_t base, int64_t id, bool firstEntry,
     if (idx >= (uint32_t)CONFIRM_ANSWER_MAX) return false;
     int i = (int)idx;
 
-    uintptr_t sys = 0, entry = 0, eEnd = 0, aBegin = 0, aEnd = 0;
-    if (!safeReadPtr(base + CD_SYSTEM_PTR_RVA, &sys) || sys <= 0x10000) return false;
-    if (!safeReadPtr(sys + CD_ENTRIES_BEGIN_OFF, &entry) || entry <= 0x10000) return false;
-    if (!safeReadPtr(sys + CD_ENTRIES_END_OFF, &eEnd) || eEnd <= entry) return false;  // no entries
+    uintptr_t entry = cdFrontEntry(base, nullptr), aBegin = 0, aEnd = 0;
+    if (!entry) return false;   // no dialog queued
     if (!safeReadPtr(entry + CD_ANSWERS_BEGIN_OFF, &aBegin) || aBegin <= 0x10000) return false;
     if (!safeReadPtr(entry + CD_ANSWERS_END_OFF, &aEnd) || aEnd <= aBegin) return false;
     int count = (int)((aEnd - aBegin) / CD_ANSWER_STRIDE);
@@ -141,10 +156,9 @@ bool altControllerGlyphs(uintptr_t base) {
 static int confirmDialogAnswers(uintptr_t base, uintptr_t* entryOut, uintptr_t* aBeginOut) {
     if (entryOut)  *entryOut  = 0;
     if (aBeginOut) *aBeginOut = 0;
-    uintptr_t sys = 0, entry = 0, eEnd = 0, aBegin = 0, aEnd = 0;
-    if (!safeReadPtr(base + CD_SYSTEM_PTR_RVA, &sys) || sys <= 0x10000) return 0;
-    if (!safeReadPtr(sys + CD_ENTRIES_BEGIN_OFF, &entry) || entry <= 0x10000) return 0;
-    if (!safeReadPtr(sys + CD_ENTRIES_END_OFF, &eEnd) || eEnd <= entry) return 0;
+    uintptr_t aBegin = 0, aEnd = 0;
+    uintptr_t entry = cdFrontEntry(base, nullptr);
+    if (!entry) return 0;
     if (!safeReadPtr(entry + CD_ANSWERS_BEGIN_OFF, &aBegin) || aBegin <= 0x10000) return 0;
     if (!safeReadPtr(entry + CD_ANSWERS_END_OFF, &aEnd) || aEnd <= aBegin) return 0;
     uintptr_t span = aEnd - aBegin;
@@ -207,19 +221,17 @@ static void cdDumpEntry(uintptr_t base) {
     static int   dumps = 0;
     static uint32_t lastKey = 0;
     if (!axDebugLogEnabled()) return;
-    uintptr_t sys = 0, begin = 0, end = 0;
-    if (!safeReadPtr(base + CD_SYSTEM_PTR_RVA, &sys) || sys <= 0x10000) return;
-    if (!safeReadPtr(sys + CD_ENTRIES_BEGIN_OFF, &begin) || begin <= 0x10000) return;
-    if (!safeReadPtr(sys + CD_ENTRIES_END_OFF, &end) || end <= begin) return;   // no entries
+    uintptr_t queued = 0;
+    uintptr_t begin = cdFrontEntry(base, &queued);
+    if (!begin) return;                         // no dialog queued
     uint32_t key = 2166136261u;
     for (int i = 0; i < 0x30; i++) { uint8_t b = 0; safeReadU8(begin + (uintptr_t)i, &b); key = (key ^ b) * 16777619u; }
     if (key == lastKey) return;                 // same dialog still up: don't re-dump
     lastKey = key;
     if (dumps >= 8) return;
     dumps++;
-    logLine("cd-dump: system=0x%llx entries begin=0x%llx end=0x%llx span=%lld",
-            (unsigned long long)sys, (unsigned long long)begin, (unsigned long long)end,
-            (long long)(end > begin ? end - begin : 0));
+    logLine("cd-dump: front entry=0x%llx queued=%llu",
+            (unsigned long long)begin, (unsigned long long)queued);
     for (int row = 0; row < 6; row++) {
         char hex[80]; char asc[24]; int hp = 0;
         for (int i = 0; i < 16; i++) {
@@ -522,7 +534,7 @@ bool routeDialogKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) 
         if (!s_phantomLogged) {
             s_phantomLogged = true;
             logLine("dialogkey: %d answers reported, none on screen -- passing keys through "
-                    "(see CD_ENTRIES_END_OFF)", count);
+                    "(see CD_QUEUE_COUNT_OFF)", count);
             feDumpFocusVector("confirm dialog reported, no answer element on screen");
         }
         if (sym == SDLK_ESCAPE && count == 2 && cdDeferCancel("no answer registered yet"))

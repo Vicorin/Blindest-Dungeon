@@ -1015,7 +1015,7 @@ bool abTipPlain(uintptr_t base, const char* key, char* out, int outsz);
 bool abTipFloat(uintptr_t base, const char* key, float v, char* out, int outsz);
 bool abHeroLabelOf(uintptr_t base, uintptr_t hero, char* out, int outsz);
 uintptr_t abActorClass(uintptr_t actor);
-static const uintptr_t ACTOR_CLASS_VID_OFF = 0x48;   // ...its inline class-id string
+static const uintptr_t ACTOR_CLASS_VID_OFF = axLay(AXL_ACTOR_CLASS_VID_OFF, 0x48);   // ...its inline class-id string
 bool abHeroHealth(uintptr_t base, uintptr_t hero, char* out, int outsz);
 bool abHeroStress(uintptr_t base, uintptr_t hero, char* out, int outsz);     // "40/200 Stress"
 bool abHeroStressCur(uintptr_t base, uintptr_t hero, char* out, int outsz);  // "40 Stress" -- the

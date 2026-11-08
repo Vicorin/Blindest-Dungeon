@@ -6,10 +6,10 @@
 #include <cmath>
 #include "internal.h"
 // ---- TOWN: the EMBARK PARTY LINEUP (AX_PARTY) ----
-static const uintptr_t PTY_ENTRY_STATE_OFF   = 0x15b0;
-static const uintptr_t PTY_ENTRY_ORDER_OFF   = 0x15b8;
-static const uintptr_t PTY_ENTRY_DIRTY_OFF   = 0x162c;
-static const uintptr_t PTY_HERO_GUID_OFF     = 0x137c;
+static const uintptr_t PTY_ENTRY_STATE_OFF   = axLay(AXL_PTY_ENTRY_STATE_OFF, 0x15b0);
+static const uintptr_t PTY_ENTRY_ORDER_OFF   = axLay(AXL_PTY_ENTRY_ORDER_OFF, 0x15b8);
+static const uintptr_t PTY_ENTRY_DIRTY_OFF   = axLay(AXL_PTY_ENTRY_DIRTY_OFF, 0x162c);
+static const uintptr_t PTY_HERO_GUID_OFF     = axLay(AXL_PTY_HERO_GUID_OFF, 0x137c);
 static const uintptr_t PTY_IFACE_SETHERO_VOFF= 0x30;     // interface vftable: SetHero(Hero*)
 static const uintptr_t PTY_SHEET_PANEL_OFF   = 0x38c0;
 static const uintptr_t PTY_SHEET_STATE_OFF   = 0x3918;
@@ -904,9 +904,9 @@ bool routePartyKey(uintptr_t base, uint32_t sym, uint16_t mod, uint8_t repeat) {
 }
 
 // ---- TOWN: the ROSTER LIST (all heroes, AX_ROSTER) ----
-static const uintptr_t ROS_ENTRY_BUILDING_OFF = 0x15c8;
-static const uintptr_t ROS_ENTRY_MISSING_OFF  = 0x1608;
-static const uintptr_t ROS_ENTRY_ACTIVITY_OFF = 0x15c0;
+static const uintptr_t ROS_ENTRY_BUILDING_OFF = axLay(AXL_ROS_ENTRY_BUILDING_OFF, 0x15c8);
+static const uintptr_t ROS_ENTRY_MISSING_OFF  = axLay(AXL_ROS_ENTRY_MISSING_OFF, 0x1608);
+static const uintptr_t ROS_ENTRY_ACTIVITY_OFF = axLay(AXL_ROS_ENTRY_ACTIVITY_OFF, 0x15c0);
 static const uintptr_t ROS_REORDER_GATE_OFF   = 0x5c;
 static const uintptr_t ROS_SORT_TYPE_OFF      = 0x1f4;    // rosterList+: int, the current eSortType
 static const uintptr_t ROS_SORT_DIR_OFF       = 0x1f8;    // rosterList+: int, 0/1 = which direction

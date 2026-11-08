@@ -38,7 +38,7 @@ static const uintptr_t WL_KILL_TARGET_OFF  = 0x2fc;  // "spawnsUntilCurio" — k
 static const uintptr_t WL_GROUPS_BEG_OFF   = 0x270;  // vector<vector<WaveInfo>> begin
 static const uintptr_t WL_GROUPS_END_OFF   = 0x278;  // ... end
 static const uintptr_t WL_GROUP_STRIDE     = 0x18;   // one std::vector = {begin, end, cap}
-static const uintptr_t WL_WAVEINFO_STRIDE  = 0x8c;   // one WaveInfo, as the widget steps it
+static const uintptr_t WL_WAVEINFO_STRIDE  = axLay(AXL_WL_WAVEINFO_STRIDE, 0x8c);   // one WaveInfo, as the widget steps it
 
 static const int       COM_TIER_LAST        = 3;     // the widget's own clamp: min(banked, 3)
 #define COM_TIER_KEY_PREFIX "str_wave_progression_reward_tier"
@@ -51,7 +51,7 @@ static const char* const kComTierKeys[4] = {
 
 static const uintptr_t COM_QUEST_THRESH_BEG = 0x2c8;
 static const uintptr_t COM_QUEST_THRESH_END = 0x2d0;  // Quest+: end                          (was 0x280)
-static const uintptr_t COM_THRESH_STRIDE    = 0x170;  // one ThresholdReward                  (was 0x120)
+static const uintptr_t COM_THRESH_STRIDE    = axLay(AXL_COM_THRESH_STRIDE, 0x170);  // one ThresholdReward                  (was 0x120)
 
 typedef unsigned long long (*ComThresholdFn)(uintptr_t);
 

@@ -30,7 +30,7 @@ const FourCcLabel* lookupFrontEnd(uint32_t code) {
 // ---- Campaign-select / save-slot screen (front-end "state 7") ----
 static const uintptr_t FE_STATE_OFF       = 0x1f18;    // int sub-screen state (7 = save slots)
 static const uintptr_t FE_SLOTARR_OFF     = 0x1768;    // ptr to save-slot array base (was 0x1798)
-static const uintptr_t SLOT_STRIDE        = 0xc10;     // bytes per SaveSlot
+static const uintptr_t SLOT_STRIDE        = axLay(AXL_SLOT_STRIDE, 0xc10);     // bytes per SaveSlot
 static const uintptr_t SLOT_OCCUPIED_OFF  = 0x144;     // byte: !=0 => campaign in use ("begin")
 static const uintptr_t SLOT_ALT_OFF       = 0x145;     // byte: !=0 => has data, uses "load"
 static const int       SLOT_CAMPAIGN_COUNT = 9;        // offsets 1..9 are the campaign slots

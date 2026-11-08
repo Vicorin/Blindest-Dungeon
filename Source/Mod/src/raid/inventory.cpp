@@ -1463,7 +1463,8 @@ static bool sehInvSetIdent(uintptr_t base, uintptr_t dst, uintptr_t srcRec) {
 }
 
 static bool sehInvSwap(uintptr_t a, uintptr_t b) {
-    unsigned char tmp[ITEM_STRIDE];
+    unsigned char tmp[0x2000];
+    if (ITEM_STRIDE > sizeof tmp) return false;
     __try {
         memcpy(tmp, reinterpret_cast<void*>(a), ITEM_STRIDE);
         memcpy(reinterpret_cast<void*>(a), reinterpret_cast<void*>(b), ITEM_STRIDE);

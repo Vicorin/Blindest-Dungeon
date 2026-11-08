@@ -11,7 +11,7 @@ static const uintptr_t CS_LIST_BEGIN_OFF  = 0x18;      // list owner+: vector be
 static const uintptr_t CS_LIST_END_OFF    = 0x20;      // list owner+: vector end
 static const uintptr_t CS_PANEL_STRIDE    = 8;         // the entries are pointers
 static const int       CS_MAX_PANELS      = 32;        // sanity cap on the panel-vector walk
-static const uintptr_t HEROCLASS_MAXSELECT_OFF = 0x11f0;
+static const uintptr_t HEROCLASS_MAXSELECT_OFF = axLay(AXL_HEROCLASS_MAXSELECT_OFF, 0x11f0);
                                                        // skills -- where the familiar 4 comes from (was 0x11d8)
 
 // ---- CHARACTER SHEET: is it open, and what is on it? ----
@@ -581,7 +581,7 @@ static int64_t csCampCellId(int i) {
 // ---- THE DESELECT PROBE ----
 static const uintptr_t CS_PANEL_EDITABLE_OFF = 0x14d;   // CharacterDisplay+: the cell closure's gate
 static const uintptr_t CS_TOWN_SHEET_STATE_OFF = 0x3918; // townRoot+: the sheet's show state (0 = down)
-static const uintptr_t CS_HERO_BACKER_OFF = 0x1428;
+static const uintptr_t CS_HERO_BACKER_OFF = axLay(AXL_CS_HERO_BACKER_OFF, 0x1428);
 static void csCampProbe(uintptr_t base, const char* when) {
     uintptr_t panel = csTownSheetPanel(base);
     uintptr_t root  = resTownRoot(base);
@@ -967,10 +967,10 @@ static const int64_t CS_MANAGE_OUTFIT_ID  = 0x70616c65;   // 'pale' — the outf
 uintptr_t feGetElementById(int64_t id);
 
 // ---- THE OUTFIT BUTTON ----
-static const uintptr_t CS_HERO_OUTFIT_OFF         = 0xb68;  // Hero+: int colour_variation
+static const uintptr_t CS_HERO_OUTFIT_OFF         = axLay(AXL_CS_HERO_OUTFIT_OFF, 0xb68);  // Hero+: int colour_variation
 static const uintptr_t CS_CLASS_OUTFITS_BEGIN_OFF = 0x5e0;  // HeroClass+: char[0x200]* begin
 static const uintptr_t CS_CLASS_OUTFITS_END_OFF   = 0x5e8;  // HeroClass+: end
-static const uintptr_t CS_CLASS_OUTFIT_STRIDE     = 0x200;
+static const uintptr_t CS_CLASS_OUTFIT_STRIDE     = axLay(AXL_CS_CLASS_OUTFIT_STRIDE, 0x200);
 
 struct CsOutfitDescs { const char* classId; AxStrId desc[4]; };   // desc[k] = folder letter 'A'+k
 static const CsOutfitDescs kCsOutfits[] = {
@@ -1012,7 +1012,7 @@ static bool csOutfitRead(uintptr_t hero, int* idx, int* count, const char** desc
     *idx = (int)cv;
     *count = (int)n;
 
-    char path[CS_CLASS_OUTFIT_STRIDE], clsId[64];
+    char path[0x200], clsId[64];
     if (!safeReadCStr(beg + cv * CS_CLASS_OUTFIT_STRIDE, path, sizeof path)) path[0] = 0;
     if (!safeReadCStr(cls + HEROCLASS_ID_OFF, clsId, sizeof clsId)) clsId[0] = 0;
     int len = (int)strlen(path);

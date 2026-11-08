@@ -92,8 +92,8 @@ static bool townEventInteractionLabel(uintptr_t base, uintptr_t entry, char* out
 static const uintptr_t TE_SYS_OFF         = 0x1808;   // Campaign+: the town-event system (was 0x1768)
 static const uintptr_t TE_SYS_BONUS_BEG   = 0x38;     // sys+: vector<RecruitEntry> BY VALUE, begin
 static const uintptr_t TE_SYS_BONUS_END   = 0x40;     // sys+: ... end
-static const uintptr_t TE_RECRUIT_STRIDE  = 0x15b0;
-static const uintptr_t TE_RECRUIT_LIVE    = 0x15a8;
+static const uintptr_t TE_RECRUIT_STRIDE  = axLay(AXL_TE_RECRUIT_STRIDE, 0x15b0);
+static const uintptr_t TE_RECRUIT_LIVE    = axLay(AXL_TE_RECRUIT_LIVE, 0x15a8);
 static const uintptr_t TE_SYS_DEAD_BEG    = 0x68;     // sys+: dead-hero grants ("From Beyond"),
 static const uintptr_t TE_SYS_DEAD_END    = 0x70;     //       guid+flag pairs
 static const uintptr_t TE_DEAD_STRIDE     = 0x08;
@@ -421,7 +421,7 @@ static bool      g_teHasInteract   = false;
 static char      g_teActLabel[256] = { 0 };
 static const uintptr_t TE_INTERACT_HANDLE_OFF = 0x160;
 static const uintptr_t TE_MGR_POOL_OFF   = 0x98;       // manager+ -> pool base ptr
-static const uintptr_t TE_POOL_STRIDE    = 0x120;      // bytes per pool entry
+static const uintptr_t TE_POOL_STRIDE    = axLay(AXL_TE_POOL_STRIDE, 0x120);      // bytes per pool entry
 static const uintptr_t TE_POOL_GEN_OFF   = 0x114;      // entry+ -> generation (validate == handle.gen)
 static const uintptr_t TE_POOL_OBJ_OFF   = 0x08;       // entry+ -> the widget object ptr
 static const uintptr_t TE_WIDGET_W_OFF   = 0x14;       // widget+ -> width  (uint, * uiScale)

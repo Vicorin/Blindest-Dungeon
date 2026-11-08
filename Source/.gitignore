@@ -47,3 +47,10 @@ nul
 
 # Python bytecode cache from the port tooling in re-notes/
 __pycache__/
+
+# sigtest's cached .text sweep (re-notes/sigtest/sigtest.py rebuilds it in 16 s)
+re-notes/sigtest/*.pkl
+
+re-notes/sigtest/harness/out-*.txt
+re-notes/sigtest/harness/*.exe
+re-notes/sigtest/harness/*.obj

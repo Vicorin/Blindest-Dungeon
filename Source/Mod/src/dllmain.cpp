@@ -8,7 +8,7 @@
 #include "internal.h"
 
 static const uintptr_t POOL_RECORDS_OFF = 0x98;      // pool+0x98: records array base
-static const uintptr_t POOL_REC_STRIDE  = 0x120;     // bytes per record
+static const uintptr_t POOL_REC_STRIDE  = axLay(AXL_POOL_REC_STRIDE, 0x120);     // bytes per record
 static const uintptr_t POOL_REC_GEN_OFF = 0x114;     // record: generation (validity)
 static const uintptr_t POOL_REC_OBJ_OFF = 0x08;      // record: resolved object ptr
 

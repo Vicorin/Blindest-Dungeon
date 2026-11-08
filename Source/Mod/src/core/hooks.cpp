@@ -424,7 +424,12 @@ static DWORD WINAPI SpeechThread(LPVOID) {
             }
         }
     }
-    if (axGameBuild() == AX_BUILD_UNKNOWN) {
+    if (axGameBuild() == AX_BUILD_UNKNOWN && axResolverUsable()) {
+        AxResolverStats rs = axResolverStats();
+        logLine("=== NEW GAME BINARY: PE stamp 0x%08x size 0x%x; resolved at startup: %d of %d addresses, "
+                "%d of %d layout values ===", peStamp, peSize, rs.anchorsOk, rs.anchors, rs.layoutsOk, rs.layouts);
+        axResolverForEachRefused([](const char* what, const char* name) { logLine("resolver refused %s %s", what, name); });
+    } else if (axGameBuild() == AX_BUILD_UNKNOWN) {
         logLine("=== UNKNOWN GAME BINARY: PE stamp 0x%08x size 0x%x, the mod knows Steam "
                 "0x%08x / 0x%x and DRM-free 0x%08x / 0x%x or 0x%08x / 0x%x -- NO hooks "
                 "installed, mod inactive ===",
@@ -475,7 +480,10 @@ static DWORD WINAPI SpeechThread(LPVOID) {
         DeleteCriticalSection(&g_cs);
         return 0;
     }
-    speakUtf8("Accessibility mod loaded.", true);
+    speakUtf8(axGameBuild() == AX_BUILD_UNKNOWN
+                  ? "Accessibility mod loaded. This game version is new to the mod, which adapted to it "
+                    "automatically. Some features may not work until the mod is updated."
+                  : "Accessibility mod loaded.", true);
     axUpdateCheckStart();
 
     DWORD handoverTick = 0;

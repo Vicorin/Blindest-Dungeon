@@ -17,39 +17,39 @@ static const uintptr_t EQUIP_LEVEL_BYTE_OFF  = 0x110;   // byte; the game prints
                                                         // ascii digit '0'..'4' -> level 1..5
 static const int       EQUIP_LEVEL_BIAS      = 0x2f;    // the game's own literal, not our arithmetic
 
-static const uintptr_t CS_RESIST_STRIDE    = 0xb8;
+static const uintptr_t CS_RESIST_STRIDE    = axLay(AXL_CS_RESIST_STRIDE, 0xb8);
 static const uintptr_t CS_RESIST_MONSTER_OFF = 0xb0;
 
 // ---- QUIRKS (character sheet) ----
 
-static const uintptr_t QUIRK_IS_POSITIVE_OFF = 0x50;
-static const uintptr_t QUIRK_IS_DISEASE_OFF  = 0x51;
+static const uintptr_t QUIRK_IS_POSITIVE_OFF = axLay(AXL_QUIRK_IS_POSITIVE_OFF, 0x50);
+static const uintptr_t QUIRK_IS_DISEASE_OFF  = axLay(AXL_QUIRK_IS_DISEASE_OFF, 0x51);
 
-static const uintptr_t QUIRK_BUFF_BEGIN_OFF = 0xa8;   // Quirk::Class+: -> first buff record
-static const uintptr_t QUIRK_BUFF_END_OFF   = 0xb0;   // Quirk::Class+: -> one past the last
-static const uintptr_t QUIRK_BUFF_STRIDE    = 0x410;
+static const uintptr_t QUIRK_BUFF_BEGIN_OFF = axLay(AXL_QUIRK_BUFF_BEGIN_OFF, 0xa8);   // Quirk::Class+: -> first buff record
+static const uintptr_t QUIRK_BUFF_END_OFF   = axLay(AXL_QUIRK_BUFF_END_OFF, 0xb0);   // Quirk::Class+: -> one past the last
+static const uintptr_t QUIRK_BUFF_STRIDE    = axLay(AXL_QUIRK_BUFF_STRIDE, 0x410);
 static const int       QUIRK_BUFF_MAX       = 32;     // sanity cap on the per-quirk buff walk
 
-static const uintptr_t QUIRK_TAG_BEGIN_OFF = 0x110;  // Quirk::Class+: -> first tag hash
-static const uintptr_t QUIRK_TAG_END_OFF   = 0x118;  // Quirk::Class+: -> one past the last
+static const uintptr_t QUIRK_TAG_BEGIN_OFF = axLay(AXL_QUIRK_TAG_BEGIN_OFF, 0x110);  // Quirk::Class+: -> first tag hash
+static const uintptr_t QUIRK_TAG_END_OFF   = axLay(AXL_QUIRK_TAG_END_OFF, 0x118);  // Quirk::Class+: -> one past the last
 static const uintptr_t QUIRK_TAG_STRIDE    = 4;      // one uint32 hash per tag
 static const int       QUIRK_TAG_MAX       = 32;     // sanity cap on the per-quirk tag walk
 static const char* const QUIRK_TAG_SINGLETON = "singleton";
 
-static const uintptr_t QUIRK_ENTRY_REPLACES_OFF = 0x24;
-static const uintptr_t QUIRK_ENTRY_REPLVIEW_OFF = 0x28;  // entry+: bool, the replaced mark has been seen
-static const uintptr_t QUIRK_ENTRY_ISNEW_OFF    = 0x29;
-static const uintptr_t QUIRK_ENTRY_LOCKED_OFF   = 0x2a;  // entry+: bool, locked (pos) / severe (neg)
+static const uintptr_t QUIRK_ENTRY_REPLACES_OFF = axLay(AXL_QUIRK_ENTRY_REPLACES_OFF, 0x24);
+static const uintptr_t QUIRK_ENTRY_REPLVIEW_OFF = axLay(AXL_QUIRK_ENTRY_REPLVIEW_OFF, 0x28);  // entry+: bool, the replaced mark has been seen
+static const uintptr_t QUIRK_ENTRY_ISNEW_OFF    = axLay(AXL_QUIRK_ENTRY_ISNEW_OFF, 0x29);
+static const uintptr_t QUIRK_ENTRY_LOCKED_OFF   = axLay(AXL_QUIRK_ENTRY_LOCKED_OFF, 0x2a);  // entry+: bool, locked (pos) / severe (neg)
 static const int       QUIRK_REGISTRY_MAX       = 4096;  // sanity cap: 213 shipped + DLC + mod room
 
 static const uintptr_t CS_QUIRK_DESC_EXTRA = 0;
 
 static const int       CS_QUIRK_DESC_MODE = 0;
 
-static const uintptr_t ACTOR_HEALTH_BLOCKS_OFF = 0x123c;
+static const uintptr_t ACTOR_HEALTH_BLOCKS_OFF = axLay(AXL_ACTOR_HEALTH_BLOCKS_OFF, 0x123c);
 static const uint32_t  ACTOR_HEALTH_BLOCKS_MAX = 99;
 
-static const uintptr_t HEROCLASS_CANSELECT_OFF = 0x11ec;
+static const uintptr_t HEROCLASS_CANSELECT_OFF = axLay(AXL_HEROCLASS_CANSELECT_OFF, 0x11ec);
 
 // ---- CAMPING skills ----
 static const uintptr_t CAMP_SKILL_ID_OFF   = 0x08;    // SkillClass+: inline C-string id ("encourage")
@@ -75,15 +75,15 @@ static const uintptr_t CAMP_BUFFREG_VALUE_OFF = 0x28;     // (was 0x20)
 static const uintptr_t CAMP_BUFF_REC_AMOUNT_OFF = 0x48;   // where the effect's amount is written in
 
 // ---- The CHARACTER STATUS PANEL: an actor's ACTIVE buffs ----
-static const uintptr_t ACTOR_BUFFS_BEGIN_OFF = 0x460;  // (was 0x408)
-static const uintptr_t ACTOR_BUFFS_END_OFF   = 0x468;  // (was 0x410)
-static const uintptr_t ACTOR_BUFF_ROUNDS_OFF = 0x54;   // int, rounds remaining (was 0x50)
+static const uintptr_t ACTOR_BUFFS_BEGIN_OFF = axLay(AXL_ACTOR_BUFFS_BEGIN_OFF, 0x460);  // (was 0x408)
+static const uintptr_t ACTOR_BUFFS_END_OFF   = axLay(AXL_ACTOR_BUFFS_END_OFF, 0x468);  // (was 0x410)
+static const uintptr_t ACTOR_BUFF_ROUNDS_OFF = axLay(AXL_ACTOR_BUFF_ROUNDS_OFF, 0x54);   // int, rounds remaining (was 0x50)
 
-static const uintptr_t BUFFREC_SOURCEDATA_OFF = 0x58;
+static const uintptr_t BUFFREC_SOURCEDATA_OFF = axLay(AXL_BUFFREC_SOURCEDATA_OFF, 0x58);
                                                         //       buffs (runtime-proven); NOT a quirk id
-static const uintptr_t BUFFREC_SRCGUID_OFF    = 0x13c;
-static const uintptr_t BUFFREC_SRCCLASS_OFF   = 0x140;
-static const uintptr_t BUFFREC_GUARD_GUID_OFF = 0x144;  // int   "guarded_guid" (guard relation partner)
+static const uintptr_t BUFFREC_SRCGUID_OFF    = axLay(AXL_BUFFREC_SRCGUID_OFF, 0x13c);
+static const uintptr_t BUFFREC_SRCCLASS_OFF   = axLay(AXL_BUFFREC_SRCCLASS_OFF, 0x140);
+static const uintptr_t BUFFREC_GUARD_GUID_OFF = axLay(AXL_BUFFREC_GUARD_GUID_OFF, 0x144);  // int   "guarded_guid" (guard relation partner)
 
 static const char* const BSRC_QUIRK_NAME = "bsrc_quirk";
 
@@ -109,21 +109,21 @@ static const int STAT_TYPE_STRESS_DOT  = 0x22;
 static const int STAT_TYPE_SHUFFLE_DOT = 0x23;
 static const int STAT_TYPE_HEAL_DOT    = 0x24;
 
-static const uintptr_t ACTOR_STUN_OFF    = 0x1090;
-static const uintptr_t ACTOR_IMMOB_OFF   = 0x1094;
-static const uintptr_t ACTOR_DAZE_OFF    = 0x130c;
+static const uintptr_t ACTOR_STUN_OFF    = axLay(AXL_ACTOR_STUN_OFF, 0x1090);
+static const uintptr_t ACTOR_IMMOB_OFF   = axLay(AXL_ACTOR_IMMOB_OFF, 0x1094);
+static const uintptr_t ACTOR_DAZE_OFF    = axLay(AXL_ACTOR_DAZE_OFF, 0x130c);
 
 static const uintptr_t TRAIT_REG_ALT_OFF  = 0x18;
-static const int       TRAIT_REC_STRIDE   = 0x100;
+static const int       TRAIT_REC_STRIDE   = axLay(AXL_TRAIT_REC_STRIDE, 0x100);
 static const uintptr_t TRAIT_REC_HASH_OFF = 0x40;
 static const int       TRAIT_REG_MAX      = 64;     // sanity cap on the registry walk
 
-static const uintptr_t HEROCLASS_MODEVEC_OFF     = 0xb38;   // ActorClass+: vector<ActorMode> begin
-static const uintptr_t HEROCLASS_MODEVEC_END_OFF = 0xb40;   // ...end
-static const int       MODE_REC_STRIDE           = 0x90;    // record: char id[0x20] @ +0, hash @ +0x20
+static const uintptr_t HEROCLASS_MODEVEC_OFF     = axLay(AXL_HEROCLASS_MODEVEC_OFF, 0xb38);   // ActorClass+: vector<ActorMode> begin
+static const uintptr_t HEROCLASS_MODEVEC_END_OFF = axLay(AXL_HEROCLASS_MODEVEC_END_OFF, 0xb40);   // ...end
+static const int       MODE_REC_STRIDE           = axLay(AXL_MODE_REC_STRIDE, 0x90);    // record: char id[0x20] @ +0, hash @ +0x20
 static const int       MODE_TABLE_MAX            = 16;      // sanity cap; the shipped classes declare 2
 
-static const uintptr_t QUIRK_HASH_OFF = 0x40;
+static const uintptr_t QUIRK_HASH_OFF = axLay(AXL_QUIRK_HASH_OFF, 0x40);
 
 // ---- CHARACTER SHEET: the SECTIONS ----
 
@@ -551,7 +551,7 @@ bool csHeroIsCursed(uintptr_t hero) {
     return false;
 }
 
-static const uintptr_t HERO_DD_QUESTS_OFF = 0x144c;  // (was 0x13dc; 6ae4c882 Actor +112)
+static const uintptr_t HERO_DD_QUESTS_OFF = axLay(AXL_HERO_DD_QUESTS_OFF, 0x144c);  // (was 0x13dc; 6ae4c882 Actor +112)
 
 bool csHeroIsNeverAgain(uintptr_t hero) {
     uint32_t n = 0;
@@ -568,7 +568,7 @@ void csNeverAgainWord(uintptr_t base, char* out, int outsz) {
     out[outsz - 1] = 0;
 }
 
-static const uintptr_t QUIRK_CLASS_ROSTER_LIMIT_OFF = 0x1b8;
+static const uintptr_t QUIRK_CLASS_ROSTER_LIMIT_OFF = axLay(AXL_QUIRK_CLASS_ROSTER_LIMIT_OFF, 0x1b8);
 
 uintptr_t csHeroRosterLimitQuirk(uintptr_t hero) {
     if (!hero) return 0;
@@ -763,7 +763,7 @@ static bool csQuirkRowCompose(uintptr_t base, uintptr_t quirk, uintptr_t entry, 
     if (gotDesc) {
         abStripMarkup(desc);
         csFlattenLines(desc, sizeof desc);
-    } else {
+    } else if (withDesc) {
         logLine("charsheet quirk: \"%s\" description call faulted", id);
     }
 
@@ -1053,7 +1053,7 @@ bool csBuffDescByKey(uintptr_t base, uint32_t key, const uint32_t* amountBits,
     uintptr_t node = csRbLowerBound(head, key, CAMP_BUFFREG_KEY_OFF);
     if (!node) { logLine("buffdesc: buff key 0x%08x not in the registry", key); return false; }
 
-    unsigned char rec[CAMP_BUFF_REC_SZ];
+    unsigned char rec[CAMP_BUFF_REC_CAP];
     if (!safeReadBlock(node + CAMP_BUFFREG_VALUE_OFF, rec, CAMP_BUFF_REC_SZ)) {
         logLine("buffdesc: buff record at %p unreadable", (void*)(node + CAMP_BUFFREG_VALUE_OFF));
         return false;
@@ -1287,7 +1287,7 @@ bool spBuffTextFromRecord(uintptr_t base, uintptr_t actor, const unsigned char* 
     CsBuffDescFn    desc    = reinterpret_cast<CsBuffDescFn>(base + CAMP_BUFF_DESC_RVA);
     char dbuf[CAMP_BUFF_DESC_BUF];
     memset(dbuf, 0, sizeof dbuf);
-    unsigned char work[CAMP_BUFF_REC_SZ];
+    unsigned char work[CAMP_BUFF_REC_CAP];
     memcpy(work, rec, CAMP_BUFF_REC_SZ);
     __try {
         if (!hasDesc(work)) { out[0] = 0; return false; }     // the game's own gate: draws no icon
@@ -1329,7 +1329,7 @@ static bool spBuffText(uintptr_t base, uintptr_t actor, int index, char* out, in
     if (n <= 0 || index < 0 || index >= n) return false;
 
     uintptr_t elem = begin + (uintptr_t)index * ACTOR_BUFF_STRIDE;
-    unsigned char rec[CAMP_BUFF_REC_SZ];
+    unsigned char rec[CAMP_BUFF_REC_CAP];
     if (!safeReadBlock(elem + ACTOR_BUFF_RECORD_OFF, rec, CAMP_BUFF_REC_SZ)) {
         logLine("status: buff %d of %d at %p unreadable", index, n, (void*)elem);
         return false;
@@ -1349,7 +1349,7 @@ static const uintptr_t CBURN_ROUNDS_OFF   = 0x08;    // int rounds left; <= 0 me
 static const uintptr_t CBURN_ACTORID_OFF  = 0x0c;    // int: the actor standing in the burning rank
 static const int       CBURN_MAX          = 64;      // sanity cap; four ranks a side is the reality
 
-static const uintptr_t MONSTER_ID_OFF     = 0x1320;  // (was 0x12b0; 6ae4c882 Actor +112)
+static const uintptr_t MONSTER_ID_OFF     = axLay(AXL_MONSTER_ID_OFF, 0x1320);  // (was 0x12b0; 6ae4c882 Actor +112)
 
 static bool spActorId(uintptr_t base, uintptr_t actor, uint32_t* out) {
     uintptr_t vft = 0;
@@ -1477,7 +1477,7 @@ static void csTipSumBySource(uintptr_t base, uintptr_t actor, int statType, cons
     int n = spBuffCount(actor, &begin);
     for (int i = 0; i < n; i++) {
         uintptr_t live = begin + (uintptr_t)i * ACTOR_BUFF_STRIDE + ACTOR_BUFF_RECORD_OFF;
-        unsigned char rec[CAMP_BUFF_REC_SZ];
+        unsigned char rec[CAMP_BUFF_REC_CAP];
         if (!safeReadBlock(live, rec, CAMP_BUFF_REC_SZ)) continue;
         if (*(int32_t*)(rec + BUFFREC_STAT_TYPE_OFF) != statType) continue;
         if (sub) {
@@ -2530,7 +2530,7 @@ int spUnvoicedBuffLines(uintptr_t base, uintptr_t actor, bool monster,
     char buf[AB_TIP_LINE_SZ];
     for (int i = 0; i < count && n < maxLines; i++) {
         uintptr_t live = begin + (uintptr_t)i * ACTOR_BUFF_STRIDE + ACTOR_BUFF_RECORD_OFF;
-        unsigned char rec[CAMP_BUFF_REC_SZ];
+        unsigned char rec[CAMP_BUFF_REC_CAP];
         if (!safeReadBlock(live, rec, CAMP_BUFF_REC_SZ)) {
             logLine("herotip: effect %d of %d at %llx unreadable", i, count,
                     (unsigned long long)live);

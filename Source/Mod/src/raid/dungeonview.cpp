@@ -22,11 +22,11 @@ static const uintptr_t PROP_TRAP_SEEN_OFF   = 0x123; // Prop+: byte, the reveale
 
 static const uintptr_t OE_TRAP_HERO_IDX_OFF = 0xd80;
 static const uintptr_t OE_TRAP_DELIBERATE_OFF = 0xd84;
-static const uintptr_t MONSTER_CLASS_OFF  = 0x1468;
+static const uintptr_t MONSTER_CLASS_OFF  = axLay(AXL_MONSTER_CLASS_OFF, 0x1468);
 
 // ---- CAPTOR OFFSETS: the Hag's pot and the Drowned Crew's anchor ----
 static const uintptr_t MONSTERCLASS_CAPTOR_FULL_OFF = 0xc68;
-static const uintptr_t MONSTER_PRISONER_GUID_OFF    = 0x156c;
+static const uintptr_t MONSTER_PRISONER_GUID_OFF    = axLay(AXL_MONSTER_PRISONER_GUID_OFF, 0x156c);
 
 // ---- The MONSTER HOVER TOOLTIP (FUN_1406ee670) ----
 static const char* const MT_HP_KEY    = "monster_tooltip_hp_format";
@@ -35,8 +35,8 @@ static const char* const MT_DODGE_KEY = "monster_tooltip_dodge_format";
 static const char* const MT_SPEED_KEY = "monster_tooltip_speed_format";
 static const char* const MT_SKILLS_KEY = "monster_panel_skills";
 static const char* const MT_RESIST_KEY      = "monster_panel_resistances";
-static const uintptr_t MONSTER_TYPE_BEG_OFF = 0x598;
-static const uintptr_t MONSTER_TYPE_END_OFF = 0x5a0;
+static const uintptr_t MONSTER_TYPE_BEG_OFF = axLay(AXL_MONSTER_TYPE_BEG_OFF, 0x598);
+static const uintptr_t MONSTER_TYPE_END_OFF = axLay(AXL_MONSTER_TYPE_END_OFF, 0x5a0);
 static const uintptr_t MONSTER_TYPE_STRIDE  = 0x44;
 static const char* const MT_TYPE_KEY_FMT = "enemy_type_name_%s";
 static const char* const MT_TYPE_SEP_KEY = "enemy_type_name_seperator";
@@ -1175,9 +1175,9 @@ static bool rvReadF32(uintptr_t addr, float* out) {
     return true;
 }
 
-static const uintptr_t ACTOR_BOX_X_OFF   = 0xa64;   // Actor+: float, the lead hero's x
-static const uintptr_t ACTOR_BOX_Y_OFF   = 0xa68;
-static const uintptr_t ACTOR_BOX_W_OFF   = 0xa70;   // Actor+: float, scaled by the interaction width
+static const uintptr_t ACTOR_BOX_X_OFF   = axLay(AXL_ACTOR_BOX_X_OFF, 0xa64);   // Actor+: float, the lead hero's x
+static const uintptr_t ACTOR_BOX_Y_OFF   = axLay(AXL_ACTOR_BOX_Y_OFF, 0xa68);
+static const uintptr_t ACTOR_BOX_W_OFF   = axLay(AXL_ACTOR_BOX_W_OFF, 0xa70);   // Actor+: float, scaled by the interaction width
 static const uintptr_t PROP_BOX_MINX_OFF = 0x0fc;   // Prop+: float, the prop's own box
 static const uintptr_t PROP_BOX_MAXX_OFF = 0x100;
 static const uintptr_t PROP_BOX_MINY_OFF = 0x104;
@@ -1875,8 +1875,8 @@ static bool rvSkillName(uintptr_t base, uintptr_t mon, int i, char* out, int out
 }
 
 // ---- RANK TARGETS: the marked rank (Prophet, Brigand Vvulf) ----
-static const uintptr_t ACTOR_ENEMY_RANK_TARGETS_OFF     = 0x480;  // Actor+: uint, "enemy_rank_targets"
-static const uintptr_t EFFECT_PERFORMER_RANK_TARGET_OFF = 0x338;
+static const uintptr_t ACTOR_ENEMY_RANK_TARGETS_OFF     = axLay(AXL_ACTOR_ENEMY_RANK_TARGETS_OFF, 0x480);  // Actor+: uint, "enemy_rank_targets"
+static const uintptr_t EFFECT_PERFORMER_RANK_TARGET_OFF = axLay(AXL_EFFECT_PERFORMER_RANK_TARGET_OFF, 0x338);
 static const int       RV_MARK_EFFECT_MAX               = 32;     // sanity cap; a shipped skill carries <= 6
 
 bool rvRankMarksOf(uintptr_t mon, uint32_t* maskOut) {
@@ -1960,7 +1960,7 @@ bool rvRankMarkClause(uintptr_t base, int slot, int slotEnd, char* out, int outs
 }
 
 // ---- WHICH SKILLS THE GAME'S TOOLTIP ACTUALLY DRAWS ----
-static const uintptr_t MONSTER_SKILL_SHOWN_OFF = 0x4b1;
+static const uintptr_t MONSTER_SKILL_SHOWN_OFF = axLay(AXL_MONSTER_SKILL_SHOWN_OFF, 0x4b1);
 
 static uint32_t rvSkillIdHash(const char* id) {
     uint32_t h = 0;
@@ -2467,7 +2467,7 @@ static int rvBuildLines(uintptr_t base, const RvEntry& e,
 }
 
 // ---- THE ARENA MIRROR PROBE ----
-static const uintptr_t RV_PROBE_HEX_BASE = 0x1270;
+static const uintptr_t RV_PROBE_HEX_BASE = axLay(AXL_RV_PROBE_HEX_BASE, 0x1270);
 static const int       RV_PROBE_HEX_LEN  = 0x220;
 
 static void rvProbeClass(uintptr_t base, const char* who, int i, const char* which,

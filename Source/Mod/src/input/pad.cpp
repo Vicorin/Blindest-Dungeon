@@ -9,7 +9,7 @@
 
 // ---- THE TABLE'S SHAPE ----
 static const int      PAD_MAX_PADS     = 4;     // the poll's handle array is 4 qwords wide
-static const uint32_t PAD_PAD_STRIDE   = 300;   // bytes per pad (memset(.., 300) on detach)
+static const uint32_t PAD_PAD_STRIDE   = axLay(AXL_PAD_PAD_STRIDE, 300);   // bytes per pad (memset(.., 300) on detach)
 static const uint32_t PAD_ENTRY_STRIDE = 12;
 static const uint32_t PAD_STICK_OFF    = 0x10c; // + stick * 16: float x, float y
 static const uint32_t PAD_TRIGGER_OFF  = 0xfc;  // + trigger * 8: float value, float delta

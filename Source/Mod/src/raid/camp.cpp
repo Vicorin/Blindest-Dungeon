@@ -12,8 +12,8 @@ static const uintptr_t RAID_CAMP_POINTS_OFF = 0x511c;
 static const uintptr_t RAID_CAMP_USED_OFF   = 0x5120;
 static const int CAMP_PHASE_MEAL    = 3;
 static const int CAMP_PHASE_RESPITE = 6;
-static const uintptr_t ACTOR_CAMP_ID_OFF    = 0x137c;
-static const uintptr_t ACTOR_CAMP_ARMED_OFF = 0x141c;
+static const uintptr_t ACTOR_CAMP_ID_OFF    = axLay(AXL_ACTOR_CAMP_ID_OFF, 0x137c);
+static const uintptr_t ACTOR_CAMP_ARMED_OFF = axLay(AXL_ACTOR_CAMP_ARMED_OFF, 0x141c);
                                                         // (-1 = none). Camp start writes -1 per hero.
 
 // ---- PERFORMING a camping skill ----
@@ -29,7 +29,7 @@ static const uintptr_t MEAL_RATIONS_OFF = 0x20;       // float: 0, 0.5, 1.0, 2.0
 static const uintptr_t MEAL_HEALING_OFF = 0x24;       // float: -0.2, 0, 0.1, 0.25 (x100 = percent)
 static const uintptr_t MEAL_STRESS_OFF  = 0x28;       // float: 15, 0, 0, -10
 static const uint32_t  MEAL_FOURCC_BASE = 0x6d656c20; // "mel " + index — the option's focus id
-static const uintptr_t ACTOR_RATION_OFF = 0xbc4;
+static const uintptr_t ACTOR_RATION_OFF = axLay(AXL_ACTOR_RATION_OFF, 0xbc4);
 
 // ---- MAY A CAMP START HERE? ----
 typedef char (*CampCanStartFn)(uintptr_t raidDisplay);

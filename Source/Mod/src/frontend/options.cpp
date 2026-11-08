@@ -18,7 +18,7 @@ static const uintptr_t OPT_DESC_GROUP_OFF= 0x44;      // int: category-group ind
 static const uintptr_t OPT_DESC_TYPE_OFF = 0x54;      // int: value display type (0=enum,1/2/3=numeric)
 static const uintptr_t OPT_VAL_SECTION   = 0x30;      // value entries start at (descIdx+0x30)
 static const uintptr_t OPT_VAL_ENTRY_STR = 0x60;      // per-entry stride; entry = {int* begin; int* end}
-static const uintptr_t OPT_LANG_STRIDE   = 0x200;     // per language entry
+static const uintptr_t OPT_LANG_STRIDE   = axLay(AXL_OPT_LANG_STRIDE, 0x200);     // per language entry
 static const uintptr_t OPT_LANG_NAME_OFF = 0x000;     // internal name within a language entry
 static const uintptr_t OPT_LANG_DISP_OFF = 0x100;     // display name within a language entry
 static const uint32_t  OPT_CAT_ID_BASE   = 0x6f6367;  // category tab id = base + catIdx ("?co")
